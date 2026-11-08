@@ -11,6 +11,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+
     existing_user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -38,13 +39,16 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(
-    email: str,
-    password: str,
+    user_data: UserCreate,
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(
+        User.email == user_data.email
+    ).first()
 
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not verify_password(
+        user_data.password, user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -55,4 +59,4 @@ def login(
     return {
         "access_token": token,
         "token_type": "bearer"
-      }
+}
