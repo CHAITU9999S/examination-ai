@@ -43,3 +43,6 @@ class ExamCreate(BaseModel):
     end_time: Optional[datetime] = None
     negative_marking: bool = False
     proctoring_enabled: bool = True
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
