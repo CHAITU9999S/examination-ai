@@ -1,37 +1,31 @@
-from datetime import datetime
-from pydantic import ValidationError
 import pytest
+from datetime import datetime, timedelta, timezone
 
-from app.schemas import ExamCreate
-
-
-def test_exam_requires_positive_duration():
-    with pytest.raises(ValidationError):
-        ExamCreate(
-            title="Test Exam",
-            subject="Python",
-            duration_minutes=0
-        )
+from app.services.exam_config import validate_exam_config
 
 
-def test_exam_accepts_valid_configuration():
-    exam = ExamCreate(
-        title="Python Test",
-        subject="Programming",
-        duration_minutes=60,
-        negative_marking=True,
-        proctoring_enabled=True
-    )
+def test_valid_exam_config():
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    end = start + timedelta(hours=2)
 
-    assert exam.duration_minutes == 60
-    assert exam.negative_marking is True
+    assert validate_exam_config(60, start, end) is True
 
 
-def test_exam_rejects_invalid_datetime_format():
-    with pytest.raises(ValidationError):
-        ExamCreate(
-            title="Test Exam",
-            subject="Python",
-            duration_minutes=60,
-            start_time="not-a-date"
-        )
+def test_rejects_zero_duration():
+    with pytest.raises(ValueError):
+        validate_exam_config(0)
+
+
+def test_rejects_invalid_time_range():
+    start = datetime.now(timezone.utc) + timedelta(hours=2)
+    end = start + timedelta(hours=1)
+
+    with pytest.raises(ValueError):
+        validate_exam_config(60, start, end)
+
+
+def test_rejects_past_start_time():
+    start = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    with pytest.raises(ValueError):
+        validate_exam_config(60, start)
