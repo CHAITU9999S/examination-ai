@@ -1,4 +1,3 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -16,27 +15,23 @@ def create_exam(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
+    if data.start_time and data.end_time:
+        if data.end_time <= data.start_time:
+            raise HTTPException(
+                status_code=400,
+                detail="End time must be after start time"
+            )
+
     exam = Exam(
         title=data.title,
         subject=data.subject,
         duration_minutes=data.duration_minutes,
-        start_time=datetime.fromisoformat(data.start_time)
-        if data.start_time else None,
-        end_time=datetime.fromisoformat(data.end_time)
-        if data.end_time else None,
+        start_time=data.start_time,
+        end_time=data.end_time,
         negative_marking=data.negative_marking,
         proctoring_enabled=data.proctoring_enabled,
         created_by=current_user.id
     )
-
-    if (
-        exam.start_time and exam.end_time
-        and exam.end_time <= exam.start_time
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="End time must be after start time"
-        )
 
     db.add(exam)
     db.commit()
@@ -67,4 +62,4 @@ def list_exams(
             "proctoring_enabled": exam.proctoring_enabled
         }
         for exam in exams
-]
+    ]
