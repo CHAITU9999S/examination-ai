@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Exam
 from app.schemas import ExamCreate
 from app.dependencies import require_role
+from app.services.exam_config import validate_exam_config
 
 router = APIRouter(prefix="/exams", tags=["Exam Configuration"])
 
@@ -15,12 +16,14 @@ def create_exam(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
-    if data.start_time and data.end_time:
-        if data.end_time <= data.start_time:
-            raise HTTPException(
-                status_code=400,
-                detail="End time must be after start time"
-            )
+    try:
+        validate_exam_config(
+            data.duration_minutes,
+            data.start_time,
+            data.end_time
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
 
     exam = Exam(
         title=data.title,
