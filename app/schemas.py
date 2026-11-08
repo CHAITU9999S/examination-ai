@@ -39,6 +39,9 @@ class ExamCreate(BaseModel):
     title: str
     subject: str
     duration_minutes: int = Field(gt=0)
+    total_questions: int = Field(default=0, ge=0)
+    randomize_questions: bool = True
+    selection_rules: Optional[dict] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     negative_marking: bool = False
