@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import QuestionBank, Option
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
+from app.services.question_validation import validate_question
 
 router = APIRouter(prefix="/questions", tags=["Question Bank"])
 
@@ -15,12 +16,16 @@ def create_question(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
-    if data.question_type in ["MCQ", "MULTI_SELECT"]:
-        if len(data.options) < 2:
-            raise HTTPException(
-                status_code=400,
-                detail="At least two options are required"
-            )
+    try:
+        validate_question(
+            data.question_type,
+            data.question_text,
+            data.marks,
+            data.options,
+            data.negative_marks
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
 
     question = QuestionBank(
         question_text=data.question_text,
@@ -85,10 +90,7 @@ def delete_question(
     ).first()
 
     if not question:
-        raise HTTPException(
-            status_code=404,
-            detail="Question not found"
-        )
+        raise HTTPException(status_code=404, detail="Question not found")
 
     db.delete(question)
     db.commit()
