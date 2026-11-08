@@ -15,6 +15,13 @@ def create_question(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
+    if data.question_type in ["MCQ", "MULTI_SELECT"]:
+        if len(data.options) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="At least two options are required"
+            )
+
     question = QuestionBank(
         question_text=data.question_text,
         question_type=data.question_type,
@@ -78,7 +85,10 @@ def delete_question(
     ).first()
 
     if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Question not found"
+        )
 
     db.delete(question)
     db.commit()
