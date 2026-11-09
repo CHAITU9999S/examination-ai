@@ -15,6 +15,11 @@ if config.config_file_name:
 database_url = os.getenv("DATABASE_URL")
 
 if database_url:
+    database_url = database_url.replace(
+        "postgresql://",
+        "postgresql+psycopg2://",
+        1
+    )
     config.set_main_option(
         "sqlalchemy.url",
         database_url.replace("%", "%%")
