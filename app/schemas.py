@@ -23,8 +23,7 @@ class UserResponse(BaseModel):
 
 class QuestionCreate(BaseModel):
     question_text: str
-    
-question_type: Literal[
+    question_type: Literal[
     "MCQ",
     "multi_select",
     "short_answer",
