@@ -130,5 +130,9 @@ class ProctorEvent(Base):
     )
     event_type = Column(String(100), nullable=False)
     description = Column(Text)
+    snapshot_data = Column(Text, nullable=True)
+    gaze_data = Column(JSON, nullable=True)
+    tab_switch_count = Column(Integer, default=0)
     suspicion_points = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
