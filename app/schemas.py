@@ -23,9 +23,15 @@ class UserResponse(BaseModel):
 
 class QuestionCreate(BaseModel):
     question_text: str
-    question_type: Literal[
-        "MCQ", "MULTI_SELECT", "SHORT", "LONG", "IMAGE"
-    ]
+    
+question_type: Literal[
+    "MCQ",
+    "multi_select",
+    "short_answer",
+    "long_answer",
+    "image_upload"
+]
+
     subject: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     expected_answer: Optional[str] = None
