@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import auth, questions, exams
+from app.routers import auth, questions, exams, exam_sessions
 
 app = FastAPI(
     title="ExamGuard AI",
