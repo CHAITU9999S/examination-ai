@@ -11,6 +11,7 @@ from app.auth import create_exam_access_token
 from app.auth import verify_token
 from app.services.paper_generator import generate_paper
 
+exam_token_scheme = HTTPBearer()
 router = APIRouter(
     prefix="/exam-sessions",
     tags=["Exam Sessions"]
