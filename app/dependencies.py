@@ -6,14 +6,14 @@ from app.auth import verify_token
 from app.database import get_db
 from app.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+security = HTTPBearer()
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    payload = verify_token(token)
+    payload = verify_token(credentials.credentials)
 
     if payload is None:
         raise HTTPException(
