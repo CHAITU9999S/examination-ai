@@ -17,8 +17,8 @@ def test_rejects_zero_duration():
 
 
 def test_rejects_invalid_time_range():
-    start = datetime.now(timezone.utc) + timedelta(hours=2)
-    end = start + timedelta(hours=1)
+    start = datetime.now(timezone.utc) + timedelta(hours=3)
+    end = start - timedelta(hours=1)
 
     with pytest.raises(ValueError):
         validate_exam_config(60, start, end)
