@@ -1,3 +1,4 @@
+
 def validate_question(
     question_type,
     question_text,
@@ -15,14 +16,19 @@ def validate_question(
         raise ValueError("Negative marks cannot be below zero")
 
     allowed_types = [
-        "MCQ", "MULTI_SELECT", "SHORT", "LONG", "IMAGE"
+        "MCQ",
+        "multi_select",
+        "short_answer",
+        "long_answer",
+        "image_upload"
     ]
 
     if question_type not in allowed_types:
         raise ValueError("Invalid question type")
 
-    if question_type in ["MCQ", "MULTI_SELECT"]:
+    if question_type in ["MCQ", "multi_select"]:
         if not options or len(options) < 2:
             raise ValueError("At least two options are required")
 
     return True
+    
