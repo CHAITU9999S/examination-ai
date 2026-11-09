@@ -12,12 +12,12 @@ def test_valid_mcq():
 
 def test_rejects_empty_question():
     with pytest.raises(ValueError):
-        validate_question("SHORT", "", 2)
+        validate_question("short_answer", "", 2)
 
 
 def test_rejects_invalid_marks():
     with pytest.raises(ValueError):
-        validate_question("SHORT", "Explain Python", 0)
+        validate_question("short_answer", "Explain Python", 0)
 
 
 def test_rejects_mcq_without_options():
