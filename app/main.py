@@ -11,7 +11,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(questions.router)
 app.include_router(exams.router)
-
+app.include_router(exam_sessions.router)
 
 @app.get("/")
 def home():
