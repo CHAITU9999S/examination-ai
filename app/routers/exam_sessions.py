@@ -1,12 +1,15 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (APIRouter,Depends,HTTPException)
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Exam, ExamSession
+from app.models import (Exam,ExamSession,QuestionBank,Option)
 from app.auth import create_exam_access_token
+from app.auth import verify_token
+from app.services.paper_generator import generate_paper
 
 router = APIRouter(
     prefix="/exam-sessions",
