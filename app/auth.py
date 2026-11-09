@@ -35,3 +35,15 @@ def verify_token(token: str):
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except Exception:
         return None
+def create_exam_access_token(exam_id: int, student_id: int) -> str:
+    token_data = {
+        "sub": str(student_id),
+        "exam_id": exam_id,
+        "student_id": student_id,
+        "token_type": "exam"
+    }
+
+    return create_access_token(
+        token_data,
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
