@@ -1,17 +1,18 @@
+
 from datetime import datetime
 
-from fastapi import (APIRouter,Depends,HTTPException)
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import (Exam,ExamSession,QuestionBank,Option)
-from app.auth import create_exam_access_token
-from app.auth import verify_token
+from app.models import Exam, ExamSession, QuestionBank, Option
+from app.auth import create_exam_access_token, verify_token
 from app.services.paper_generator import generate_paper
 
 exam_token_scheme = HTTPBearer()
+
 router = APIRouter(
     prefix="/exam-sessions",
     tags=["Exam Sessions"]
@@ -30,7 +31,9 @@ def start_exam(
             detail="Only students can start exams"
         )
 
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    exam = db.query(Exam).filter(
+        Exam.id == exam_id
+    ).first()
 
     if not exam:
         raise HTTPException(
@@ -78,7 +81,8 @@ def start_exam(
         "exam_id": exam_id,
         "access_token": exam_token,
         "token_type": "bearer"
-          }
+    }
+
 
 @router.get("/paper/{exam_id}")
 def get_exam_paper(
@@ -135,33 +139,45 @@ def get_exam_paper(
             QuestionBank.difficulty == rules["difficulty"]
         )
 
-    questions = query.all()
+    questions = query.order_by(QuestionBank.id).all()
 
     number = exam.total_questions or len(questions)
 
+    question_ids = [question.id for question in questions]
+
     try:
-        question_ids = generate_paper(
-            [q.id for q in questions],
-            student_id,
-            exam_id,
-            number
-        )
+        if exam.randomize_questions:
+            selected_ids = generate_paper(
+                question_ids,
+                student_id,
+                exam_id,
+                number
+            )
+        else:
+            if number <= 0 or number > len(question_ids):
+                raise ValueError("Invalid number of questions")
+
+            selected_ids = question_ids[:number]
+
     except ValueError as error:
         raise HTTPException(
             status_code=400,
             detail=str(error)
         )
 
-    question_map = {q.id: q for q in questions}
+    question_map = {
+        question.id: question
+        for question in questions
+    }
 
     paper = []
 
-    for question_id in question_ids:
+    for question_id in selected_ids:
         question = question_map[question_id]
 
         options = db.query(Option).filter(
             Option.question_id == question_id
-        ).all()
+        ).order_by(Option.id).all()
 
         paper.append({
             "question_id": question.id,
@@ -183,4 +199,5 @@ def get_exam_paper(
         "session_id": session.id,
         "total_questions": len(paper),
         "questions": paper
-        }
+}
+    
