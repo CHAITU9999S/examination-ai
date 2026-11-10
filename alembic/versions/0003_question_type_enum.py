@@ -1,5 +1,4 @@
 from alembic import op
-import sqlalchemy as sa
 
 revision = "0003_question_type_enum"
 down_revision = "0002_proctor_fields"
@@ -9,28 +8,29 @@ depends_on = None
 
 def upgrade():
     op.execute("""
-        ALTER TABLE question_bank
-        ALTER COLUMN question_type TYPE VARCHAR(30);
+        CREATE TYPE question_type_enum AS ENUM (
+            'MCQ',
+            'multi_select',
+            'short_answer',
+            'long_answer',
+            'image_upload'
+        );
     """)
 
     op.execute("""
         ALTER TABLE question_bank
-        ADD CONSTRAINT question_type_enum_check
-        CHECK (
-            question_type IN (
-                'MCQ',
-                'multi_select',
-                'short_answer',
-                'long_answer',
-                'image_upload'
-            )
-        );
+        ALTER COLUMN question_type
+        TYPE question_type_enum
+        USING question_type::text::question_type_enum;
     """)
 
 
 def downgrade():
-    op.drop_constraint(
-        "question_type_enum_check",
-        "question_bank",
-        type_="check"
-    )
+    op.execute("""
+        ALTER TABLE question_bank
+        ALTER COLUMN question_type
+        TYPE VARCHAR(30)
+        USING question_type::text;
+    """)
+
+    op.execute("DROP TYPE question_type_enum;")
