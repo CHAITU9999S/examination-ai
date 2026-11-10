@@ -67,4 +67,14 @@ def test_rejects_invalid_multi_select_index():
             2,
             ["Python", "Java"],
             correct_option_indices=[0, 5]
-    )
+     )
+
+def test_rejects_duplicate_multi_select_indexes():
+    with pytest.raises(ValueError):
+        validate_question(
+            "multi_select",
+            "Select programming languages",
+            2,
+            ["Python", "Java", "HTML"],
+            correct_option_indices=[0, 0]
+        )
