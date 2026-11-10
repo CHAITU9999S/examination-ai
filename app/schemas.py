@@ -39,6 +39,7 @@ class QuestionCreate(BaseModel):
     tags: List[str] = Field(default_factory=list)
     options: List[str] = Field(default_factory=list)
     correct_option_index: Optional[int] = Field(default=None, ge=0)
+    correct_option_indices: Optional[List[int]] = Field(default=None)
 
 
 class ExamCreate(BaseModel):
