@@ -29,3 +29,8 @@ def test_rejects_more_questions_than_available():
 def test_rejects_zero_questions():
     with pytest.raises(ValueError):
         generate_paper([1, 2], 101, 1, 0)
+
+def test_rejects_negative_questions():
+    with pytest.raises(ValueError):
+        generate_paper([1, 2], 101, 1, -1)
+        
