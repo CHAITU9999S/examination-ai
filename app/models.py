@@ -27,7 +27,17 @@ class QuestionBank(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     question_text = Column(Text, nullable=False)
-    question_type = Column(String(30), nullable=False)
+    question_type = Column(
+    Enum(
+        "MCQ",
+        "multi_select",
+        "short_answer",
+        "long_answer",
+        "image_upload",
+        name="question_type_enum"
+    ),
+    nullable=False
+    )
     subject = Column(String(100))
     difficulty = Column(String(20))
     expected_answer = Column(Text)
