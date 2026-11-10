@@ -29,3 +29,22 @@ def test_rejects_past_start_time():
 
     with pytest.raises(ValueError):
         validate_exam_config(60, start)
+
+def test_rejects_negative_duration():
+    with pytest.raises(ValueError):
+        validate_exam_config(-10)
+
+
+def test_rejects_past_end_time():
+    end = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    with pytest.raises(ValueError):
+        validate_exam_config(60, end_time=end)
+
+
+def test_rejects_mismatched_timezones():
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    end = datetime.now() + timedelta(hours=2)
+
+    with pytest.raises(ValueError):
+        validate_exam_config(60, start, end)
