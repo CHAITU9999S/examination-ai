@@ -1,3 +1,4 @@
+
 from datetime import datetime
 from typing import Optional, List, Literal
 
@@ -24,16 +25,17 @@ class UserResponse(BaseModel):
 class QuestionCreate(BaseModel):
     question_text: str
     question_type: Literal[
-    "MCQ",
-    "multi_select",
-    "short_answer",
-    "long_answer",
-    "image_upload"
-]
+        "MCQ",
+        "multi_select",
+        "short_answer",
+        "long_answer",
+        "image_upload"
+    ]
 
     subject: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     expected_answer: Optional[str] = None
+    model_answer_text: Optional[str] = None
     marks: float = Field(gt=0)
     negative_marks: float = Field(default=0, ge=0)
     tags: List[str] = Field(default_factory=list)
@@ -53,6 +55,11 @@ class ExamCreate(BaseModel):
     end_time: Optional[datetime] = None
     negative_marking: bool = False
     proctoring_enabled: bool = True
+    gaze_tracking_sensitivity: Optional[float] = Field(default=None, gt=0, le=1)
+    max_tab_switch_warnings: Optional[int] = Field(default=None, ge=0)
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    
