@@ -22,7 +22,7 @@ def create_question(
             data.question_text,
             data.marks,
             data.options,
-            data.negative_marks
+            data.negative_marks,
             data.correct_option_index
         )
     except ValueError as error:
