@@ -55,7 +55,7 @@ class ExamCreate(BaseModel):
     end_time: Optional[datetime] = None
     negative_marking: bool = False
     proctoring_enabled: bool = True
-    gaze_tracking_sensitivity: Optional[float] = Field(default=None, gt=0, le=1)
+    gaze_tracking_sensitivity: Optional[float] = None
     max_tab_switch_warnings: Optional[int] = Field(default=None, ge=0)
 
 
