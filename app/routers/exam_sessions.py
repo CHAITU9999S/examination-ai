@@ -119,7 +119,8 @@ def get_exam_paper(
             status_code=401,
             detail="Exam token identity mismatch"
         )
-            student = db.query(User).filter(
+
+    student = db.query(User).filter(
         User.id == student_id
     ).first()
 
@@ -128,6 +129,7 @@ def get_exam_paper(
             status_code=403,
             detail="Student account is invalid or inactive"
         )
+
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == student_id,
@@ -221,5 +223,5 @@ def get_exam_paper(
         "session_id": session.id,
         "total_questions": len(paper),
         "questions": paper
-}
+    }
     
