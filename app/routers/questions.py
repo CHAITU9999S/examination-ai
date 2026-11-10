@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,8 @@ def create_question(
             data.marks,
             data.options,
             data.negative_marks,
-            data.correct_option_index
+            data.correct_option_index,
+            data.correct_option_indices
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
@@ -48,18 +50,21 @@ def create_question(
             question_id=question.id,
             option_text=option_text,
             is_correct=(
-                data.question_type == "MCQ"
-                and index == data.correct_option_index
+                (
+                    data.question_type == "MCQ"
+                    and index == data.correct_option_index
+                )
+                or
+                (
+                    data.question_type == "multi_select"
+                    and index in (data.correct_option_indices or [])
+                )
             )
         ))
 
     db.commit()
     db.refresh(question)
 
-    return {
-        "message": "Question created successfully",
-        "question_id": question.id
-}
     return {
         "message": "Question created successfully",
         "question_id": question.id
@@ -99,9 +104,13 @@ def delete_question(
     ).first()
 
     if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Question not found"
+        )
 
     db.delete(question)
     db.commit()
 
     return {"message": "Question deleted successfully"}
+        
