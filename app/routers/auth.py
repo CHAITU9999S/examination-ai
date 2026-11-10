@@ -1,21 +1,34 @@
-from app.dependencies import require_role
-from fastapi import APIRouter, Depends, HTTPException, status
+
+import os
+import secrets
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    status
+)
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import require_role
 from app.models import User
 from app.schemas import UserCreate, UserResponse, UserLogin
 from app.auth import hash_password, verify_password, create_access_token
-import os
-import secrets
-from fastapi import Header
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
 
 
 @router.post("/register", response_model=UserResponse)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
-
+def register(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
     existing_user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -51,19 +64,28 @@ def login(
     ).first()
 
     if not user or not verify_password(
-        user_data.password, user.password_hash
+        user_data.password,
+        user.password_hash
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
 
-    token = create_access_token({"sub": str(user.id)})
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+
+    token = create_access_token({
+        "sub": str(user.id)
+    })
 
     return {
         "access_token": token,
         "token_type": "bearer"
-}
+    }
 
 
 @router.post("/create-examiner", response_model=UserResponse)
@@ -101,7 +123,8 @@ def create_examiner(
 def bootstrap_admin(
     user_data: UserCreate,
     bootstrap_secret: str = Header(
-        ..., alias="X-Admin-Bootstrap-Secret"
+        ...,
+        alias="X-Admin-Bootstrap-Secret"
     ),
     db: Session = Depends(get_db)
 ):
@@ -114,7 +137,8 @@ def bootstrap_admin(
         )
 
     if not secrets.compare_digest(
-        bootstrap_secret, expected_secret
+        bootstrap_secret,
+        expected_secret
     ):
         raise HTTPException(
             status_code=403,
@@ -140,3 +164,4 @@ def bootstrap_admin(
     db.refresh(admin)
 
     return admin
+            
