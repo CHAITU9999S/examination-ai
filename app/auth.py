@@ -22,6 +22,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta=None) -> str:
     to_encode = data.copy()
 
+    # Normal login tokens are access tokens.
+    # Exam tokens keep their separate "exam" type.
+    to_encode.setdefault("token_type", "access")
+
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
