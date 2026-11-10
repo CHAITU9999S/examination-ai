@@ -38,6 +38,7 @@ class QuestionCreate(BaseModel):
     negative_marks: float = Field(default=0, ge=0)
     tags: List[str] = Field(default_factory=list)
     options: List[str] = Field(default_factory=list)
+    correct_option_index: Optional[int] = Field(default=None, ge=0)
 
 
 class ExamCreate(BaseModel):
