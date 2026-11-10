@@ -1,14 +1,17 @@
+
+from datetime import timedelta
+
 from app.auth import (
     hash_password,
     verify_password,
     create_access_token,
+    create_exam_access_token,
     verify_token
 )
 
 
 def test_password_hashing():
     password = "TestPassword123"
-
     hashed = hash_password(password)
 
     assert hashed != password
@@ -23,9 +26,37 @@ def test_wrong_password_rejected():
 
 def test_access_token_creation():
     token = create_access_token({"sub": "101"})
-
     payload = verify_token(token)
 
     assert payload is not None
     assert payload["sub"] == "101"
     assert payload["token_type"] == "access"
+
+
+def test_exam_token_creation():
+    token = create_exam_access_token(
+        exam_id=10,
+        student_id=101
+    )
+
+    payload = verify_token(token)
+
+    assert payload is not None
+    assert payload["token_type"] == "exam"
+    assert payload["exam_id"] == 10
+    assert payload["student_id"] == 101
+    assert payload["sub"] == "101"
+
+
+def test_expired_token_rejected():
+    token = create_access_token(
+        {"sub": "101"},
+        expires_delta=timedelta(seconds=-1)
+    )
+
+    assert verify_token(token) is None
+
+
+def test_invalid_token_rejected():
+    assert verify_token("invalid.token.value") is None
+    
