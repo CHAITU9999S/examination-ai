@@ -28,3 +28,4 @@ def test_access_token_creation():
 
     assert payload is not None
     assert payload["sub"] == "101"
+    assert payload["token_type"] == "access"
