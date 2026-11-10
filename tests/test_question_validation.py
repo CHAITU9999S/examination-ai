@@ -78,3 +78,45 @@ def test_rejects_duplicate_multi_select_indexes():
             ["Python", "Java", "HTML"],
             correct_option_indices=[0, 0]
         )
+def test_valid_short_answer():
+    assert validate_question(
+        "short_answer",
+        "What is Python?",
+        2
+    ) is True
+
+
+def test_valid_long_answer():
+    assert validate_question(
+        "long_answer",
+        "Explain object-oriented programming.",
+        10
+    ) is True
+
+
+def test_valid_image_upload():
+    assert validate_question(
+        "image_upload",
+        "Upload a diagram of a computer network.",
+        5
+    ) is True
+
+
+def test_image_upload_requires_positive_marks():
+    with pytest.raises(ValueError):
+        validate_question(
+            "image_upload",
+            "Upload a diagram.",
+            0
+        )
+
+
+def test_rejects_negative_negative_marks():
+    with pytest.raises(ValueError):
+        validate_question(
+            "short_answer",
+            "Explain Python.",
+            5,
+            negative_marks=-1
+        )
+            
