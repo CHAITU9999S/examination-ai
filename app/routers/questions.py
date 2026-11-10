@@ -36,6 +36,7 @@ def create_question(
         subject=data.subject,
         difficulty=data.difficulty,
         expected_answer=data.expected_answer,
+        model_answer_text=data.model_answer_text,
         marks=data.marks,
         negative_marks=data.negative_marks,
         tags=data.tags,
@@ -87,7 +88,8 @@ def list_questions(
             "difficulty": q.difficulty,
             "marks": q.marks,
             "negative_marks": q.negative_marks,
-            "tags": q.tags
+            "tags": q.tags,
+            "model_answer_text": q.model_answer_text
         }
         for q in questions
     ]
@@ -113,4 +115,4 @@ def delete_question(
     db.commit()
 
     return {"message": "Question deleted successfully"}
-        
+    
