@@ -5,9 +5,7 @@ from app.services.question_validation import validate_question
 
 def test_valid_mcq():
     assert validate_question(
-        "MCQ",
-        "What is Python?",
-        2,
+        "MCQ", "What is Python?", 2,
         ["A", "B"],
         correct_option_index=0
     ) is True
