@@ -43,7 +43,9 @@ def create_question(
     db.add(question)
     db.flush()
 
-    for index, option_text in enumerate(data.options):
+    db.flush()
+
+for index, option_text in enumerate(data.options):
     db.add(Option(
         question_id=question.id,
         option_text=option_text,
@@ -53,8 +55,8 @@ def create_question(
         )
     ))
 
-    db.commit()
-    db.refresh(question)
+db.commit()
+db.refresh(question)
 
     return {
         "message": "Question created successfully",
