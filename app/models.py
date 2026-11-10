@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime,
+    Column, Integer, String, Boolean, DateTime, Enum,
     ForeignKey, Text, Float, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
