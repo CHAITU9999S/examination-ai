@@ -33,4 +33,19 @@ def test_rejects_zero_questions():
 def test_rejects_negative_questions():
     with pytest.raises(ValueError):
         generate_paper([1, 2], 101, 1, -1)
+
+def test_generated_paper_has_requested_count():
+    questions = list(range(1, 21))
+
+    paper = generate_paper(questions, 101, 1, 10)
+
+    assert len(paper) == 10
+
+
+def test_generated_paper_has_no_duplicates():
+    questions = list(range(1, 21))
+
+    paper = generate_paper(questions, 101, 1, 15)
+
+    assert len(paper) == len(set(paper))
         
