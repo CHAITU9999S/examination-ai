@@ -1,3 +1,4 @@
+from app.dependencies import require_role
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -63,6 +64,37 @@ def login(
         "access_token": token,
         "token_type": "bearer"
 }
+
+
+@router.post("/create-examiner", response_model=UserResponse)
+def create_examiner(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("admin"))
+):
+    existing_user = db.query(User).filter(
+        User.email == user_data.email
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+
+    examiner = User(
+        full_name=user_data.full_name,
+        email=user_data.email,
+        department=user_data.department,
+        password_hash=hash_password(user_data.password),
+        role="examiner"
+    )
+
+    db.add(examiner)
+    db.commit()
+    db.refresh(examiner)
+
+    return examiner
 
 
 @router.post("/bootstrap-admin", response_model=UserResponse)
