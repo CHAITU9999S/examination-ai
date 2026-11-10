@@ -5,6 +5,9 @@ from app.database import get_db
 from app.models import User
 from app.schemas import UserCreate, UserResponse, UserLogin
 from app.auth import hash_password, verify_password, create_access_token
+import os
+import secrets
+from fastapi import Header
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -60,3 +63,48 @@ def login(
         "access_token": token,
         "token_type": "bearer"
 }
+
+
+@router.post("/bootstrap-admin", response_model=UserResponse)
+def bootstrap_admin(
+    user_data: UserCreate,
+    bootstrap_secret: str = Header(
+        ..., alias="X-Admin-Bootstrap-Secret"
+    ),
+    db: Session = Depends(get_db)
+):
+    expected_secret = os.getenv("ADMIN_BOOTSTRAP_SECRET")
+
+    if not expected_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin setup is not configured"
+        )
+
+    if not secrets.compare_digest(
+        bootstrap_secret, expected_secret
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid setup secret"
+        )
+
+    if db.query(User).count() != 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Admin setup is already completed"
+        )
+
+    admin = User(
+        full_name=user_data.full_name,
+        email=user_data.email,
+        department=user_data.department,
+        password_hash=hash_password(user_data.password),
+        role="admin"
+    )
+
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    return admin
