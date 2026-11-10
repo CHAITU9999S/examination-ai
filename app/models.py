@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from sqlalchemy import (
@@ -28,19 +29,20 @@ class QuestionBank(Base):
     id = Column(Integer, primary_key=True, index=True)
     question_text = Column(Text, nullable=False)
     question_type = Column(
-    Enum(
-        "MCQ",
-        "multi_select",
-        "short_answer",
-        "long_answer",
-        "image_upload",
-        name="question_type_enum"
-    ),
-    nullable=False
+        Enum(
+            "MCQ",
+            "multi_select",
+            "short_answer",
+            "long_answer",
+            "image_upload",
+            name="question_type_enum"
+        ),
+        nullable=False
     )
     subject = Column(String(100))
     difficulty = Column(String(20))
     expected_answer = Column(Text)
+    model_answer_text = Column(Text, nullable=True)
     marks = Column(Float, default=1)
     negative_marks = Column(Float, default=0)
     tags = Column(JSON)
@@ -73,6 +75,8 @@ class Exam(Base):
     end_time = Column(DateTime)
     negative_marking = Column(Boolean, default=False)
     proctoring_enabled = Column(Boolean, default=True)
+    gaze_tracking_sensitivity = Column(Float, nullable=True)
+    max_tab_switch_warnings = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"))
 
 
