@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,8 @@ def create_exam(
         end_time=data.end_time,
         negative_marking=data.negative_marking,
         proctoring_enabled=data.proctoring_enabled,
+        gaze_tracking_sensitivity=data.gaze_tracking_sensitivity,
+        max_tab_switch_warnings=data.max_tab_switch_warnings,
         created_by=current_user.id
     )
 
@@ -68,7 +71,10 @@ def list_exams(
             "start_time": exam.start_time,
             "end_time": exam.end_time,
             "negative_marking": exam.negative_marking,
-            "proctoring_enabled": exam.proctoring_enabled
+            "proctoring_enabled": exam.proctoring_enabled,
+            "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
+            "max_tab_switch_warnings": exam.max_tab_switch_warnings
         }
         for exam in exams
     ]
+    
