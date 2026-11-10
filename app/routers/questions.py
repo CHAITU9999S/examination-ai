@@ -23,6 +23,7 @@ def create_question(
             data.marks,
             data.options,
             data.negative_marks
+            data.correct_option_index
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
@@ -42,11 +43,15 @@ def create_question(
     db.add(question)
     db.flush()
 
-    for option_text in data.options:
-        db.add(Option(
-            question_id=question.id,
-            option_text=option_text
-        ))
+    for index, option_text in enumerate(data.options):
+    db.add(Option(
+        question_id=question.id,
+        option_text=option_text,
+        is_correct=(
+            data.question_type == "MCQ"
+            and index == data.correct_option_index
+        )
+    ))
 
     db.commit()
     db.refresh(question)
