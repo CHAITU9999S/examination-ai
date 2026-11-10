@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Exam, ExamSession, QuestionBank, Option
+from app.models import Exam, ExamSession, QuestionBank, Option, User
 from app.auth import create_exam_access_token, verify_token
 from app.services.paper_generator import generate_paper
 
@@ -98,14 +98,36 @@ def get_exam_paper(
             detail="Invalid exam token"
         )
 
-    if payload.get("exam_id") != exam_id:
+    try:
+        token_exam_id = int(payload.get("exam_id"))
+        student_id = int(payload.get("student_id"))
+        token_user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid exam token identity"
+        )
+
+    if token_exam_id != exam_id:
         raise HTTPException(
             status_code=403,
             detail="Token does not belong to this exam"
         )
 
-    student_id = payload.get("student_id")
+    if student_id != token_user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Exam token identity mismatch"
+        )
+            student = db.query(User).filter(
+        User.id == student_id
+    ).first()
 
+    if not student or not student.is_active or student.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail="Student account is invalid or inactive"
+        )
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == student_id,
