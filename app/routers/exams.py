@@ -21,7 +21,11 @@ def create_exam(
         validate_exam_config(
             data.duration_minutes,
             data.start_time,
-            data.end_time
+            data.end_time,
+            data.selection_rules,
+            data.total_questions,
+            data.gaze_tracking_sensitivity,
+            data.max_tab_switch_warnings
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
