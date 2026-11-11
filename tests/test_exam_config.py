@@ -1,3 +1,4 @@
+
 import pytest
 from datetime import datetime, timedelta, timezone
 
@@ -30,6 +31,7 @@ def test_rejects_past_start_time():
     with pytest.raises(ValueError):
         validate_exam_config(60, start)
 
+
 def test_rejects_negative_duration():
     with pytest.raises(ValueError):
         validate_exam_config(-10)
@@ -48,3 +50,107 @@ def test_rejects_mismatched_timezones():
 
     with pytest.raises(ValueError):
         validate_exam_config(60, start, end)
+
+
+def test_valid_distribution_rules():
+    rules = {
+        "difficulty_counts": {
+            "Easy": 2,
+            "Medium": 1,
+            "Hard": 1
+        },
+        "question_type_counts": {
+            "MCQ": 2,
+            "short_answer": 1,
+            "long_answer": 1
+        }
+    }
+
+    assert validate_exam_config(
+        60,
+        selection_rules=rules,
+        total_questions=4
+    ) is True
+
+
+def test_rejects_missing_question_type_distribution():
+    rules = {
+        "difficulty_counts": {
+            "Easy": 2,
+            "Medium": 2
+        }
+    }
+
+    with pytest.raises(ValueError):
+        validate_exam_config(
+            60,
+            selection_rules=rules,
+            total_questions=4
+        )
+
+
+def test_rejects_missing_difficulty_distribution():
+    rules = {
+        "question_type_counts": {
+            "MCQ": 4
+        }
+    }
+
+    with pytest.raises(ValueError):
+        validate_exam_config(
+            60,
+            selection_rules=rules,
+            total_questions=4
+        )
+
+
+def test_rejects_unknown_selection_rule():
+    rules = {
+        "difficulty": "Easy",
+        "random_selection": True
+    }
+
+    with pytest.raises(ValueError):
+        validate_exam_config(
+            60,
+            selection_rules=rules
+        )
+
+
+def test_rejects_conflicting_difficulty_rules():
+    rules = {
+        "difficulty": "Easy",
+        "difficulty_counts": {
+            "Easy": 4
+        },
+        "question_type_counts": {
+            "MCQ": 4
+        }
+    }
+
+    with pytest.raises(ValueError):
+        validate_exam_config(
+            60,
+            selection_rules=rules,
+            total_questions=4
+        )
+
+
+def test_rejects_distribution_with_wrong_total():
+    rules = {
+        "difficulty_counts": {
+            "Easy": 2,
+            "Medium": 1
+        },
+        "question_type_counts": {
+            "MCQ": 3
+        }
+    }
+
+    with pytest.raises(ValueError):
+        validate_exam_config(
+            60,
+            selection_rules=rules,
+            total_questions=4
+                            )
+        
