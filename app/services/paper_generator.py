@@ -9,7 +9,8 @@ def generate_paper(
     number_of_questions,
     question_details=None,
     difficulty_counts=None,
-    question_type_counts=None
+    question_type_counts=None,
+    randomize=True
 ):
     if number_of_questions <= 0:
         raise ValueError("Number of questions must be positive")
@@ -22,10 +23,11 @@ def generate_paper(
 
     selected = list(question_ids)
 
-    # Preserve the existing random selection behavior
-    # when no distributions are configured.
+    # Preserve the existing behavior when no distributions are configured.
     if not difficulty_counts and not question_type_counts:
-        rng.shuffle(selected)
+        if randomize:
+            rng.shuffle(selected)
+
         return selected[:number_of_questions]
 
     if not question_details:
@@ -73,12 +75,12 @@ def generate_paper(
             (difficulty, question_type), []
         ).append(question_id)
 
-    # Randomize the available questions within each group.
+    # Randomize available questions within each group.
     for group in groups.values():
-        rng.shuffle(group)
+        if randomize:
+            rng.shuffle(group)
 
-    # Build a small maximum-flow network.
-    # This finds a combination satisfying both distributions.
+    # Build a maximum-flow network to satisfy both distributions.
     source = "source"
     sink = "sink"
 
@@ -117,7 +119,7 @@ def generate_paper(
                 available
             )
 
-    # Find the maximum flow using breadth-first search.
+    # Find maximum flow using breadth-first search.
     total_flow = 0
 
     while True:
@@ -128,10 +130,15 @@ def generate_paper(
             current = queue.pop(0)
 
             neighbors = list(graph[current])
-            rng.shuffle(neighbors)
+
+            if randomize:
+                rng.shuffle(neighbors)
 
             for neighbor in neighbors:
-                if neighbor not in parent and graph[current][neighbor] > 0:
+                if (
+                    neighbor not in parent
+                    and graph[current][neighbor] > 0
+                ):
                     parent[neighbor] = current
                     queue.append(neighbor)
 
@@ -191,7 +198,8 @@ def generate_paper(
             "Unable to generate the requested question paper"
         )
 
-    rng.shuffle(paper)
+    if randomize:
+        rng.shuffle(paper)
 
     return paper
     
