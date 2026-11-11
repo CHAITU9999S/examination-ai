@@ -98,12 +98,38 @@ def validate_exam_config(
         if not isinstance(selection_rules, dict):
             raise ValueError("Selection rules must be a dictionary")
 
-        # Preserve support for the existing single-difficulty rule.
+        allowed_keys = {
+            "difficulty",
+            "difficulty_counts",
+            "question_type_counts"
+        }
+
+        if not set(selection_rules).issubset(allowed_keys):
+            raise ValueError("Unknown selection rule")
+
+        has_difficulty_counts = (
+            "difficulty_counts" in selection_rules
+        )
+
+        has_type_counts = (
+            "question_type_counts" in selection_rules
+        )
+
+        if has_difficulty_counts != has_type_counts:
+            raise ValueError(
+                "Both difficulty_counts and question_type_counts are required"
+            )
+
         if "difficulty" in selection_rules:
             if selection_rules["difficulty"] not in VALID_DIFFICULTIES:
                 raise ValueError("Invalid difficulty")
 
-        if "difficulty_counts" in selection_rules:
+            if has_difficulty_counts:
+                raise ValueError(
+                    "Use either difficulty or distribution rules, not both"
+                )
+
+        if has_difficulty_counts:
             validate_distribution(
                 selection_rules["difficulty_counts"],
                 VALID_DIFFICULTIES,
@@ -111,7 +137,6 @@ def validate_exam_config(
                 "difficulty_counts"
             )
 
-        if "question_type_counts" in selection_rules:
             validate_distribution(
                 selection_rules["question_type_counts"],
                 VALID_QUESTION_TYPES,
@@ -132,4 +157,4 @@ def validate_exam_config(
             )
 
     return True
-        
+            
