@@ -11,6 +11,7 @@ from app.models import Exam, ExamSession, QuestionBank, Option, User
 from app.auth import create_exam_access_token, verify_token
 from app.services.paper_generator import generate_paper
 
+
 exam_token_scheme = HTTPBearer()
 
 router = APIRouter(
@@ -158,7 +159,12 @@ def get_exam_paper(
 
     rules = exam.selection_rules or {}
 
-    if rules.get("difficulty"):
+    # Preserve the old single-difficulty rule when
+    # distribution-based selection is not configured.
+    if (
+        rules.get("difficulty")
+        and not rules.get("difficulty_counts")
+    ):
         query = query.filter(
             QuestionBank.difficulty == rules["difficulty"]
         )
@@ -167,21 +173,29 @@ def get_exam_paper(
 
     number = exam.total_questions or len(questions)
 
-    question_ids = [question.id for question in questions]
+    question_ids = [
+        question.id for question in questions
+    ]
+
+    question_details = {
+        question.id: {
+            "difficulty": question.difficulty,
+            "question_type": question.question_type
+        }
+        for question in questions
+    }
 
     try:
-        if exam.randomize_questions:
-            selected_ids = generate_paper(
-                question_ids,
-                student_id,
-                exam_id,
-                number
-            )
-        else:
-            if number <= 0 or number > len(question_ids):
-                raise ValueError("Invalid number of questions")
-
-            selected_ids = question_ids[:number]
+        selected_ids = generate_paper(
+            question_ids,
+            student_id,
+            exam_id,
+            number,
+            question_details=question_details,
+            difficulty_counts=rules.get("difficulty_counts"),
+            question_type_counts=rules.get("question_type_counts"),
+            randomize=exam.randomize_questions
+        )
 
     except ValueError as error:
         raise HTTPException(
@@ -224,4 +238,3 @@ def get_exam_paper(
         "total_questions": len(paper),
         "questions": paper
     }
-    
