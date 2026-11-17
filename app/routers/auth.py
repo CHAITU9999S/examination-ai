@@ -9,13 +9,18 @@ from fastapi import (
     HTTPException,
     status
 )
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_role
 from app.models import User
 from app.schemas import UserCreate, UserResponse, UserLogin
-from app.auth import hash_password, verify_password, create_access_token
+from app.auth import (
+    hash_password,
+    verify_password,
+    create_access_token
+)
 
 
 router = APIRouter(
@@ -23,6 +28,10 @@ router = APIRouter(
     tags=["Authentication"]
 )
 
+
+# --------------------------------------------------
+# 1. STUDENT REGISTRATION
+# --------------------------------------------------
 
 @router.post("/register", response_model=UserResponse)
 def register(
@@ -53,6 +62,10 @@ def register(
 
     return new_user
 
+
+# --------------------------------------------------
+# 2. LOGIN - STUDENT, EXAMINER AND ADMIN
+# --------------------------------------------------
 
 @router.post("/login")
 def login(
@@ -88,7 +101,14 @@ def login(
     }
 
 
-@router.post("/create-examiner", response_model=UserResponse)
+# --------------------------------------------------
+# 3. ADMIN CREATES EXAMINER
+# --------------------------------------------------
+
+@router.post(
+    "/create-examiner",
+    response_model=UserResponse
+)
 def create_examiner(
     user_data: UserCreate,
     db: Session = Depends(get_db),
@@ -119,7 +139,14 @@ def create_examiner(
     return examiner
 
 
-@router.post("/bootstrap-admin", response_model=UserResponse)
+# --------------------------------------------------
+# 4. SECURE INITIAL ADMIN CREATION
+# --------------------------------------------------
+
+@router.post(
+    "/bootstrap-admin",
+    response_model=UserResponse
+)
 def bootstrap_admin(
     user_data: UserCreate,
     bootstrap_secret: str = Header(
@@ -128,12 +155,14 @@ def bootstrap_admin(
     ),
     db: Session = Depends(get_db)
 ):
-    expected_secret = os.getenv("ADMIN_BOOTSTRAP_SECRET")
+    expected_secret = os.getenv(
+        "ADMIN_BOOTSTRAP_SECRET"
+    )
 
-    if not expected_secret:
+    if not expected_secret or len(expected_secret) < 32:
         raise HTTPException(
             status_code=503,
-            detail="Admin setup is not configured"
+            detail="Admin setup is not configured securely"
         )
 
     if not secrets.compare_digest(
@@ -145,10 +174,32 @@ def bootstrap_admin(
             detail="Invalid setup secret"
         )
 
-    if db.query(User).count() != 0:
+    # Prevent simultaneous bootstrap requests on PostgreSQL.
+    # The transaction-level lock is released after commit/rollback.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(741923610)")
+        )
+
+    # Existing Student or Examiner accounts do not block setup.
+    existing_admin = db.query(User).filter(
+        User.role == "admin"
+    ).first()
+
+    if existing_admin:
         raise HTTPException(
             status_code=409,
             detail="Admin setup is already completed"
+        )
+
+    existing_user = db.query(User).filter(
+        User.email == user_data.email
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
         )
 
     admin = User(
@@ -156,7 +207,8 @@ def bootstrap_admin(
         email=user_data.email,
         department=user_data.department,
         password_hash=hash_password(user_data.password),
-        role="admin"
+        role="admin",
+        is_active=True
     )
 
     db.add(admin)
@@ -164,4 +216,4 @@ def bootstrap_admin(
     db.refresh(admin)
 
     return admin
-            
+    
