@@ -65,7 +65,7 @@ def register(
 
 
 # --------------------------------------------------
-# 2. LOGIN - STUDENT, EXAMINER AND ADMIN
+# 2. LOGIN
 # --------------------------------------------------
 
 @router.post("/login")
@@ -195,7 +195,6 @@ def bootstrap_admin(
             text("SELECT pg_advisory_xact_lock(741923610)")
         )
 
-    # Student and Examiner accounts do not block Admin setup.
     existing_admin = db.query(User).filter(
         User.role == "admin"
     ).first()
@@ -226,6 +225,19 @@ def bootstrap_admin(
     )
 
     db.add(admin)
+    db.flush()
+
+    record_admin_activity(
+        db=db,
+        actor_user_id=admin.id,
+        target_user_id=admin.id,
+        action="bootstrapped_initial_admin",
+        details={
+            "created_role": "admin",
+            "creation_method": "secure_bootstrap"
+        }
+    )
+
     db.commit()
     db.refresh(admin)
 
