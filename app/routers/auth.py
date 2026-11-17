@@ -2,6 +2,8 @@
 import os
 import secrets
 
+from pydantic import BaseModel, Field
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -29,6 +31,13 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+
+class AdminPasswordRecovery(BaseModel):
+    new_password: str = Field(
+        min_length=8,
+        max_length=128
+    )
 
 
 # --------------------------------------------------
@@ -156,7 +165,76 @@ def create_examiner(
 
 
 # --------------------------------------------------
-# 4. SECURE INITIAL ADMIN CREATION
+# 4. TEMPORARY SECOND ADMIN PASSWORD RECOVERY
+# --------------------------------------------------
+
+@router.post("/recover-second-admin")
+def recover_second_admin(
+    recovery_data: AdminPasswordRecovery,
+    bootstrap_secret: str = Header(
+        ...,
+        alias="X-Admin-Bootstrap-Secret"
+    ),
+    db: Session = Depends(get_db)
+):
+    expected_secret = os.getenv(
+        "ADMIN_BOOTSTRAP_SECRET"
+    )
+
+    if not expected_secret or len(expected_secret) < 32:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin recovery is not configured securely"
+        )
+
+    if not secrets.compare_digest(
+        bootstrap_secret,
+        expected_secret
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid recovery secret"
+        )
+
+    admin = db.query(User).filter(
+        User.id == 14,
+        User.email == "admin2@example.com",
+        User.role == "admin"
+    ).first()
+
+    if admin is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Second Admin account not found"
+        )
+
+    admin.password_hash = hash_password(
+        recovery_data.new_password
+    )
+
+    record_admin_activity(
+        db=db,
+        actor_user_id=admin.id,
+        target_user_id=admin.id,
+        action="recovered_admin_password",
+        details={
+            "recovery_method": "temporary_bootstrap_secret"
+        }
+    )
+
+    db.commit()
+    db.refresh(admin)
+
+    return {
+        "message": "Second Admin password reset successfully",
+        "user_id": admin.id,
+        "email": admin.email,
+        "role": admin.role
+    }
+
+
+# --------------------------------------------------
+# 5. SECURE INITIAL ADMIN CREATION
 # --------------------------------------------------
 
 @router.post(
@@ -190,7 +268,6 @@ def bootstrap_admin(
             detail="Invalid setup secret"
         )
 
-    # Prevent simultaneous bootstrap requests on PostgreSQL.
     if db.get_bind().dialect.name == "postgresql":
         db.execute(
             text("SELECT pg_advisory_xact_lock(741923610)")
