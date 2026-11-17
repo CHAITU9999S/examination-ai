@@ -5,7 +5,6 @@ from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Enum,
     ForeignKey, Text, Float, JSON, UniqueConstraint
 )
-from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -149,4 +148,32 @@ class ProctorEvent(Base):
     tab_switch_count = Column(Integer, default=0)
     suspicion_points = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdminActivity(Base):
+    __tablename__ = "admin_activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    actor_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    target_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    action = Column(String(100), nullable=False)
+
+    details = Column(JSON, nullable=True)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
     
