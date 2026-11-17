@@ -1,4 +1,6 @@
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -26,7 +28,7 @@ def create_managed_account(
 ):
     """
     Create an Examiner or another Admin account.
-    Only authenticated Admins can reach the endpoints using this helper.
+    Only authenticated Admins can reach this helper.
     """
 
     existing_user = (
@@ -86,9 +88,7 @@ def admin_dashboard(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin"))
 ):
-    """
-    View dashboard statistics.
-    """
+    """View dashboard statistics."""
 
     return {
         "message": "Admin dashboard statistics",
@@ -109,9 +109,7 @@ def list_users(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin"))
 ):
-    """
-    List user accounts, optionally filtered by role.
-    """
+    """List user accounts, optionally filtered by role."""
 
     query = db.query(User)
 
@@ -164,9 +162,7 @@ def create_examiner(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin"))
 ):
-    """
-    Create an Examiner account.
-    """
+    """Create an Examiner account."""
 
     return create_managed_account(
         db=db,
@@ -185,10 +181,7 @@ def create_additional_admin(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin"))
 ):
-    """
-    Create an additional Admin account.
-    Existing Admin authentication is required.
-    """
+    """Create an additional Admin account."""
 
     return create_managed_account(
         db=db,
@@ -207,11 +200,22 @@ def update_user_status(
 ):
     """
     Activate or deactivate a user account.
+
+    Serialize account-status changes using a PostgreSQL
+    transaction-level advisory lock.
     """
+
+    # Prevent concurrent account-status changes from
+    # performing their checks at the same time.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(741923611)")
+        )
 
     target_user = (
         db.query(User)
         .filter(User.id == user_id)
+        .with_for_update()
         .first()
     )
 
@@ -221,12 +225,14 @@ def update_user_status(
             detail="User account not found"
         )
 
+    # An Admin cannot deactivate their own account.
     if target_user.id == admin.id and not update.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own Admin account"
         )
 
+    # Prevent deactivation of the last active Admin.
     if (
         target_user.role == "admin"
         and target_user.is_active
@@ -248,6 +254,20 @@ def update_user_status(
             )
 
     old_status = target_user.is_active
+
+    # Avoid recording unnecessary status changes.
+    if old_status == update.is_active:
+        return {
+            "message": "User account status is already set to the requested value",
+            "user": {
+                "id": target_user.id,
+                "full_name": target_user.full_name,
+                "email": target_user.email,
+                "role": target_user.role,
+                "is_active": target_user.is_active
+            }
+        }
+
     target_user.is_active = update.is_active
 
     record_admin_activity(
@@ -292,9 +312,7 @@ def get_admin_activity_logs(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin"))
 ):
-    """
-    View recorded Admin activities.
-    """
+    """View recorded Admin activities."""
 
     query = db.query(AdminActivity)
 
@@ -323,5 +341,5 @@ def get_admin_activity_logs(
             }
             for log in logs
         ]
-  }
-      
+    }
+    
