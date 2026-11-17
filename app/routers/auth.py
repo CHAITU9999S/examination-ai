@@ -21,6 +21,7 @@ from app.auth import (
     verify_password,
     create_access_token
 )
+from app.services.admin_service import record_admin_activity
 
 
 router = APIRouter(
@@ -129,10 +130,24 @@ def create_examiner(
         email=user_data.email,
         department=user_data.department,
         password_hash=hash_password(user_data.password),
-        role="examiner"
+        role="examiner",
+        is_active=True
     )
 
     db.add(examiner)
+    db.flush()
+
+    record_admin_activity(
+        db=db,
+        actor_user_id=current_user.id,
+        target_user_id=examiner.id,
+        action="created_examiner_account",
+        details={
+            "created_email": examiner.email,
+            "created_role": "examiner"
+        }
+    )
+
     db.commit()
     db.refresh(examiner)
 
@@ -175,13 +190,12 @@ def bootstrap_admin(
         )
 
     # Prevent simultaneous bootstrap requests on PostgreSQL.
-    # The transaction-level lock is released after commit/rollback.
     if db.get_bind().dialect.name == "postgresql":
         db.execute(
             text("SELECT pg_advisory_xact_lock(741923610)")
         )
 
-    # Existing Student or Examiner accounts do not block setup.
+    # Student and Examiner accounts do not block Admin setup.
     existing_admin = db.query(User).filter(
         User.role == "admin"
     ).first()
