@@ -16,6 +16,7 @@ from app.database import get_db
 from app.dependencies import require_role
 from app.models import User
 from app.schemas import UserCreate, UserResponse, UserLogin
+from app.admin_schemas import AdminAccountCreate
 from app.auth import (
     hash_password,
     verify_password,
@@ -163,7 +164,7 @@ def create_examiner(
     response_model=UserResponse
 )
 def bootstrap_admin(
-    user_data: UserCreate,
+    user_data: AdminAccountCreate,
     bootstrap_secret: str = Header(
         ...,
         alias="X-Admin-Bootstrap-Secret"
@@ -242,4 +243,3 @@ def bootstrap_admin(
     db.refresh(admin)
 
     return admin
-    
