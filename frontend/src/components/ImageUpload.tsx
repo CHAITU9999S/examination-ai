@@ -196,7 +196,7 @@ export default function ImageUpload({
           )}
 
           <p className="text-xs font-medium text-green-700">
-            Image selected. It will be uploaded when the parent form submits it.
+            Image selected. Use the upload button in the examination form to send it for OCR and examiner review.
           </p>
         </div>
       )}
