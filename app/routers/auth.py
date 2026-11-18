@@ -1,28 +1,20 @@
-
-import os
-import secrets
-
-from fastapi import (
-    APIRouter,
-    Depends,
-    Header,
-    HTTPException,
-    status
-)
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.dependencies import require_role
-from app.models import User
-from app.schemas import UserCreate, UserResponse, UserLogin
-from app.admin_schemas import AdminAccountCreate
 from app.auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    create_access_token,
     hash_password,
     verify_password,
-    create_access_token
 )
-from app.services.admin_service import record_admin_activity
+from app.database import get_db
+from app.models import User
+from app.schemas import (
+    LoginRequest,
+    StudentRegister,
+    TokenResponse,
+    UserResponse,
+)
 
 
 router = APIRouter(
@@ -31,215 +23,91 @@ router = APIRouter(
 )
 
 
-# --------------------------------------------------
-# 1. STUDENT REGISTRATION
-# --------------------------------------------------
+# -----------------------------------------
+# STUDENT PUBLIC REGISTRATION
+# -----------------------------------------
 
-@router.post("/register", response_model=UserResponse)
-def register(
-    user_data: UserCreate,
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def register_student(
+    student_data: StudentRegister,
     db: Session = Depends(get_db)
 ):
+    """
+    Public registration is restricted to Students.
+    Admin and Examiner accounts cannot be created here.
+    """
+
     existing_user = db.query(User).filter(
-        User.email == user_data.email
+        User.email == student_data.email
     ).first()
 
     if existing_user:
         raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists."
         )
 
-    new_user = User(
-        full_name=user_data.full_name,
-        email=user_data.email,
-        department=user_data.department,
-        password_hash=hash_password(user_data.password),
-        role="student"
+    new_student = User(
+        full_name=student_data.full_name,
+        email=student_data.email,
+        hashed_password=hash_password(student_data.password),
+        role="student",
+        is_active=True
     )
 
-    db.add(new_user)
+    db.add(new_student)
     db.commit()
-    db.refresh(new_user)
+    db.refresh(new_student)
 
-    return new_user
+    return new_student
 
 
-# --------------------------------------------------
-# 2. LOGIN
-# --------------------------------------------------
+# -----------------------------------------
+# USER LOGIN
+# -----------------------------------------
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=TokenResponse
+)
 def login(
-    user_data: UserLogin,
+    login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
+    """
+    Login is available to Students, Examiners and Admins.
+    """
+
     user = db.query(User).filter(
-        User.email == user_data.email
+        User.email == login_data.email
     ).first()
 
-    if not user or not verify_password(
-        user_data.password,
-        user.password_hash
+    if user is None or not verify_password(
+        login_data.password,
+        user.hashed_password
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect email or password.",
+            headers={"WWW-Authenticate": "Bearer"}
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            detail="Your account is inactive. Contact an Admin."
         )
 
-    token = create_access_token({
-        "sub": str(user.id)
-    })
-
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
-
-
-# --------------------------------------------------
-# 3. ADMIN CREATES EXAMINER
-# --------------------------------------------------
-
-@router.post(
-    "/create-examiner",
-    response_model=UserResponse
-)
-def create_examiner(
-    user_data: UserCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_role("admin"))
-):
-    existing_user = db.query(User).filter(
-        User.email == user_data.email
-    ).first()
-
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-
-    examiner = User(
-        full_name=user_data.full_name,
-        email=user_data.email,
-        department=user_data.department,
-        password_hash=hash_password(user_data.password),
-        role="examiner",
-        is_active=True
+    access_token = create_access_token(
+        subject=str(user.id)
     )
 
-    db.add(examiner)
-    db.flush()
-
-    record_admin_activity(
-        db=db,
-        actor_user_id=current_user.id,
-        target_user_id=examiner.id,
-        action="created_examiner_account",
-        details={
-            "created_email": examiner.email,
-            "created_role": "examiner"
-        }
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
-
-    db.commit()
-    db.refresh(examiner)
-
-    return examiner
-
-
-# --------------------------------------------------
-# 4. SECURE INITIAL ADMIN CREATION
-# --------------------------------------------------
-
-@router.post(
-    "/bootstrap-admin",
-    response_model=UserResponse
-)
-def bootstrap_admin(
-    user_data: AdminAccountCreate,
-    bootstrap_secret: str = Header(
-        ...,
-        alias="X-Admin-Bootstrap-Secret"
-    ),
-    db: Session = Depends(get_db)
-):
-    expected_secret = os.getenv(
-        "ADMIN_BOOTSTRAP_SECRET"
-    )
-
-    if not expected_secret or len(expected_secret) < 32:
-        raise HTTPException(
-            status_code=503,
-            detail="Admin setup is not configured securely"
-        )
-
-    if not secrets.compare_digest(
-        bootstrap_secret,
-        expected_secret
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid setup secret"
-        )
-
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(
-            text("SELECT pg_advisory_xact_lock(741923610)")
-        )
-
-    existing_admin = db.query(User).filter(
-        User.role == "admin"
-    ).first()
-
-    if existing_admin:
-        raise HTTPException(
-            status_code=409,
-            detail="Admin setup is already completed"
-        )
-
-    existing_user = db.query(User).filter(
-        User.email == user_data.email
-    ).first()
-
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-
-    admin = User(
-        full_name=user_data.full_name,
-        email=user_data.email,
-        department=user_data.department,
-        password_hash=hash_password(user_data.password),
-        role="admin",
-        is_active=True
-    )
-
-    db.add(admin)
-    db.flush()
-
-    record_admin_activity(
-        db=db,
-        actor_user_id=admin.id,
-        target_user_id=admin.id,
-        action="bootstrapped_initial_admin",
-        details={
-            "created_role": "admin",
-            "creation_method": "secure_bootstrap"
-        }
-    )
-
-    db.commit()
-    db.refresh(admin)
-
-    return admin
-    
