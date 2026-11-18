@@ -3,7 +3,7 @@ import math
 
 
 VALID_QUESTION_TYPES = {
-    "mcq",
+    "MCQ",
     "multi_select",
     "short_answer",
     "long_answer",
@@ -18,7 +18,7 @@ def validate_question(
     options=None,
     negative_marks=0,
     correct_option_index=None,
-    correct_option_indices=None
+    correct_option_indices=None,
 ):
     """Validate question content, marks and correct options."""
 
@@ -27,7 +27,10 @@ def validate_question(
         raise ValueError("Invalid question type")
 
     # Question text
-    if not isinstance(question_text, str) or not question_text.strip():
+    if (
+        not isinstance(question_text, str)
+        or not question_text.strip()
+    ):
         raise ValueError("Question text cannot be empty")
 
     # Marks
@@ -37,7 +40,9 @@ def validate_question(
         or not math.isfinite(marks)
         or marks <= 0
     ):
-        raise ValueError("Marks must be a positive finite number")
+        raise ValueError(
+            "Marks must be a positive finite number"
+        )
 
     # Negative marks
     if (
@@ -50,30 +55,50 @@ def validate_question(
             "Negative marks must be a non-negative finite number"
         )
 
-    # Options and correct answers
-    if question_type in {"mcq", "multi_select"}:
+    # Validate options for objective questions
+    if question_type in {"MCQ", "multi_select"}:
 
         if not isinstance(options, list) or len(options) < 2:
-            raise ValueError("At least two options are required")
+            raise ValueError(
+                "At least two options are required"
+            )
+
+        normalized_options = []
 
         for option in options:
+
             if isinstance(option, str):
-                if not option.strip():
-                    raise ValueError("Option text cannot be empty")
+                option_text = option.strip()
 
             elif isinstance(option, dict):
-                if (
-                    not isinstance(option.get("text"), str)
-                    or not option["text"].strip()
-                ):
-                    raise ValueError("Every option must have valid text")
+                option_text = option.get("text")
+
+                if not isinstance(option_text, str):
+                    raise ValueError(
+                        "Every option must have valid text"
+                    )
+
+                option_text = option_text.strip()
 
             else:
                 raise ValueError(
                     "Each option must be a string or an option dictionary"
                 )
 
-    if question_type == "mcq":
+            if not option_text:
+                raise ValueError(
+                    "Option text cannot be empty"
+                )
+
+            normalized_options.append(option_text.casefold())
+
+        if len(normalized_options) != len(set(normalized_options)):
+            raise ValueError(
+                "Duplicate options are not allowed"
+            )
+
+    # MCQ: exactly one correct option
+    if question_type == "MCQ":
 
         if correct_option_index is None:
             raise ValueError(
@@ -84,19 +109,27 @@ def validate_question(
             isinstance(correct_option_index, bool)
             or not isinstance(correct_option_index, int)
         ):
-            raise ValueError("Correct option index must be an integer")
+            raise ValueError(
+                "Correct option index must be an integer"
+            )
 
         if not 0 <= correct_option_index < len(options):
-            raise ValueError("Correct option index is invalid")
+            raise ValueError(
+                "Correct option index is invalid"
+            )
 
         if correct_option_indices is not None:
             raise ValueError(
                 "Use correct_option_index for MCQ"
             )
 
+    # Multi-select: one or more correct options
     elif question_type == "multi_select":
 
-        if not isinstance(correct_option_indices, list) or not correct_option_indices:
+        if (
+            not isinstance(correct_option_indices, list)
+            or not correct_option_indices
+        ):
             raise ValueError(
                 "Multi-select must have at least one correct option"
             )
@@ -107,7 +140,8 @@ def validate_question(
             )
 
         if any(
-            isinstance(index, bool) or not isinstance(index, int)
+            isinstance(index, bool)
+            or not isinstance(index, int)
             for index in correct_option_indices
         ):
             raise ValueError(
@@ -121,8 +155,11 @@ def validate_question(
 
         for index in correct_option_indices:
             if not 0 <= index < len(options):
-                raise ValueError("Correct option index is invalid")
+                raise ValueError(
+                    "Correct option index is invalid"
+                )
 
+    # Other question types cannot have option indexes
     elif (
         correct_option_index is not None
         or correct_option_indices is not None
@@ -132,4 +169,4 @@ def validate_question(
         )
 
     return True
-        
+    
