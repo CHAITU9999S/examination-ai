@@ -547,6 +547,14 @@ class ProctorEvent(Base):
 
     suspicion_points = Column(Float, nullable=True)
 
+    # Running server-calculated session score immediately after this event.
+    cumulative_suspicion_score = Column(
+        Float,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+
     # Compatibility with existing proctoring code.
     suspicion_score = synonym("suspicion_points")
 
