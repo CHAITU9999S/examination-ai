@@ -605,19 +605,22 @@ export default function StudentExamPage() {
     if (question.question_type === "image_upload") {
       return (
         <div className="mt-5 space-y-3">
-          <ImageUpload
-            onFileSelect={(file) => {
-              setPendingImageFiles((current) => {
-                const next = { ...current };
-                if (file) next[question.id] = file;
-                else delete next[question.id];
-                return next;
-              });
-            }}
-            disabled={imageUploading || submitting || uploadedImageQuestionIds.includes(question.id)}
-          />
-          {uploadedImageQuestionIds.includes(question.id) && (
-            <p role="status" className="text-sm text-green-300">Answer image uploaded and saved.</p>
+          {uploadedImageQuestionIds.includes(question.id) ? (
+            <p role="status" className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">
+              Answer image uploaded and saved for examiner review.
+            </p>
+          ) : (
+            <ImageUpload
+              onFileSelect={(file) => {
+                setPendingImageFiles((current) => {
+                  const next = { ...current };
+                  if (file) next[question.id] = file;
+                  else delete next[question.id];
+                  return next;
+                });
+              }}
+              disabled={imageUploading || submitting}
+            />
           )}
           {pendingImageFiles[question.id] && (
             <button
