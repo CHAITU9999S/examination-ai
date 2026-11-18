@@ -83,6 +83,35 @@ def _get_question_count(
     return number
 
 
+def _get_selection_question_pool(
+    exam: Exam,
+    questions: list[QuestionBank],
+):
+    """Apply simple exam-wide selection filters consistently."""
+
+    rules = exam.selection_rules or {}
+
+    if (
+        rules.get("difficulty")
+        and not rules.get("difficulty_counts")
+        and not rules.get("question_type_counts")
+    ):
+        required_difficulty = rules["difficulty"]
+
+        questions = [
+            question
+            for question in questions
+            if _enum_value(question.difficulty) == required_difficulty
+        ]
+
+        if not questions:
+            raise ValueError(
+                "No assigned questions match the configured difficulty."
+            )
+
+    return questions
+
+
 # ==========================================
 # GENERATE SESSION QUESTION IDS
 # ==========================================
@@ -110,11 +139,6 @@ def generate_session_question_ids(
         db,
     )
 
-    question_count = _get_question_count(
-        exam,
-        len(questions),
-    )
-
     rules = exam.selection_rules or {}
 
     if not isinstance(rules, dict):
@@ -122,31 +146,15 @@ def generate_session_question_ids(
             "Examination selection rules must be a dictionary."
         )
 
-    # Apply a single difficulty filter when distribution rules
-    # have not been configured.
-    if (
-        rules.get("difficulty")
-        and not rules.get("difficulty_counts")
-        and not rules.get("question_type_counts")
-    ):
-        required_difficulty = rules["difficulty"]
+    questions = _get_selection_question_pool(
+        exam,
+        questions,
+    )
 
-        questions = [
-            question
-            for question in questions
-            if _enum_value(question.difficulty)
-            == required_difficulty
-        ]
-
-        if not questions:
-            raise ValueError(
-                "No assigned questions match the configured difficulty."
-            )
-
-        question_count = _get_question_count(
-            exam,
-            len(questions),
-        )
+    question_count = _get_question_count(
+        exam,
+        len(questions),
+    )
 
     question_ids = [
         question.id
@@ -218,14 +226,19 @@ def get_or_create_session_question_ids(
             db,
         )
 
-        assigned_ids = {
+        selection_pool = _get_selection_question_pool(
+            exam,
+            assigned_questions,
+        )
+
+        selection_pool_ids = {
             question.id
-            for question in assigned_questions
+            for question in selection_pool
         }
 
         expected_count = _get_question_count(
             exam,
-            len(assigned_ids),
+            len(selection_pool_ids),
         )
 
         saved_ids = session.selected_question_ids
@@ -258,10 +271,10 @@ def get_or_create_session_question_ids(
                     "the examination question count."
                 )
 
-            if not set(saved_ids).issubset(assigned_ids):
+            if not set(saved_ids).issubset(selection_pool_ids):
                 raise ValueError(
-                    "Saved session contains questions not assigned "
-                    "to this examination."
+                    "Saved session contains questions outside the "
+                    "configured examination selection."
                 )
 
             return saved_ids
