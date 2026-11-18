@@ -42,12 +42,12 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 ).replace(/\/+$/, "");
 
-function getExamToken(): string {
+function getExamToken(sessionId: number): string {
   if (typeof window === "undefined") {
     throw new Error("Examination session is unavailable.");
   }
 
-  const token = sessionStorage.getItem(EXAM_TOKEN_KEY);
+  const token = sessionStorage.getItem(`examguard_exam_token_${sessionId}`) || sessionStorage.getItem(EXAM_TOKEN_KEY);
 
   if (!token) {
     throw new Error("Exam access token is missing.");
@@ -85,7 +85,7 @@ export const proctoringService = {
         snapshot_data: event.snapshot_data ?? null,
       },
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -106,7 +106,7 @@ export const proctoringService = {
   createHeartbeatUrl(sessionId: number): string {
     validateSessionId(sessionId);
 
-    const token = encodeURIComponent(getExamToken());
+    const token = encodeURIComponent(getExamToken(sessionId));
 
     return (
       `${buildWebSocketBaseUrl()}` +
