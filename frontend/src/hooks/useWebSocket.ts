@@ -17,6 +17,7 @@ interface UseWebSocketOptions {
   reconnectIntervalMs?: number;
   maxReconnectAttempts?: number;
   heartbeatIntervalMs?: number;
+  heartbeatPayload?: () => Record<string, unknown>;
   onMessage?: (message: unknown) => void;
   onError?: (error: Event) => void;
 }
@@ -38,6 +39,7 @@ export function useWebSocket({
   reconnectIntervalMs = 3000,
   maxReconnectAttempts = 5,
   heartbeatIntervalMs = 10000,
+  heartbeatPayload,
   onMessage,
   onError,
 }: UseWebSocketOptions): UseWebSocketReturn {
@@ -53,6 +55,7 @@ export function useWebSocket({
 
   const onMessageRef = useRef(onMessage);
   const onErrorRef = useRef(onError);
+  const heartbeatPayloadRef = useRef(heartbeatPayload);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
@@ -61,6 +64,10 @@ export function useWebSocket({
   useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
+
+  useEffect(() => {
+    heartbeatPayloadRef.current = heartbeatPayload;
+  }, [heartbeatPayload]);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -137,7 +144,13 @@ export function useWebSocket({
       if (heartbeatIntervalMs > 0) {
         heartbeatTimerRef.current = window.setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "heartbeat" }));
+            let signals: Record<string, unknown> = {};
+            try {
+              signals = heartbeatPayloadRef.current?.() ?? {};
+            } catch {
+              // A failed client-side summary must not stop the heartbeat.
+            }
+            socket.send(JSON.stringify({ type: "heartbeat", signals }));
           }
         }, heartbeatIntervalMs);
       }
