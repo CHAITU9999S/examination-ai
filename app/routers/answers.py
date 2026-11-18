@@ -22,7 +22,7 @@ from fastapi.security import (
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
-from PIL import Image
+from PIL import Image, ImageOps
 
 from app.auth import verify_token
 from app.database import get_db
@@ -853,12 +853,27 @@ async def upload_image_answer(
     stored_name = f"{uuid.uuid4().hex}{extension}"
     stored_file = answer_directory / stored_name
     relative_path = f"answers/{stored_name}"
+    thumbnail_directory = answer_directory / "thumbnails"
+    thumbnail_directory.mkdir(parents=True, exist_ok=True)
+    thumbnail_name = f"{Path(stored_name).stem}.webp"
+    thumbnail_file = thumbnail_directory / thumbnail_name
 
     ocr_result = None
     ocr_available = True
 
     try:
         stored_file.write_bytes(image_bytes)
+
+        # Generate a separate, bounded thumbnail for examiner review.
+        with Image.open(io.BytesIO(image_bytes)) as source_image:
+            thumbnail = ImageOps.exif_transpose(source_image).convert("RGB")
+            thumbnail.thumbnail((480, 480), Image.Resampling.LANCZOS)
+            thumbnail.save(
+                thumbnail_file,
+                format="WEBP",
+                quality=82,
+                method=6,
+            )
 
         try:
             ocr_result = extract_text_from_image(image_bytes)
@@ -896,11 +911,13 @@ async def upload_image_answer(
     except HTTPException:
         db.rollback()
         stored_file.unlink(missing_ok=True)
+        thumbnail_file.unlink(missing_ok=True)
         raise
 
     except (OSError, SQLAlchemyError):
         db.rollback()
         stored_file.unlink(missing_ok=True)
+        thumbnail_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unable to save the uploaded answer image.",
@@ -912,6 +929,7 @@ async def upload_image_answer(
         "session_id": session.id,
         "question_id": question_id,
         "image_uploaded": True,
+        "thumbnail_generated": thumbnail_file.is_file(),
         "ocr_available": ocr_available,
         "ocr_completed": bool(
             ocr_result and ocr_result.get("extracted_text")
