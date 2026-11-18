@@ -174,7 +174,7 @@ export const answerService = {
       `/answers/${sessionId}/upload`,
       formData,
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -189,7 +189,7 @@ export const answerService = {
     return api.get<SavedAnswer | null>(
       `/answers/${sessionId}/${questionId}`,
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -202,7 +202,7 @@ export const answerService = {
     const response = await api.get<
       SavedAnswer[] | { answers: SavedAnswer[] }
     >(`/answers/${sessionId}`, {
-      token: getExamToken(),
+      token: getExamToken(sessionId),
     });
 
     return Array.isArray(response)
