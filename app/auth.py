@@ -7,9 +7,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 
-# -----------------------------------------
+# ==========================================
 # AUTHENTICATION CONFIGURATION
-# -----------------------------------------
+# ==========================================
 
 JWT_SECRET_KEY = os.getenv(
     "JWT_SECRET_KEY",
@@ -23,9 +23,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(
 )
 
 
-# -----------------------------------------
+# ==========================================
 # PASSWORD HASHING
-# -----------------------------------------
+# ==========================================
 
 password_context = CryptContext(
     schemes=["bcrypt"],
@@ -51,15 +51,15 @@ def verify_password(
     )
 
 
-# -----------------------------------------
-# JWT ACCESS TOKEN CREATION
-# -----------------------------------------
+# ==========================================
+# NORMAL JWT ACCESS TOKEN CREATION
+# ==========================================
 
 def create_access_token(
     subject: str,
     expires_delta: Optional[timedelta] = None
 ) -> str:
-    """Create a signed JWT access token."""
+    """Create a signed JWT token for normal API authentication."""
 
     now = datetime.now(timezone.utc)
 
@@ -87,9 +87,64 @@ def create_access_token(
     )
 
 
-# -----------------------------------------
+# ==========================================
+# EXAMINATION ACCESS TOKEN CREATION
+# ==========================================
+
+def create_exam_access_token(
+    exam_id: int,
+    student_id: int,
+    session_id: int,
+    expires_at: datetime
+) -> str:
+    """
+    Create an examination-specific JWT token.
+
+    The token is bound to one examination, one student,
+    and one examination session.
+    """
+
+    if not all(
+        isinstance(value, int) and not isinstance(value, bool) and value > 0
+        for value in (exam_id, student_id, session_id)
+    ):
+        raise ValueError(
+            "Exam, student and session IDs must be positive integers"
+        )
+
+    if not isinstance(expires_at, datetime):
+        raise ValueError("A valid examination expiry time is required")
+
+    if expires_at.tzinfo is None:
+        expires_at_utc = expires_at.replace(tzinfo=timezone.utc)
+    else:
+        expires_at_utc = expires_at.astimezone(timezone.utc)
+
+    now = datetime.now(timezone.utc)
+
+    if expires_at_utc <= now:
+        raise ValueError("Examination token expiry must be in the future")
+
+    payload = {
+        "sub": str(student_id),
+        "exam_id": exam_id,
+        "student_id": student_id,
+        "session_id": session_id,
+        "iat": now,
+        "exp": expires_at_utc,
+        "token_type": "exam",
+    }
+
+    return jwt.encode(
+        payload,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM
+    )
+
+
+# ==========================================
 # JWT TOKEN VERIFICATION
-# -----------------------------------------
+# ==========================================
 
 def verify_token(
     token: str,
@@ -98,14 +153,8 @@ def verify_token(
     """
     Decode and verify a JWT token.
 
-    Args:
-        token: Encoded JWT token.
-        expected_token_type: Optional required token type,
-            such as "access" or "exam".
-
-    Returns:
-        Decoded payload when valid.
-        None when invalid, expired or of the wrong type.
+    Returns the decoded payload when valid.
+    Returns None when invalid, expired or of the wrong type.
     """
 
     try:
@@ -123,5 +172,5 @@ def verify_token(
 
         return payload
 
-    except JWTError:
+    except (JWTError, TypeError, ValueError):
         return None
