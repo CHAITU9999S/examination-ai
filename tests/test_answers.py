@@ -1,8 +1,10 @@
 
+import io
 import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from PIL import Image
 
 from app.auth import create_exam_access_token
 from app.models import (
@@ -550,3 +552,83 @@ def test_image_upload_question_rejects_text_submission(
     )
 
     assert response.status_code == 400
+
+
+def test_image_answer_upload_stores_image_and_ocr_text(
+    client,
+    db_session,
+    answer_test_data,
+    monkeypatch,
+    tmp_path,
+):
+    data = answer_test_data
+
+    image_question = QuestionBank(
+        question_text="Upload a handwritten answer.",
+        question_type="image_upload",
+        subject="Programming",
+        difficulty="easy",
+        marks=5,
+        negative_marks=0,
+    )
+    db_session.add(image_question)
+    db_session.commit()
+    db_session.refresh(image_question)
+
+    db_session.add(
+        ExamQuestion(
+            exam_id=data["exam"].id,
+            question_id=image_question.id,
+        )
+    )
+    data["session"].selected_question_ids.append(image_question.id)
+    db_session.commit()
+
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (40, 40), "white").save(
+        image_buffer,
+        format="PNG",
+    )
+    image_bytes = image_buffer.getvalue()
+
+    monkeypatch.setenv(
+        "ANSWER_UPLOAD_DIR",
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        "app.routers.answers.extract_text_from_image",
+        lambda image_data: {
+            "success": True,
+            "extracted_text": "A handwritten database answer.",
+            "message": "Text extracted successfully.",
+            "requires_manual_review": True,
+        },
+    )
+
+    response = client.post(
+        f"/answers/{data['session'].id}/upload",
+        headers=exam_headers(data["token"]),
+        data={"question_id": str(image_question.id)},
+        files={
+            "file": (
+                "handwritten-answer.png",
+                image_bytes,
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["image_uploaded"] is True
+    assert response.json()["ocr_completed"] is True
+    assert response.json()["requires_manual_review"] is True
+
+    saved_answer = db_session.query(Answer).filter(
+        Answer.session_id == data["session"].id,
+        Answer.question_id == image_question.id,
+    ).first()
+
+    assert saved_answer is not None
+    assert saved_answer.answer_text == "A handwritten database answer."
+    assert saved_answer.image_path.startswith("answers/")
+    assert (tmp_path / saved_answer.image_path).is_file()
