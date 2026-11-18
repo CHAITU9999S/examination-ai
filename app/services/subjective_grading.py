@@ -222,6 +222,17 @@ def generate_ai_grading_suggestion(
             detail="Question maximum marks are invalid.",
         )
 
+    ai_grading_enabled = os.getenv(
+        "AI_GRADING_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+    if not ai_grading_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI grading is disabled until it is explicitly enabled by the application administrator.",
+        )
+
     api_key = os.getenv("OPENAI_API_KEY")
 
     if not api_key:
