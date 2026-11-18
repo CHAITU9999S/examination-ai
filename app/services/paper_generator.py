@@ -1,5 +1,7 @@
 
 import random
+from collections import deque
+from math import isfinite
 
 
 def generate_paper(
@@ -10,60 +12,95 @@ def generate_paper(
     question_details=None,
     difficulty_counts=None,
     question_type_counts=None,
-    randomize=True
+    randomize=True,
 ):
-    if number_of_questions <= 0:
-        raise ValueError("Number of questions must be positive")
+    """Generate a deterministic question paper for a student and exam."""
 
-    if number_of_questions > len(question_ids):
+    # Validate requested question count.
+    if (
+        isinstance(number_of_questions, bool)
+        or not isinstance(number_of_questions, int)
+        or number_of_questions <= 0
+    ):
+        raise ValueError("Number of questions must be a positive integer")
+
+    if not isinstance(question_ids, (list, tuple)):
+        raise ValueError("Question IDs must be a list or tuple")
+
+    selected = list(question_ids)
+
+    if len(selected) != len(set(selected)):
+        raise ValueError("Duplicate question IDs are not allowed")
+
+    if number_of_questions > len(selected):
         raise ValueError("Not enough questions available")
+
+    if not isinstance(randomize, bool):
+        raise ValueError("Randomize must be a Boolean value")
 
     seed = f"{exam_id}-{student_id}"
     rng = random.Random(seed)
 
-    selected = list(question_ids)
-
-    # Preserve the existing behavior when no distributions are configured.
+    # Preserve existing behavior when distributions are not configured.
     if not difficulty_counts and not question_type_counts:
         if randomize:
             rng.shuffle(selected)
 
         return selected[:number_of_questions]
 
-    if not question_details:
+    if not isinstance(question_details, dict):
         raise ValueError(
             "Question details are required for distribution-based selection"
         )
+
+    if not isinstance(difficulty_counts, dict) or not isinstance(
+        question_type_counts, dict
+    ):
+        raise ValueError("Both distributions must be dictionaries")
 
     if not difficulty_counts or not question_type_counts:
         raise ValueError(
             "Both difficulty and question-type distributions are required"
         )
 
-    if sum(difficulty_counts.values()) != number_of_questions:
-        raise ValueError(
-            "Difficulty counts must equal the requested question count"
-        )
+    # Validate distribution values.
+    for distribution_name, distribution in (
+        ("Difficulty", difficulty_counts),
+        ("Question-type", question_type_counts),
+    ):
+        for count in distribution.values():
+            if (
+                isinstance(count, bool)
+                or not isinstance(count, int)
+                or count < 0
+            ):
+                raise ValueError(
+                    f"{distribution_name} counts must be non-negative integers"
+                )
 
-    if sum(question_type_counts.values()) != number_of_questions:
-        raise ValueError(
-            "Question-type counts must equal the requested question count"
-        )
+        if sum(distribution.values()) != number_of_questions:
+            raise ValueError(
+                f"{distribution_name} counts must equal "
+                "the requested question count"
+            )
 
     difficulties = list(difficulty_counts)
     question_types = list(question_type_counts)
 
-    # Group available questions by difficulty and question type.
+    # Normalize enum values and group available questions.
     groups = {}
 
     for question_id in selected:
         details = question_details.get(question_id)
 
-        if not details:
+        if not isinstance(details, dict):
             continue
 
         difficulty = details.get("difficulty")
         question_type = details.get("question_type")
+
+        difficulty = getattr(difficulty, "value", difficulty)
+        question_type = getattr(question_type, "value", question_type)
 
         if difficulty not in difficulty_counts:
             continue
@@ -75,15 +112,14 @@ def generate_paper(
             (difficulty, question_type), []
         ).append(question_id)
 
-    # Randomize available questions within each group.
+    # Randomize questions within each group.
     for group in groups.values():
         if randomize:
             rng.shuffle(group)
 
-    # Build a maximum-flow network to satisfy both distributions.
+    # Build a maximum-flow network.
     source = "source"
     sink = "sink"
-
     graph = {}
 
     def add_edge(start, end, capacity):
@@ -93,20 +129,23 @@ def generate_paper(
         graph[start][end] = capacity
         graph[end][start] = 0
 
+    # Source -> difficulty nodes.
     for difficulty in difficulties:
         add_edge(
             source,
             ("difficulty", difficulty),
-            difficulty_counts[difficulty]
+            difficulty_counts[difficulty],
         )
 
+    # Question-type nodes -> sink.
     for question_type in question_types:
         add_edge(
             ("type", question_type),
             sink,
-            question_type_counts[question_type]
+            question_type_counts[question_type],
         )
 
+    # Difficulty nodes -> question-type nodes.
     for difficulty in difficulties:
         for question_type in question_types:
             available = len(
@@ -116,19 +155,18 @@ def generate_paper(
             add_edge(
                 ("difficulty", difficulty),
                 ("type", question_type),
-                available
+                available,
             )
 
-    # Find maximum flow using breadth-first search.
+    # Edmonds-Karp maximum-flow algorithm.
     total_flow = 0
 
     while True:
         parent = {source: None}
-        queue = [source]
+        queue = deque([source])
 
         while queue and sink not in parent:
-            current = queue.pop(0)
-
+            current = queue.popleft()
             neighbors = list(graph[current])
 
             if randomize:
@@ -142,6 +180,9 @@ def generate_paper(
                     parent[neighbor] = current
                     queue.append(neighbor)
 
+                    if neighbor == sink:
+                        break
+
         if sink not in parent:
             break
 
@@ -152,7 +193,7 @@ def generate_paper(
             previous = parent[current]
             flow = min(
                 flow,
-                graph[previous][current]
+                graph[previous][current],
             )
             current = previous
 
@@ -173,7 +214,7 @@ def generate_paper(
             "Available questions cannot satisfy the configured distributions"
         )
 
-    # Select questions according to the calculated flow.
+    # Extract selected questions from the final flow.
     paper = []
 
     for difficulty in difficulties:
@@ -184,14 +225,16 @@ def generate_paper(
 
             selected_count = graph[type_node][difficulty_node]
 
-            if selected_count:
-                available_questions = groups.get(
-                    (difficulty, question_type), []
-                )
+            if selected_count <= 0:
+                continue
 
-                paper.extend(
-                    available_questions[:selected_count]
-                )
+            available_questions = groups.get(
+                (difficulty, question_type), []
+            )
+
+            paper.extend(
+                available_questions[:selected_count]
+            )
 
     if len(paper) != number_of_questions:
         raise ValueError(
@@ -202,4 +245,4 @@ def generate_paper(
         rng.shuffle(paper)
 
     return paper
-    
+        
