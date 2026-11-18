@@ -16,7 +16,9 @@ from app.models import (
     QuestionBank,
     User
 )
-from app.services.paper_generator import generate_paper
+from app.services.session_paper import (
+    get_or_create_session_question_ids
+)
 
 
 router = APIRouter(
@@ -94,62 +96,6 @@ def validate_student_exam_token(
     return payload, session
 
 
-def get_selected_question_ids(
-    exam: Exam,
-    student_id: int,
-    db: Session
-):
-    query = db.query(QuestionBank).filter(
-        QuestionBank.subject == exam.subject
-    )
-
-    rules = exam.selection_rules or {}
-
-    if (
-        rules.get("difficulty")
-        and not rules.get("difficulty_counts")
-    ):
-        query = query.filter(
-            QuestionBank.difficulty == rules["difficulty"]
-        )
-
-    questions = query.order_by(
-        QuestionBank.id
-    ).all()
-
-    question_ids = [
-        question.id for question in questions
-    ]
-
-    question_details = {
-        question.id: {
-            "difficulty": question.difficulty,
-            "question_type": question.question_type
-        }
-        for question in questions
-    }
-
-    number = exam.total_questions or len(questions)
-
-    try:
-        return generate_paper(
-            question_ids,
-            student_id,
-            exam.id,
-            number,
-            question_details=question_details,
-            difficulty_counts=rules.get("difficulty_counts"),
-            question_type_counts=rules.get("question_type_counts"),
-            randomize=exam.randomize_questions
-        )
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error)
-        )
-
-
 @router.get("/{session_id}/answers")
 def get_saved_answers(
     session_id: int,
@@ -199,21 +145,23 @@ def save_exam_answer(
     db: Session = Depends(get_db)
 ):
 
-    payload, session = validate_student_exam_token(
+    payload, validated_session = validate_student_exam_token(
         credentials,
         session_id,
         db
     )
 
-    if session.status != "in_progress":
+    if validated_session.status != "in_progress":
         raise HTTPException(
             status_code=409,
             detail="This exam session is no longer active"
         )
 
-    # Lock the session while saving an answer.
+    # Lock only the session belonging to this student and exam.
     session = db.query(ExamSession).filter(
-        ExamSession.id == session_id
+        ExamSession.id == session_id,
+        ExamSession.exam_id == validated_session.exam_id,
+        ExamSession.student_id == validated_session.student_id
     ).with_for_update().first()
 
     if not session or session.status != "in_progress":
@@ -244,16 +192,49 @@ def save_exam_answer(
             detail="Exam not found"
         )
 
-    selected_question_ids = get_selected_question_ids(
-        exam,
-        session.student_id,
-        db
-    )
+    # Use the permanent question IDs saved for this session.
+    try:
+        selected_question_ids = get_or_create_session_question_ids(
+            session,
+            exam,
+            db
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail=str(error)
+        )
 
     if question_id not in selected_question_ids:
         raise HTTPException(
             status_code=403,
             detail="This question does not belong to your exam paper"
+        )
+
+    # Re-lock and recheck the session because initializing an older
+    # session without saved question IDs may have committed the database.
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.exam_id == validated_session.exam_id,
+        ExamSession.student_id == validated_session.student_id
+    ).with_for_update().first()
+
+    if not session or session.status != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail="This exam session is no longer active"
+        )
+
+    now = datetime.utcnow()
+
+    if now >= session.expires_at:
+        session.status = "submitted"
+        session.submitted_at = now
+        db.commit()
+
+        raise HTTPException(
+            status_code=403,
+            detail="Exam time has expired. Your exam has been submitted"
         )
 
     question = db.query(QuestionBank).filter(
