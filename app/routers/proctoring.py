@@ -404,6 +404,62 @@ async def proctoring_heartbeat(
                 })
                 continue
 
+            raw_signals = payload.get("signals", {})
+            if not isinstance(raw_signals, dict):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Heartbeat signals must be a JSON object.",
+                })
+                continue
+
+            event_counts = raw_signals.get("event_counts", {})
+            if not isinstance(event_counts, dict):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Heartbeat event_counts must be a JSON object.",
+                })
+                continue
+
+            allowed_event_types = set(EVENT_SUSPICION_POINTS) - {"heartbeat"}
+            normalized_counts = {}
+            invalid_counts = False
+            for event_type, count in event_counts.items():
+                if (
+                    event_type not in allowed_event_types
+                    or isinstance(count, bool)
+                    or not isinstance(count, int)
+                    or count < 0
+                ):
+                    invalid_counts = True
+                    break
+                normalized_counts[event_type] = min(count, 1000000)
+
+            total_event_count = raw_signals.get("total_event_count", 0)
+            tab_switch_count = raw_signals.get("tab_switch_count", 0)
+            auto_flagged = raw_signals.get("auto_flagged", False)
+            if (
+                invalid_counts
+                or isinstance(total_event_count, bool)
+                or not isinstance(total_event_count, int)
+                or total_event_count < 0
+                or isinstance(tab_switch_count, bool)
+                or not isinstance(tab_switch_count, int)
+                or tab_switch_count < 0
+                or not isinstance(auto_flagged, bool)
+            ):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Heartbeat signal summary is invalid.",
+                })
+                continue
+
+            normalized_signals = {
+                "event_counts": normalized_counts,
+                "total_event_count": min(total_event_count, 1000000),
+                "tab_switch_count": min(tab_switch_count, 1000000),
+                "auto_flagged": auto_flagged,
+            }
+
             db.expire_all()
 
             session = db.query(ExamSession).filter(
@@ -435,6 +491,7 @@ async def proctoring_heartbeat(
 
             heartbeat_time = get_current_utc_time()
             session.last_heartbeat_at = heartbeat_time
+            session.last_heartbeat_signals = normalized_signals
             db.commit()
 
             remaining_seconds = max(
@@ -452,6 +509,7 @@ async def proctoring_heartbeat(
                 "session_id": session_id,
                 "server_time": heartbeat_time.isoformat(),
                 "last_heartbeat_at": heartbeat_time.isoformat(),
+                "signals_received": normalized_signals,
                 "remaining_seconds": remaining_seconds,
                 "status": session.status,
             })
