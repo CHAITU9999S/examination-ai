@@ -5,6 +5,7 @@ from app.auth import (
     create_access_token,
     create_exam_access_token,
 )
+from app.services.session_service import get_or_create_session_question_ids
 from app.models import (
     User,
     Exam,
@@ -328,3 +329,82 @@ def test_valid_student_can_access_assigned_exam_paper(
     # Correct answers must never be exposed to students.
     assert "is_correct" not in returned_option
     
+
+
+def test_saved_question_selection_uses_filtered_pool_when_total_is_unset(
+    db_session,
+):
+    student = create_student(
+        db_session,
+        email="filtered-paper-student@test.com",
+    )
+
+    exam = Exam(
+        title="Filtered Question Pool",
+        subject="General Knowledge",
+        duration_minutes=30,
+        total_questions=None,
+        randomize_questions=False,
+        selection_rules={"difficulty": "easy"},
+        created_by=None,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    easy_questions = [
+        QuestionBank(
+            question_text=f"Easy question {index}",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=1,
+            negative_marks=0,
+        )
+        for index in range(1, 3)
+    ]
+    hard_question = QuestionBank(
+        question_text="Hard question",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="hard",
+        marks=1,
+        negative_marks=0,
+    )
+    db_session.add_all([*easy_questions, hard_question])
+    db_session.commit()
+
+    for question in [*easy_questions, hard_question]:
+        db_session.add(
+            ExamQuestion(
+                exam_id=exam.id,
+                question_id=question.id,
+            )
+        )
+    db_session.commit()
+
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        expires_at=(
+            datetime.now(timezone.utc).replace(tzinfo=None)
+            + timedelta(minutes=30)
+        ),
+        status="in_progress",
+        selected_question_ids=None,
+    )
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+
+    selected_ids = get_or_create_session_question_ids(
+        session,
+        exam,
+        db_session,
+    )
+
+    assert len(selected_ids) == 2
+    assert set(selected_ids) == {
+        question.id for question in easy_questions
+    }
