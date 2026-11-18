@@ -30,6 +30,7 @@ interface UseProctoringReturn {
   events: ProctoringEvent[];
   tabSwitchCount: number;
   warningCount: number;
+  isAutoFlagged: boolean;
   isMonitoring: boolean;
   reportFaceNotDetected: () => void;
   reportMultipleFaces: () => void;
@@ -47,6 +48,9 @@ export function useProctoring({
   const [events, setEvents] = useState<ProctoringEvent[]>([]);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [warningCount, setWarningCount] = useState(0);
+  const [isAutoFlagged, setIsAutoFlagged] = useState(false);
+  const tabSwitchCountRef = useRef(0);
+  const autoFlaggedRef = useRef(false);
   const [isMonitoring, setIsMonitoring] = useState(false);
 
   const lastEventTimeRef = useRef<Record<string, number>>({});
@@ -87,12 +91,22 @@ export function useProctoring({
       setWarningCount((current) => current + 1);
 
       if (eventType === "tab_switch") {
-        setTabSwitchCount((current) => current + 1);
+        tabSwitchCountRef.current += 1;
+        setTabSwitchCount(tabSwitchCountRef.current);
+
+        const threshold = Math.max(0, Math.floor(maxTabWarnings));
+        if (
+          !autoFlaggedRef.current
+          && tabSwitchCountRef.current >= threshold
+        ) {
+          autoFlaggedRef.current = true;
+          setIsAutoFlagged(true);
+        }
       }
 
       onEventRef.current?.(event);
     },
-    [enabled, duplicateEventCooldownMs]
+    [enabled, duplicateEventCooldownMs, maxTabWarnings]
   );
 
   const reportFaceNotDetected = useCallback(() => {
@@ -133,7 +147,10 @@ export function useProctoring({
   const clearEvents = useCallback(() => {
     setEvents([]);
     setTabSwitchCount(0);
+    tabSwitchCountRef.current = 0;
     setWarningCount(0);
+    setIsAutoFlagged(false);
+    autoFlaggedRef.current = false;
     lastEventTimeRef.current = {};
   }, []);
 
@@ -193,6 +210,7 @@ export function useProctoring({
     events,
     tabSwitchCount,
     warningCount,
+    isAutoFlagged,
     isMonitoring,
     reportFaceNotDetected,
     reportMultipleFaces,
