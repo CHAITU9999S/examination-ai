@@ -1,71 +1,85 @@
-
-from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import (
-    auth,
-    questions,
-    exams,
-    exam_sessions,
-    answers,
-    admin
+
+# -----------------------------------------
+# APPLICATION CONFIGURATION
+# -----------------------------------------
+
+APP_NAME = os.getenv(
+    "APP_NAME",
+    "ExamGuard AI"
 )
 
-from app.services.exam_scheduler import (
-    start_exam_scheduler,
-    stop_exam_scheduler
+APP_ENV = os.getenv(
+    "APP_ENV",
+    "development"
 )
 
+DEBUG = APP_ENV == "development"
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Start automatic exam submission scheduler.
-    start_exam_scheduler()
 
-    yield
-
-    # Stop scheduler during application shutdown.
-    stop_exam_scheduler()
-
+# -----------------------------------------
+# CREATE FASTAPI APPLICATION
+# -----------------------------------------
 
 app = FastAPI(
-    title="ExamGuard AI",
-    description="Intelligent Examination Platform",
+    title=APP_NAME,
+    description=(
+        "AI-Based Intelligent Examination Platform "
+        "with Automated Proctoring and Candidate "
+        "Performance Analysis."
+    ),
     version="1.0.0",
-    lifespan=lifespan
+    debug=DEBUG
 )
 
 
-# Authentication
-app.include_router(auth.router)
+# -----------------------------------------
+# CORS CONFIGURATION
+# -----------------------------------------
 
-# Question Bank
-app.include_router(questions.router)
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000"
+    ).split(",")
+    if origin.strip()
+]
 
-# Exam Configuration
-app.include_router(exams.router)
-
-# Exam Sessions
-app.include_router(exam_sessions.router)
-
-# Student Answers
-app.include_router(answers.router)
-
-# Admin Management
-app.include_router(admin.router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
-@app.get("/")
-def home():
+# -----------------------------------------
+# ROOT ENDPOINT
+# -----------------------------------------
+
+@app.get("/", tags=["General"])
+def root():
     return {
-        "message": "ExamGuard AI Backend Running"
+        "message": "Welcome to ExamGuard AI",
+        "application": APP_NAME,
+        "environment": APP_ENV,
+        "status": "running"
     }
 
 
-@app.get("/health")
-def health():
+# -----------------------------------------
+# HEALTH CHECK ENDPOINT
+# -----------------------------------------
+
+@app.get("/health", tags=["General"])
+def health_check():
     return {
-        "status": "healthy"
+        "status": "healthy",
+        "application": APP_NAME
 }
-    
