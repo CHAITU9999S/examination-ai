@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 
 
@@ -11,6 +10,25 @@ VALID_QUESTION_TYPES = {
     "long_answer",
     "image_upload"
 }
+
+
+def normalize_to_naive_utc(value):
+    """
+    Convert a datetime to naive UTC.
+
+    Naive datetime values are interpreted as UTC.
+    Timezone-aware values are converted to UTC first.
+    """
+
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        return value
+
+    return value.astimezone(
+        timezone.utc
+    ).replace(tzinfo=None)
 
 
 def validate_distribution(
@@ -60,39 +78,29 @@ def validate_exam_config(
     gaze_tracking_sensitivity=None,
     max_tab_switch_warnings=None
 ):
-    if duration_minutes <= 0:
-        raise ValueError("Duration must be positive")
+    if (
+        isinstance(duration_minutes, bool)
+        or not isinstance(duration_minutes, int)
+        or duration_minutes <= 0
+    ):
+        raise ValueError("Duration must be a positive integer")
 
-    if start_time and end_time:
-        if start_time.tzinfo != end_time.tzinfo:
-            raise ValueError(
-                "Start and end times must use compatible timezones"
-            )
+    normalized_start = normalize_to_naive_utc(start_time)
+    normalized_end = normalize_to_naive_utc(end_time)
 
-        if end_time <= start_time:
+    if normalized_start and normalized_end:
+        if normalized_end <= normalized_start:
             raise ValueError("End time must be after start time")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(
+        tzinfo=None
+    )
 
-    if start_time:
-        normalized_start = (
-            start_time.replace(tzinfo=timezone.utc)
-            if start_time.tzinfo is None
-            else start_time.astimezone(timezone.utc)
-        )
+    if normalized_start and normalized_start < now:
+        raise ValueError("Start time cannot be in the past")
 
-        if normalized_start < now:
-            raise ValueError("Start time cannot be in the past")
-
-    if end_time:
-        normalized_end = (
-            end_time.replace(tzinfo=timezone.utc)
-            if end_time.tzinfo is None
-            else end_time.astimezone(timezone.utc)
-        )
-
-        if normalized_end < now:
-            raise ValueError("End time cannot be in the past")
+    if normalized_end and normalized_end <= now:
+        raise ValueError("End time must be in the future")
 
     if selection_rules is not None:
         if not isinstance(selection_rules, dict):
@@ -145,16 +153,24 @@ def validate_exam_config(
             )
 
     if gaze_tracking_sensitivity is not None:
-        if not 0 <= gaze_tracking_sensitivity <= 1:
+        if (
+            isinstance(gaze_tracking_sensitivity, bool)
+            or not isinstance(gaze_tracking_sensitivity, (int, float))
+            or not 0 <= gaze_tracking_sensitivity <= 1
+        ):
             raise ValueError(
                 "Gaze tracking sensitivity must be between 0 and 1"
             )
 
     if max_tab_switch_warnings is not None:
-        if max_tab_switch_warnings < 0:
+        if (
+            isinstance(max_tab_switch_warnings, bool)
+            or not isinstance(max_tab_switch_warnings, int)
+            or max_tab_switch_warnings < 0
+        ):
             raise ValueError(
                 "Maximum tab-switch warnings cannot be negative"
             )
 
     return True
-            
+        
