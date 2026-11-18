@@ -1,4 +1,3 @@
-
 import json
 from datetime import datetime
 
@@ -30,6 +29,69 @@ exam_token_scheme = HTTPBearer()
 
 class AnswerSubmission(BaseModel):
     answer_text: str = Field(min_length=1)
+
+
+def validate_student_exam_token(
+    credentials: HTTPAuthorizationCredentials,
+    session_id: int,
+    db: Session
+):
+    payload = verify_token(credentials.credentials)
+
+    if not payload or payload.get("token_type") != "exam":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid exam access token"
+        )
+
+    try:
+        exam_id = int(payload.get("exam_id"))
+        student_id = int(payload.get("student_id"))
+        token_user_id = int(payload.get("sub"))
+        token_session_id = int(payload.get("session_id"))
+
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid exam token identity"
+        )
+
+    if (
+        student_id != token_user_id
+        or session_id != token_session_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Exam token identity mismatch"
+        )
+
+    student = db.query(User).filter(
+        User.id == student_id
+    ).first()
+
+    if (
+        not student
+        or not student.is_active
+        or student.role != "student"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Student account is invalid or inactive"
+        )
+
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student_id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Exam session not found"
+        )
+
+    return payload, session
 
 
 def get_selected_question_ids(
@@ -88,6 +150,44 @@ def get_selected_question_ids(
         )
 
 
+@router.get("/{session_id}/answers")
+def get_saved_answers(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme
+    ),
+    db: Session = Depends(get_db)
+):
+
+    payload, session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db
+    )
+
+    answers = db.query(Answer).filter(
+        Answer.session_id == session.id
+    ).order_by(
+        Answer.question_id
+    ).all()
+
+    return {
+        "session_id": session.id,
+        "exam_id": session.exam_id,
+        "status": session.status,
+        "total_saved_answers": len(answers),
+        "answers": [
+            {
+                "answer_id": answer.id,
+                "question_id": answer.question_id,
+                "answer_text": answer.answer_text,
+                "image_path": answer.image_path
+            }
+            for answer in answers
+        ]
+    }
+
+
 @router.post("/{session_id}/answers/{question_id}")
 def save_exam_answer(
     session_id: int,
@@ -99,65 +199,24 @@ def save_exam_answer(
     db: Session = Depends(get_db)
 ):
 
-    # 1. Verify the exam-specific access token.
-    payload = verify_token(credentials.credentials)
-
-    if not payload or payload.get("token_type") != "exam":
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid exam access token"
-        )
-
-    try:
-        exam_id = int(payload.get("exam_id"))
-        student_id = int(payload.get("student_id"))
-        token_user_id = int(payload.get("sub"))
-        token_session_id = int(payload.get("session_id"))
-
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid exam token identity"
-        )
-
-    if (
-        student_id != token_user_id
-        or session_id != token_session_id
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Exam token identity mismatch"
-        )
-
-    # 2. Confirm that the student account is active.
-    student = db.query(User).filter(
-        User.id == student_id
-    ).first()
-
-    if (
-        not student
-        or not student.is_active
-        or student.role != "student"
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Student account is invalid or inactive"
-        )
-
-    # 3. Lock the session while saving the answer.
-    session = db.query(ExamSession).filter(
-        ExamSession.id == session_id,
-        ExamSession.exam_id == exam_id,
-        ExamSession.student_id == student_id
-    ).with_for_update().first()
-
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail="Exam session not found"
-        )
+    payload, session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db
+    )
 
     if session.status != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail="This exam session is no longer active"
+        )
+
+    # Lock the session while saving an answer.
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id
+    ).with_for_update().first()
+
+    if not session or session.status != "in_progress":
         raise HTTPException(
             status_code=409,
             detail="This exam session is no longer active"
@@ -175,9 +234,8 @@ def save_exam_answer(
             detail="Exam time has expired. Your exam has been submitted"
         )
 
-    # 4. Confirm that the exam exists.
     exam = db.query(Exam).filter(
-        Exam.id == exam_id
+        Exam.id == session.exam_id
     ).first()
 
     if not exam:
@@ -186,10 +244,9 @@ def save_exam_answer(
             detail="Exam not found"
         )
 
-    # 5. Regenerate this student's exact question paper.
     selected_question_ids = get_selected_question_ids(
         exam,
-        student_id,
+        session.student_id,
         db
     )
 
@@ -217,7 +274,7 @@ def save_exam_answer(
             detail="Answer cannot be empty"
         )
 
-    # 6. Validate the submitted answer by question type.
+    # Validate MCQ answers.
     if question.question_type == "MCQ":
 
         try:
@@ -241,6 +298,7 @@ def save_exam_answer(
 
         answer_text = str(option_id)
 
+    # Validate multiple-select answers.
     elif question.question_type == "multi_select":
 
         try:
@@ -301,7 +359,7 @@ def save_exam_answer(
             detail="Unsupported question type"
         )
 
-    # 7. Update the existing answer or create a new one.
+    # Update an existing answer or create a new one.
     answer = db.query(Answer).filter(
         Answer.session_id == session_id,
         Answer.question_id == question_id
@@ -310,6 +368,7 @@ def save_exam_answer(
     if answer:
         answer.answer_text = answer_text
         answer.image_path = None
+
     else:
         answer = Answer(
             session_id=session_id,
@@ -328,5 +387,5 @@ def save_exam_answer(
         "question_id": question_id,
         "question_type": question.question_type,
         "saved": True
-}
-  
+    }
+    
