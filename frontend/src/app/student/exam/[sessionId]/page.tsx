@@ -501,6 +501,17 @@ export default function StudentExamPage() {
     heartbeatIntervalMs: 10000,
     reconnectIntervalMs: 3000,
     maxReconnectAttempts: 10,
+    onMessage: (message) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "session_expired"
+      ) {
+        setRemainingSeconds(0);
+        setError("The examination session has expired. Submitting your saved answers.");
+      }
+    },
   });
 
   useEffect(() => {
