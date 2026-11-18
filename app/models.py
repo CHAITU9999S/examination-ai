@@ -123,7 +123,8 @@ class ExamSession(Base):
             "exam_id",
             "student_id",
             unique=True,
-            postgresql_where=text("status = 'in_progress'")
+            postgresql_where=text("status = 'in_progress'"),
+            sqlite_where=text("status = 'in_progress'")
         ),
     )
 
@@ -137,12 +138,15 @@ class ExamSession(Base):
     status = Column(String(20), default="in_progress")
     suspicion_score = Column(Float, default=0)
 
-    # Stores the permanent question IDs selected for this session.
     selected_question_ids = Column(JSON, nullable=True)
 
 
 class Answer(Base):
     __tablename__ = "answers"
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
