@@ -261,6 +261,17 @@ The current implementation is limited to Milestones 1 and 2 and the agreed UI an
 - The student exam flow now uses the backend's exam-start, paper, remaining-time, answer-save, image-upload, and submit routes. Students can list available exams; exam paper responses include the IDs and metadata expected by the frontend.
 - AI grading remains disabled by default. It requires an administrator-configured server-side API key and explicit enablement; the examiner must review and approve marks.
 
+### Backend Container Deployment
+
+The repository includes a backend Dockerfile and Docker Compose configuration. The image installs Tesseract OCR and stores uploaded answer images in the named `examguard_uploads` volume.
+
+1. Copy `.env.example` to `.env`.
+2. Set a valid PostgreSQL `DATABASE_URL` and a strong `JWT_SECRET_KEY` in `.env`.
+3. Start the backend with `docker compose up --build -d`.
+4. Keep the `examguard_uploads` volume attached to the backend when redeploying.
+
+Running `docker compose down` preserves the named volume. Do not use `docker compose down -v` unless you intentionally want to delete uploaded answer files. Never commit `.env` or API keys.
+
 ## 8. Security
 
 - JWT-based authentication.
