@@ -242,10 +242,14 @@ def generate_ai_grading_suggestion(
             detail="AI grading is unavailable because OPENAI_API_KEY is not configured.",
         )
 
-    model = os.getenv(
-        "OPENAI_MODEL",
-        DEFAULT_MODEL,
-    )
+    model = (
+        os.getenv("AI_GRADING_MODEL")
+        or os.getenv("OPENAI_MODEL")
+        or DEFAULT_MODEL
+    ).strip()
+
+    if not model:
+        model = DEFAULT_MODEL
 
     expected_answer = question.expected_answer or ""
     model_answer = question.model_answer_text or ""
