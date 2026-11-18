@@ -77,15 +77,13 @@ The platform provides separate access and functionality for Students, Examiners,
 - OCR support for image-based answers.
 
 ### Automated Proctoring
-- Browser webcam support.
-- Face detection.
-- FaceMesh-based gaze estimation.
-- Multiple-person detection.
-- Browser tab visibility monitoring.
-- Window focus monitoring.
-- Proctoring event logging.
-- Suspicion-score calculation.
-- WebSocket heartbeat monitoring.
+- Browser tab visibility and window-focus event monitoring.
+- Webcam permission and preview component.
+- Authenticated proctoring event submission.
+- Server-side event validation and suspicion-score calculation.
+- WebSocket heartbeat and server-side session-expiry checks.
+
+**Implementation status:** Face detection, FaceMesh gaze estimation, and multiple-person detection are not yet implemented or connected to the examination flow. The current webcam component only obtains and previews the camera stream; it does not analyse frames. These computer-vision capabilities remain outstanding within Milestone 2 and must not be treated as completed.
 
 ---
 
@@ -253,6 +251,14 @@ Existing tables, records, and columns must not be deleted or reset during routin
 The current implementation is limited to Milestones 1 and 2 and the agreed UI and web-access requirements.
 
 ---
+
+## 8. Milestone 2 Runtime Requirements and Known Integration Work
+
+- AI-assisted grading is disabled by default. It requires an explicitly enabled setting and a valid server-side OpenAI API key. The examiner must review and approve marks; AI suggestions do not directly finalize grades.
+- OCR requires the Tesseract executable to be installed on the backend host. Installing the Python package alone is not sufficient.
+- Uploaded answer images are stored under the configured upload directory. Production deployments must mount persistent storage or configure durable object storage; ephemeral container storage can lose uploaded files after redeployment.
+- Face detection, gaze estimation, and multiple-person detection still need a real computer-vision implementation and integration with the exam session. Browser focus events and webcam preview alone are not AI face proctoring.
+- The existing frontend exam page still needs its API calls and proctoring components aligned with the backend contracts before the complete student examination flow can be considered integrated.
 
 ## 8. Security
 
