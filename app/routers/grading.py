@@ -460,10 +460,14 @@ def approve_ai_grading_suggestion(
         question.question_type,
     )
 
-    if question_type not in {"short_answer", "long_answer"}:
+    if question_type not in {
+        "short_answer",
+        "long_answer",
+        "image_upload",
+    }:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="AI-assisted approval is available only for written answers.",
+            detail="AI-assisted approval requires written or OCR-extracted answer text.",
         )
 
     approval = approve_subjective_marks(
