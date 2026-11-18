@@ -1,4 +1,6 @@
 
+from datetime import datetime, timedelta
+
 from app.auth import create_access_token, create_exam_access_token
 from app.models import User, Exam, ExamSession, QuestionBank, Option
 
@@ -33,15 +35,28 @@ def create_exam(db, title="Security Test Exam"):
 
 
 def create_active_session(db, exam, student):
+    now = datetime.utcnow()
+
     session = ExamSession(
         exam_id=exam.id,
         student_id=student.id,
+        started_at=now,
+        expires_at=now + timedelta(minutes=exam.duration_minutes),
         status="in_progress"
     )
     db.add(session)
     db.commit()
     db.refresh(session)
     return session
+
+
+def create_exam_token(exam, student, session):
+    return create_exam_access_token(
+        exam_id=exam.id,
+        student_id=student.id,
+        session_id=session.id,
+        expires_at=session.expires_at
+    )
 
 
 def test_normal_access_token_rejected_for_exam_paper(client, db_session):
@@ -62,11 +77,9 @@ def test_normal_access_token_rejected_for_exam_paper(client, db_session):
 def test_exam_token_rejected_for_wrong_exam(client, db_session):
     student = create_student(db_session)
     exam = create_exam(db_session)
+    session = create_active_session(db_session, exam, student)
 
-    token = create_exam_access_token(
-        exam_id=exam.id,
-        student_id=student.id
-    )
+    token = create_exam_token(exam, student, session)
 
     response = client.get(
         f"/exam-sessions/paper/{exam.id + 1}",
@@ -79,10 +92,7 @@ def test_exam_token_rejected_for_wrong_exam(client, db_session):
 def test_exam_token_identity_mismatch_rejected(client, db_session):
     student = create_student(db_session)
 
-
     # Create a token whose subject does not match student_id.
-    from app.auth import create_access_token
-
     mismatched_token = create_access_token({
         "sub": str(student.id + 100),
         "exam_id": 10,
@@ -104,9 +114,9 @@ def test_inactive_student_cannot_access_exam(client, db_session):
         active=False
     )
     exam = create_exam(db_session)
-    create_active_session(db_session, exam, student)
+    session = create_active_session(db_session, exam, student)
 
-    token = create_exam_access_token(exam.id, student.id)
+    token = create_exam_token(exam, student, session)
 
     response = client.get(
         f"/exam-sessions/paper/{exam.id}",
@@ -123,9 +133,9 @@ def test_non_student_cannot_access_exam(client, db_session):
         role="examiner"
     )
     exam = create_exam(db_session)
-    create_active_session(db_session, exam, examiner)
+    session = create_active_session(db_session, exam, examiner)
 
-    token = create_exam_access_token(exam.id, examiner.id)
+    token = create_exam_token(exam, examiner, session)
 
     response = client.get(
         f"/exam-sessions/paper/{exam.id}",
@@ -139,7 +149,13 @@ def test_exam_access_requires_active_session(client, db_session):
     student = create_student(db_session)
     exam = create_exam(db_session)
 
-    token = create_exam_access_token(exam.id, student.id)
+    # This token refers to a session that does not exist.
+    token = create_exam_access_token(
+        exam_id=exam.id,
+        student_id=student.id,
+        session_id=999999,
+        expires_at=datetime.utcnow() + timedelta(minutes=30)
+    )
 
     response = client.get(
         f"/exam-sessions/paper/{exam.id}",
@@ -152,7 +168,7 @@ def test_exam_access_requires_active_session(client, db_session):
 def test_valid_student_can_access_exam_paper(client, db_session):
     student = create_student(db_session)
     exam = create_exam(db_session)
-    create_active_session(db_session, exam, student)
+    session = create_active_session(db_session, exam, student)
 
     question = QuestionBank(
         question_text="What is the capital of India?",
@@ -174,7 +190,7 @@ def test_valid_student_can_access_exam_paper(client, db_session):
     db_session.add(option)
     db_session.commit()
 
-    token = create_exam_access_token(exam.id, student.id)
+    token = create_exam_token(exam, student, session)
 
     response = client.get(
         f"/exam-sessions/paper/{exam.id}",
@@ -192,4 +208,4 @@ def test_valid_student_can_access_exam_paper(client, db_session):
 
     # Correct answers must never be exposed to students.
     assert "is_correct" not in data["questions"][0]["options"][0]
-      
+    
