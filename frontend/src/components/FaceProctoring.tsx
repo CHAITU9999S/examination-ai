@@ -23,11 +23,17 @@ function point(landmarks: Array<{ x: number; y: number }>, index: number) {
   return landmarks[index];
 }
 
+interface HorizontalGazeEstimate {
+  position: number;
+  confidence: number;
+}
+
 function estimateHorizontalGaze(
   landmarks: Array<{ x: number; y: number }>
-): number | null {
-  // Face Landmarker iris centres and eye corners. This is a coarse
-  // screen-attention heuristic, not a medical or identity assessment.
+): HorizontalGazeEstimate | null {
+  // Compare both iris positions relative to their own eye corners.
+  // A large disagreement between the eyes is treated as unreliable.
+  // This remains an approximate screen-attention heuristic.
   const leftIris = point(landmarks, 468);
   const leftOuter = point(landmarks, 33);
   const leftInner = point(landmarks, 133);
@@ -52,7 +58,24 @@ function estimateHorizontalGaze(
   const rightRatio =
     (rightIris.x - Math.min(rightInner.x, rightOuter.x)) / rightWidth;
 
-  return (leftRatio + rightRatio) / 2;
+  if (
+    !Number.isFinite(leftRatio) ||
+    !Number.isFinite(rightRatio) ||
+    leftRatio < -0.15 ||
+    leftRatio > 1.15 ||
+    rightRatio < -0.15 ||
+    rightRatio > 1.15
+  ) {
+    return null;
+  }
+
+  const eyeDisagreement = Math.abs(leftRatio - rightRatio);
+  if (eyeDisagreement > 0.25) return null;
+
+  return {
+    position: (leftRatio + rightRatio) / 2,
+    confidence: Math.max(0, Math.min(1, 1 - eyeDisagreement / 0.25)),
+  };
 }
 
 export default function FaceProctoring({
@@ -69,6 +92,7 @@ export default function FaceProctoring({
   const lastDetectionRef = useRef(0);
   const missingSinceRef = useRef<number | null>(null);
   const gazeAwaySinceRef = useRef<number | null>(null);
+  const gazeSamplesRef = useRef<HorizontalGazeEstimate[]>([]);
   const lastReportedRef = useRef<Record<string, number>>({});
   const [status, setStatus] = useState<DetectorStatus>("idle");
 
@@ -95,6 +119,9 @@ export default function FaceProctoring({
 
     async function start() {
       setStatus("loading");
+      gazeSamplesRef.current = [];
+      gazeAwaySinceRef.current = null;
+      missingSinceRef.current = null;
 
       try {
         if (!video) throw new Error("Video element is unavailable.");
@@ -160,20 +187,54 @@ export default function FaceProctoring({
               }
 
               if (faces.length === 1) {
-                const gaze = estimateHorizontalGaze(faces[0]);
-                if (gaze !== null && (gaze < threshold || gaze > 1 - threshold)) {
-                  if (gazeAwaySinceRef.current === null) gazeAwaySinceRef.current = now;
-                  if (now - gazeAwaySinceRef.current >= 1200) {
-                    reportWithCooldown("gaze", () => onGazeAway({
-                      direction: gaze < threshold ? "left" : "right",
-                      normalized_horizontal_position: Number(gaze.toFixed(3)),
-                      confidence: 0.5,
-                      detector: "mediapipe_face_landmarker",
-                    }));
+                const estimate = estimateHorizontalGaze(faces[0]);
+
+                if (estimate) {
+                  gazeSamplesRef.current = [
+                    ...gazeSamplesRef.current.slice(-6),
+                    estimate,
+                  ];
+
+                  // Smooth short-lived landmark jitter before classifying gaze.
+                  const samples = gazeSamplesRef.current;
+                  const smoothedGaze = samples.reduce(
+                    (total, sample) => total + sample.position,
+                    0
+                  ) / samples.length;
+                  const averageConfidence = samples.reduce(
+                    (total, sample) => total + sample.confidence,
+                    0
+                  ) / samples.length;
+
+                  const lookingAway =
+                    smoothedGaze < threshold ||
+                    smoothedGaze > 1 - threshold;
+
+                  if (lookingAway && samples.length >= 4) {
+                    if (gazeAwaySinceRef.current === null) {
+                      gazeAwaySinceRef.current = now;
+                    }
+
+                    if (now - gazeAwaySinceRef.current >= 1200) {
+                      reportWithCooldown("gaze", () => onGazeAway({
+                        direction: smoothedGaze < threshold ? "left" : "right",
+                        normalized_horizontal_position: Number(smoothedGaze.toFixed(3)),
+                        confidence: Number(averageConfidence.toFixed(2)),
+                        consistent_samples: samples.length,
+                        detector: "mediapipe_face_landmarker",
+                        estimation: "bilateral_iris_ratio_smoothed",
+                      }));
+                    }
+                  } else {
+                    gazeAwaySinceRef.current = null;
                   }
                 } else {
+                  gazeSamplesRef.current = [];
                   gazeAwaySinceRef.current = null;
                 }
+              } else {
+                gazeSamplesRef.current = [];
+                gazeAwaySinceRef.current = null;
               }
             } catch (error) {
               const message = error instanceof Error ? error.message : "Face detector failed.";
