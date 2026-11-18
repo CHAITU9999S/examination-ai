@@ -1,4 +1,6 @@
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.routers import (
@@ -9,11 +11,28 @@ from app.routers import (
     admin
 )
 
+from app.services.exam_scheduler import (
+    start_exam_scheduler,
+    stop_exam_scheduler
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start automatic exam submission scheduler.
+    start_exam_scheduler()
+
+    yield
+
+    # Stop scheduler during application shutdown.
+    stop_exam_scheduler()
+
 
 app = FastAPI(
     title="ExamGuard AI",
     description="Intelligent Examination Platform",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
