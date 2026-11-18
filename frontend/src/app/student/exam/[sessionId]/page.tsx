@@ -64,6 +64,7 @@ export default function StudentExamPage() {
     useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
+  const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
   const [imageUploading, setImageUploading] = useState(false);
   const [websocketStatus, setWebsocketStatus] = useState("disconnected");
 
@@ -140,6 +141,11 @@ export default function StudentExamPage() {
       setUploadedImageQuestionIds((current) =>
         current.includes(questionId) ? current : [...current, questionId]
       );
+      setPendingImageFiles((current) => {
+        const next = { ...current };
+        delete next[questionId];
+        return next;
+      });
       setMessage(data.ocr_completed
         ? "Image uploaded and text extracted for examiner review."
         : "Image uploaded. OCR is unavailable; examiner review is required.");
@@ -253,7 +259,7 @@ export default function StudentExamPage() {
     answerText: string
   ) => {
     const headers = getHeaders();
-    if (!headers) return;
+    if (!headers) return false;
 
     setSaving(true);
 
@@ -278,12 +284,14 @@ export default function StudentExamPage() {
 
       setMessage("Answer saved.");
       setError("");
+      return true;
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
           : "Unable to save answer."
       );
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -312,7 +320,7 @@ export default function StudentExamPage() {
       }
 
       // Flush every locally edited answer before final submission.
-      await Promise.all(
+      const saveResults = await Promise.all(
         Object.entries(answersRef.current)
           .filter(([questionId]) =>
             paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
@@ -321,6 +329,9 @@ export default function StudentExamPage() {
             saveAnswer(Number(questionId), answerText)
           )
       );
+      if (saveResults.some((result) => result === false)) {
+        throw new Error("One or more answers could not be saved. Please retry before submitting.");
+      }
 
       const response = await fetch(
         `${API_URL}/exam-sessions/submit/${sessionId}`,
@@ -386,7 +397,9 @@ export default function StudentExamPage() {
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveAnswer(questionId, answerText);
+      void saveAnswer(questionId, answerText).catch(() => {
+        // The visible error state is set by saveAnswer.
+      });
     }, 700);
   }
 
@@ -589,10 +602,28 @@ export default function StudentExamPage() {
         <div className="mt-5 space-y-3">
           <ImageUpload
             onFileSelect={(file) => {
-              if (file) void handleImageUpload(question.id, file);
+              setPendingImageFiles((current) => {
+                const next = { ...current };
+                if (file) next[question.id] = file;
+                else delete next[question.id];
+                return next;
+              });
             }}
-            disabled={imageUploading || submitting}
+            disabled={imageUploading || submitting || uploadedImageQuestionIds.includes(question.id)}
           />
+          {uploadedImageQuestionIds.includes(question.id) && (
+            <p role="status" className="text-sm text-green-300">Answer image uploaded and saved.</p>
+          )}
+          {pendingImageFiles[question.id] && (
+            <button
+              type="button"
+              onClick={() => void handleImageUpload(question.id, pendingImageFiles[question.id])}
+              disabled={imageUploading || submitting}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold disabled:opacity-50"
+            >
+              Upload Answer Image
+            </button>
+          )}
           {imageUploading && (
             <p role="status" className="text-sm text-blue-300">Uploading image and processing OCR...</p>
           )}
