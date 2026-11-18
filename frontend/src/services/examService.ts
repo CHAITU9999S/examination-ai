@@ -32,7 +32,8 @@ export interface ExamCreateData {
 
 export interface ExamStartResponse {
   session_id: number;
-  exam_token: string;
+  access_token: string;
+  exam_id: number;
   expires_at?: string;
   remaining_seconds?: number;
   message?: string;
@@ -87,14 +88,15 @@ function saveExamSession(
 
   sessionStorage.setItem(EXAM_SESSION_KEY, String(sessionId));
   sessionStorage.setItem(EXAM_TOKEN_KEY, examToken);
+  sessionStorage.setItem(`examguard_exam_token_${sessionId}`, examToken);
 }
 
-function getExamToken(): string {
+function getExamToken(sessionId: number): string {
   if (typeof window === "undefined") {
     throw new Error("Examination session is unavailable.");
   }
 
-  const token = sessionStorage.getItem(EXAM_TOKEN_KEY);
+  const token = sessionStorage.getItem(`examguard_exam_token_${sessionId}`) || sessionStorage.getItem(EXAM_TOKEN_KEY);
 
   if (!token) {
     throw new Error("Exam access token is missing. Start the examination again.");
@@ -126,21 +128,21 @@ export const examService = {
     }
 
     const response = await api.post<ExamStartResponse>(
-      "/exam-sessions/start",
-      { exam_id: examId }
+      `/exam-sessions/start/${examId}`
     );
 
     if (
       !response ||
       !Number.isInteger(response.session_id) ||
       response.session_id <= 0 ||
-      typeof response.exam_token !== "string" ||
-      !response.exam_token
+      typeof response.access_token !== "string" ||
+      !response.access_token
     ) {
       throw new Error("The server returned an invalid exam session.");
     }
 
-    saveExamSession(response.session_id, response.exam_token);
+    saveExamSession(response.session_id, response.access_token);
+    sessionStorage.setItem(`examguard_exam_id_${response.session_id}`, String(response.exam_id));
 
     return response;
   },
@@ -153,9 +155,9 @@ export const examService = {
     }
 
     return api.get<ExamPaperResponse>(
-      `/exam-sessions/paper/${sessionId}`,
+      `/exam-sessions/paper/${sessionStorage.getItem(`examguard_exam_id_${sessionId}`) || sessionId}`,
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -168,9 +170,9 @@ export const examService = {
     }
 
     return api.get<RemainingTimeResponse>(
-      `/exam-sessions/${sessionId}/remaining-time`,
+      `/exam-sessions/time/${sessionId}`,
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -183,10 +185,10 @@ export const examService = {
     }
 
     return api.post<ExamSubmissionResponse>(
-      `/exam-sessions/${sessionId}/submit`,
+      `/exam-sessions/submit/${sessionId}`,
       {},
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
@@ -214,6 +216,11 @@ export const examService = {
       return;
     }
 
+    const sessionId = this.getStoredExamSessionId();
+    if (sessionId !== null) {
+      sessionStorage.removeItem(`examguard_exam_token_${sessionId}`);
+      sessionStorage.removeItem(`examguard_exam_id_${sessionId}`);
+    }
     sessionStorage.removeItem(EXAM_TOKEN_KEY);
     sessionStorage.removeItem(EXAM_SESSION_KEY);
   },
