@@ -1,11 +1,17 @@
 
+import io
 import json
+import os
+import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
     Depends,
+    File,
     HTTPException,
+    UploadFile,
     status,
 )
 from fastapi.security import (
@@ -15,6 +21,7 @@ from fastapi.security import (
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from PIL import Image
 
 from app.auth import verify_token
 from app.database import get_db
@@ -24,6 +31,10 @@ from app.models import (
     Option,
     QuestionBank,
     User,
+)
+from app.services.ocr_service import (
+    extract_text_from_image,
+    validate_image_bytes,
 )
 
 
@@ -597,3 +608,173 @@ def save_exam_answer_with_question_in_body(
         credentials=credentials,
         db=db,
     )
+
+
+# ==========================================
+# IMAGE ANSWER UPLOAD
+# ==========================================
+
+@router.post(
+    "/{session_id}/answers/{question_id}/image",
+    status_code=status.HTTP_201_CREATED,
+)
+@legacy_router.post(
+    "/{session_id}/{question_id}/image",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_image_answer(
+    session_id: int,
+    question_id: int,
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Store a validated image answer and attempt OCR preprocessing."""
+
+    validated_session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db,
+    )
+
+    session = get_active_session_for_update(
+        session_id=session_id,
+        exam_id=validated_session.exam_id,
+        student_id=validated_session.student_id,
+        db=db,
+    )
+
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question does not belong to your examination paper.",
+        )
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id,
+    ).first()
+
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+
+    if get_question_type_value(question) != "image_upload":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image files can only be submitted for image-upload questions.",
+        )
+
+    image_bytes = await file.read(10 * 1024 * 1024 + 1)
+    validate_image_bytes(image_bytes)
+
+    try:
+        image_format = Image.open(
+            io.BytesIO(image_bytes)
+        ).format
+    except (OSError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded file is not a valid image.",
+        )
+
+    extensions = {
+        "JPEG": ".jpg",
+        "PNG": ".png",
+        "WEBP": ".webp",
+        "TIFF": ".tiff",
+        "BMP": ".bmp",
+    }
+    extension = extensions.get(image_format)
+
+    if extension is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported image format.",
+        )
+
+    upload_root = Path(
+        os.getenv("ANSWER_UPLOAD_DIR", "uploads")
+    ).resolve()
+    answer_directory = upload_root / "answers"
+    answer_directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    stored_name = f"{uuid.uuid4().hex}{extension}"
+    stored_file = answer_directory / stored_name
+    relative_path = f"answers/{stored_name}"
+
+    ocr_result = None
+    ocr_available = True
+
+    try:
+        stored_file.write_bytes(image_bytes)
+
+        try:
+            ocr_result = extract_text_from_image(image_bytes)
+        except HTTPException as error:
+            if error.status_code in {
+                status.HTTP_502_BAD_GATEWAY,
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+            }:
+                ocr_available = False
+            else:
+                raise
+
+        answer = db.query(Answer).filter(
+            Answer.session_id == session.id,
+            Answer.question_id == question_id,
+        ).with_for_update().first()
+
+        if answer is None:
+            answer = Answer(
+                session_id=session.id,
+                question_id=question_id,
+            )
+            db.add(answer)
+
+        answer.image_path = relative_path
+
+        if ocr_result and ocr_result.get("extracted_text"):
+            answer.answer_text = ocr_result["extracted_text"]
+        else:
+            answer.answer_text = None
+
+        db.commit()
+        db.refresh(answer)
+
+    except HTTPException:
+        db.rollback()
+        stored_file.unlink(missing_ok=True)
+        raise
+
+    except (OSError, SQLAlchemyError):
+        db.rollback()
+        stored_file.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to save the uploaded answer image.",
+        )
+
+    return {
+        "message": "Answer image uploaded successfully.",
+        "answer_id": answer.id,
+        "session_id": session.id,
+        "question_id": question_id,
+        "image_uploaded": True,
+        "ocr_available": ocr_available,
+        "ocr_completed": bool(
+            ocr_result and ocr_result.get("extracted_text")
+        ),
+        "requires_manual_review": True,
+        "ocr_message": (
+            ocr_result.get("message")
+            if ocr_result
+            else "OCR is unavailable. The examiner must review the image manually."
+        ),
+    }
