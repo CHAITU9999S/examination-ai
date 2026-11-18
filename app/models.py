@@ -1,44 +1,47 @@
+
 from datetime import datetime, timezone
+from enum import Enum as PythonEnum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
     DateTime,
-    Enum,
+    Enum as SQLAlchemyEnum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 
 from app.database import Base
-from app.schemas import UserRole
 
 
 # -----------------------------------------
 # DATABASE ENUMERATIONS
 # -----------------------------------------
 
-class QuestionType(str, __import__("enum").Enum):
-    MCQ = "mcq"
+class QuestionType(str, PythonEnum):
+    MCQ = "MCQ"
     MULTI_SELECT = "multi_select"
     SHORT_ANSWER = "short_answer"
     LONG_ANSWER = "long_answer"
     IMAGE_UPLOAD = "image_upload"
 
 
-class DifficultyLevel(str, __import__("enum").Enum):
+class DifficultyLevel(str, PythonEnum):
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
 
 
-class ExamStatus(str, __import__("enum").Enum):
+class ExamStatus(str, PythonEnum):
     DRAFT = "draft"
     SCHEDULED = "scheduled"
     ACTIVE = "active"
@@ -46,7 +49,7 @@ class ExamStatus(str, __import__("enum").Enum):
     CANCELLED = "cancelled"
 
 
-class SessionStatus(str, __import__("enum").Enum):
+class SessionStatus(str, PythonEnum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
@@ -54,11 +57,16 @@ class SessionStatus(str, __import__("enum").Enum):
     EXPIRED = "expired"
 
 
-class AnswerStatus(str, __import__("enum").Enum):
+class AnswerStatus(str, PythonEnum):
     NOT_ANSWERED = "not_answered"
     ANSWERED = "answered"
     PENDING_REVIEW = "pending_review"
     GRADED = "graded"
+
+
+def utc_now_naive():
+    """Return the current UTC time without timezone information."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # -----------------------------------------
@@ -70,47 +78,39 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    full_name = Column(String(100), nullable=False)
+    full_name = Column(String(150), nullable=False)
 
     email = Column(
         String(255),
         unique=True,
-        index=True,
         nullable=False
     )
 
-    hashed_password = Column(String(255), nullable=False)
+    department = Column(String(100), nullable=True)
 
-    role = Column(
-        Enum(
-            UserRole,
-            name="user_role",
-            values_callable=lambda enum_cls: [
-                item.value for item in enum_cls
-            ],
-        ),
-        nullable=False
+    password_hash = Column(String(255), nullable=False)
+
+    # Compatibility with existing authentication code.
+    hashed_password = synonym("password_hash")
+
+    role = Column(String(20), nullable=False)
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=True
     )
-
-    is_active = Column(Boolean, default=True, nullable=False)
 
     created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
-
-    updated_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False
+        DateTime(),
+        default=utc_now_naive,
+        nullable=True
     )
 
     created_exams = relationship(
         "Exam",
         back_populates="examiner",
-        foreign_keys="Exam.examiner_id"
+        foreign_keys="Exam.created_by"
     )
 
     questions = relationship(
@@ -123,6 +123,22 @@ class User(Base):
         back_populates="student"
     )
 
+    admin_actions = relationship(
+        "AdminActivityLog",
+        back_populates="actor",
+        foreign_keys="AdminActivityLog.actor_user_id"
+    )
+
+    admin_targets = relationship(
+        "AdminActivityLog",
+        back_populates="target",
+        foreign_keys="AdminActivityLog.target_user_id"
+    )
+
+    __table_args__ = (
+        Index("ix_users_email", "email"),
+    )
+
 
 # -----------------------------------------
 # QUESTION BANK TABLE
@@ -133,62 +149,44 @@ class Question(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    created_by = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
     question_text = Column(Text, nullable=False)
 
     question_type = Column(
-        Enum(
+        SQLAlchemyEnum(
             QuestionType,
-            name="question_type",
+            name="question_type_enum",
             values_callable=lambda enum_cls: [
                 item.value for item in enum_cls
             ],
+            validate_strings=True
         ),
         nullable=False
     )
 
-    subject = Column(String(100), nullable=False, index=True)
+    subject = Column(String(100), nullable=True)
 
-    topic = Column(String(150), nullable=True)
-
-    difficulty = Column(
-        Enum(
-            DifficultyLevel,
-            name="difficulty_level",
-            values_callable=lambda enum_cls: [
-                item.value for item in enum_cls
-            ],
-        ),
-        nullable=False
-    )
-
-    # Stores question options and their correctness information.
-    # Example: [{"text": "Option A", "is_correct": true}]
-    options = Column(JSON, nullable=True)
+    difficulty = Column(String(20), nullable=True)
 
     expected_answer = Column(Text, nullable=True)
 
-    model_answer = Column(Text, nullable=True)
+    model_answer_text = Column(Text, nullable=True)
 
-    keywords = Column(JSON, nullable=True)
+    # Compatibility with existing code using model_answer.
+    model_answer = synonym("model_answer_text")
 
-    marks = Column(Float, nullable=False, default=1.0)
+    marks = Column(Float, nullable=True)
 
-    negative_marks = Column(Float, nullable=False, default=0.0)
+    negative_marks = Column(Float, nullable=True)
 
-    image_url = Column(String(500), nullable=True)
+    tags = Column(JSON, nullable=True)
 
-    is_active = Column(Boolean, default=True, nullable=False)
+    # Compatibility with existing code using keywords.
+    keywords = synonym("tags")
 
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
+    created_by = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
     )
 
     creator = relationship(
@@ -196,17 +194,45 @@ class Question(Base):
         back_populates="questions"
     )
 
+    options = relationship(
+        "Option",
+        back_populates="question",
+        cascade="all, delete-orphan"
+    )
+
     exam_questions = relationship(
         "ExamQuestion",
         back_populates="question"
     )
 
-    __table_args__ = (
-        CheckConstraint("marks > 0", name="check_question_marks"),
-        CheckConstraint(
-            "negative_marks >= 0",
-            name="check_negative_marks"
-        ),
+    answers = relationship(
+        "Answer",
+        back_populates="question"
+    )
+
+
+# -----------------------------------------
+# QUESTION OPTIONS TABLE
+# -----------------------------------------
+
+class Option(Base):
+    __tablename__ = "options"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    question_id = Column(
+        Integer,
+        ForeignKey("question_bank.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    option_text = Column(Text, nullable=False)
+
+    is_correct = Column(Boolean, nullable=True)
+
+    question = relationship(
+        "Question",
+        back_populates="options"
     )
 
 
@@ -219,73 +245,49 @@ class Exam(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    examiner_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
     title = Column(String(200), nullable=False)
 
-    description = Column(Text, nullable=True)
-
-    subject = Column(String(100), nullable=False)
+    subject = Column(String(100), nullable=True)
 
     duration_minutes = Column(Integer, nullable=False)
 
-    start_time = Column(
-        DateTime(timezone=True),
-        nullable=False
+    total_questions = Column(Integer, nullable=True)
+
+    randomize_questions = Column(Boolean, nullable=True)
+
+    selection_rules = Column(JSON, nullable=True)
+
+    # Compatibility with existing configuration code.
+    configuration = synonym("selection_rules")
+
+    start_time = Column(DateTime(), nullable=True)
+
+    end_time = Column(DateTime(), nullable=True)
+
+    negative_marking = Column(Boolean, nullable=True)
+
+    # Compatibility with existing code.
+    negative_marking_enabled = synonym("negative_marking")
+
+    proctoring_enabled = Column(Boolean, nullable=True)
+
+    gaze_tracking_sensitivity = Column(Float, nullable=True)
+
+    max_tab_switch_warnings = Column(Integer, nullable=True)
+
+    created_by = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
     )
 
-    end_time = Column(
-        DateTime(timezone=True),
-        nullable=False
-    )
-
-    total_marks = Column(Float, nullable=False, default=0.0)
-
-    negative_marking_enabled = Column(
-        Boolean,
-        default=False,
-        nullable=False
-    )
-
-    randomize_questions = Column(
-        Boolean,
-        default=True,
-        nullable=False
-    )
-
-    # Stores exam configuration such as question counts,
-    # difficulty distribution and question type distribution.
-    configuration = Column(JSON, nullable=False, default=dict)
-
-    # Stores webcam, gaze sensitivity and tab-warning settings.
-    proctor_settings = Column(JSON, nullable=False, default=dict)
-
-    status = Column(
-        Enum(
-            ExamStatus,
-            name="exam_status",
-            values_callable=lambda enum_cls: [
-                item.value for item in enum_cls
-            ],
-        ),
-        default=ExamStatus.DRAFT,
-        nullable=False
-    )
-
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
+    # Compatibility with existing code using examiner_id.
+    examiner_id = synonym("created_by")
 
     examiner = relationship(
         "User",
         back_populates="created_exams",
-        foreign_keys=[examiner_id]
+        foreign_keys=[created_by]
     )
 
     exam_questions = relationship(
@@ -297,17 +299,6 @@ class Exam(Base):
     exam_sessions = relationship(
         "ExamSession",
         back_populates="exam"
-    )
-
-    __table_args__ = (
-        CheckConstraint(
-            "duration_minutes > 0",
-            name="check_exam_duration"
-        ),
-        CheckConstraint(
-            "end_time > start_time",
-            name="check_exam_schedule"
-        ),
     )
 
 
@@ -322,7 +313,7 @@ class ExamQuestion(Base):
 
     exam_id = Column(
         Integer,
-        ForeignKey("exams.id", ondelete="CASCADE"),
+        ForeignKey("exams.id"),
         nullable=False
     )
 
@@ -332,7 +323,7 @@ class ExamQuestion(Base):
         nullable=False
     )
 
-    question_order = Column(Integer, nullable=False)
+    question_order = Column(Integer, nullable=True)
 
     exam = relationship(
         "Exam",
@@ -347,13 +338,7 @@ class ExamQuestion(Base):
     __table_args__ = (
         UniqueConstraint(
             "exam_id",
-            "question_id",
-            name="unique_exam_question"
-        ),
-        UniqueConstraint(
-            "exam_id",
-            "question_order",
-            name="unique_exam_question_order"
+            "question_id"
         ),
     )
 
@@ -379,37 +364,27 @@ class ExamSession(Base):
         nullable=False
     )
 
-    # Store a hash of the session token, never the raw token.
-    session_token_hash = Column(String(255), nullable=True, unique=True)
+    started_at = Column(DateTime(), nullable=True)
 
-    started_at = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-    expires_at = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-    submitted_at = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
+    submitted_at = Column(DateTime(), nullable=True)
 
     status = Column(
-        Enum(
-            SessionStatus,
-            name="session_status",
-            values_callable=lambda enum_cls: [
-                item.value for item in enum_cls
-            ],
-        ),
-        default=SessionStatus.NOT_STARTED,
+        String(20),
+        default=SessionStatus.NOT_STARTED.value,
+        nullable=True
+    )
+
+    suspicion_score = Column(Float, nullable=True)
+
+    expires_at = Column(
+        DateTime(),
         nullable=False
     )
 
-    remaining_seconds = Column(Integer, nullable=True)
+    selected_question_ids = Column(
+        JSON,
+        nullable=True
+    )
 
     student = relationship(
         "User",
@@ -440,10 +415,13 @@ class ExamSession(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_exam_sessions_active_student_exam",
             "exam_id",
             "student_id",
-            name="unique_student_exam_session"
+            unique=True,
+            postgresql_where=text("status = 'in_progress'"),
+            sqlite_where=text("status = 'in_progress'")
         ),
     )
 
@@ -459,7 +437,7 @@ class Answer(Base):
 
     session_id = Column(
         Integer,
-        ForeignKey("exam_sessions.id", ondelete="CASCADE"),
+        ForeignKey("exam_sessions.id"),
         nullable=False
     )
 
@@ -469,44 +447,25 @@ class Answer(Base):
         nullable=False
     )
 
-    # Text, selected options or uploaded file information.
     answer_text = Column(Text, nullable=True)
 
-    selected_options = Column(JSON, nullable=True)
+    image_path = Column(String(500), nullable=True)
 
-    uploaded_file_path = Column(String(500), nullable=True)
+    # Compatibility with existing answer-handling code.
+    uploaded_file_path = synonym("image_path")
 
-    word_count = Column(Integer, nullable=True)
+    awarded_marks = Column(Float, nullable=True)
 
-    marks_awarded = Column(Float, nullable=True)
-
-    ai_suggested_marks = Column(Float, nullable=True)
-
-    ai_justification = Column(Text, nullable=True)
-
-    matched_points = Column(JSON, nullable=True)
-
-    missed_points = Column(JSON, nullable=True)
-
-    status = Column(
-        Enum(
-            AnswerStatus,
-            name="answer_status",
-            values_callable=lambda enum_cls: [
-                item.value for item in enum_cls
-            ],
-        ),
-        default=AnswerStatus.NOT_ANSWERED,
-        nullable=False
-    )
-
-    submitted_at = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
+    # Compatibility with existing evaluation code.
+    marks_awarded = synonym("awarded_marks")
 
     session = relationship(
         "ExamSession",
+        back_populates="answers"
+    )
+
+    question = relationship(
+        "Question",
         back_populates="answers"
     )
 
@@ -514,7 +473,7 @@ class Answer(Base):
         UniqueConstraint(
             "session_id",
             "question_id",
-            name="unique_session_question_answer"
+            name="uq_answers_session_question"
         ),
     )
 
@@ -530,25 +489,21 @@ class Result(Base):
 
     session_id = Column(
         Integer,
-        ForeignKey("exam_sessions.id", ondelete="CASCADE"),
+        ForeignKey("exam_sessions.id"),
         nullable=False,
         unique=True
     )
 
-    total_marks = Column(Float, nullable=False, default=0.0)
+    total_marks = Column(Float, nullable=True)
 
-    marks_obtained = Column(Float, nullable=False, default=0.0)
+    obtained_marks = Column(Float, nullable=True)
 
-    objective_marks = Column(Float, nullable=False, default=0.0)
+    # Compatibility with existing result-handling code.
+    marks_obtained = synonym("obtained_marks")
 
-    subjective_marks = Column(Float, nullable=False, default=0.0)
+    percentage = Column(Float, nullable=True)
 
-    percentage = Column(Float, nullable=False, default=0.0)
-
-    evaluated_at = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
+    evaluated_at = Column(DateTime(), nullable=True)
 
     session = relationship(
         "ExamSession",
@@ -567,7 +522,7 @@ class ProctorEvent(Base):
 
     session_id = Column(
         Integer,
-        ForeignKey("exam_sessions.id", ondelete="CASCADE"),
+        ForeignKey("exam_sessions.id"),
         nullable=False
     )
 
@@ -575,24 +530,78 @@ class ProctorEvent(Base):
 
     description = Column(Text, nullable=True)
 
-    suspicion_score = Column(Float, nullable=False, default=0.0)
+    suspicion_points = Column(Float, nullable=True)
 
-    event_metadata = Column(JSON, nullable=True)
+    # Compatibility with existing proctoring code.
+    suspicion_score = synonym("suspicion_points")
 
-    recorded_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
+    created_at = Column(
+        DateTime(),
+        default=utc_now_naive,
+        nullable=True
     )
+
+    # Compatibility with existing code.
+    recorded_at = synonym("created_at")
+
+    snapshot_data = Column(Text, nullable=True)
+
+    gaze_data = Column(JSON, nullable=True)
+
+    tab_switch_count = Column(Integer, nullable=True)
 
     session = relationship(
         "ExamSession",
         back_populates="proctor_events"
     )
 
-    __table_args__ = (
-        CheckConstraint(
-            "suspicion_score >= 0 AND suspicion_score <= 100",
-            name="check_suspicion_score"
-        ),
+
+# -----------------------------------------
+# ADMIN ACTIVITY LOGS TABLE
+# -----------------------------------------
+
+class AdminActivityLog(Base):
+    __tablename__ = "admin_activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    actor_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
     )
+
+    target_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    action = Column(String(100), nullable=False)
+
+    details = Column(JSON, nullable=True)
+
+    created_at = Column(
+        DateTime(),
+        nullable=False,
+        server_default=text("now()")
+    )
+
+    actor = relationship(
+        "User",
+        back_populates="admin_actions",
+        foreign_keys=[actor_user_id]
+    )
+
+    target = relationship(
+        "User",
+        back_populates="admin_targets",
+        foreign_keys=[target_user_id]
+    )
+
+
+# -----------------------------------------
+# BACKWARD-COMPATIBILITY ALIASES
+# -----------------------------------------
+
+QuestionBank = Question
