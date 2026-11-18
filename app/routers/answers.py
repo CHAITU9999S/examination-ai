@@ -32,6 +32,11 @@ router = APIRouter(
     tags=["Exam Answers"],
 )
 
+legacy_router = APIRouter(
+    prefix="/answers",
+    tags=["Exam Answers"],
+)
+
 exam_token_scheme = HTTPBearer(auto_error=False)
 
 
@@ -44,6 +49,10 @@ class AnswerSubmission(BaseModel):
         min_length=1,
         max_length=50000,
     )
+
+
+class AnswerWithQuestionSubmission(AnswerSubmission):
+    question_id: int = Field(gt=0)
 
 
 # ==========================================
@@ -276,6 +285,7 @@ def validate_text_answer(
 # GET SAVED ANSWERS
 # ==========================================
 
+@legacy_router.get("/{session_id}")
 @router.get("/{session_id}/answers")
 def get_saved_answers(
     session_id: int,
@@ -334,6 +344,10 @@ def get_saved_answers(
 # SAVE OR UPDATE EXAM ANSWER
 # ==========================================
 
+@legacy_router.post(
+    "/{session_id}/{question_id}",
+    status_code=status.HTTP_200_OK,
+)
 @router.post(
     "/{session_id}/answers/{question_id}",
     status_code=status.HTTP_200_OK,
@@ -557,3 +571,29 @@ def save_exam_answer(
         "question_type": question_type,
         "saved": True,
     }
+
+
+
+@legacy_router.post(
+    "/{session_id}",
+    status_code=status.HTTP_200_OK,
+)
+def save_exam_answer_with_question_in_body(
+    session_id: int,
+    submission: AnswerWithQuestionSubmission,
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Compatibility endpoint for clients sending question_id in the body."""
+
+    return save_exam_answer(
+        session_id=session_id,
+        question_id=submission.question_id,
+        submission=AnswerSubmission(
+            answer_text=submission.answer_text,
+        ),
+        credentials=credentials,
+        db=db,
+    )
