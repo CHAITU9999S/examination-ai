@@ -1,71 +1,299 @@
+
 # ExamGuard AI
 
-## AI-Based Intelligent Examination Platform
+## AI-Based Intelligent Examination Platform with Automated Proctoring and Candidate Performance Analysis
 
-ExamGuard AI is a web-based examination platform designed to conduct secure online examinations with automated proctoring and candidate performance evaluation.
+ExamGuard AI is a web-based examination platform designed to conduct secure online examinations using automated examination management, timed exam sessions, AI-assisted evaluation, and browser-based proctoring.
 
-## Main Features
+The platform provides separate access and functionality for Students, Examiners, and Administrators.
 
-- Role-based authentication for Students, Examiners, and Admins.
+---
+
+## 1. Project Objectives
+
+- Conduct secure online examinations.
+- Manage questions and examination configurations.
+- Generate randomized examination papers.
+- Enforce server-side examination timing.
+- Support multiple question and answer types.
+- Automatically evaluate objective answers.
+- Assist examiners with subjective answer evaluation.
+- Monitor examination activity using browser-based proctoring.
+- Analyze candidate examination performance.
+
+---
+
+## 2. Main Features
+
+### Authentication and Account Management
 - Student self-registration.
-- Admin-controlled account management.
-- Question bank management.
-- Automated examination paper generation.
-- Timed online examinations.
-- Secure answer submission.
-- Automatic objective answer evaluation.
-- AI-assisted subjective answer evaluation.
-- Automated online proctoring.
-- Examination activity monitoring.
+- Login for Students, Examiners, and Admins.
+- JWT-based authentication.
+- Role-based authorization.
+- Secure password hashing.
+- Admin-controlled account creation and management.
 
-## Technology Stack
+### Question Bank
+- MCQ questions.
+- Multiple-select questions.
+- Short-answer questions.
+- Long-answer questions.
+- Image-upload questions.
+- Subject and difficulty classification.
+- Marks and negative-marking configuration.
+
+### Examination Management
+- Examination creation and configuration.
+- Subject-based question selection.
+- Difficulty-based question distribution.
+- Question-type distribution.
+- Randomized question selection.
+- Individual student paper generation.
+- Examination scheduling.
+- Configurable examination duration.
+
+### Timed Examination Engine
+- Unique examination sessions.
+- Secure examination access tokens.
+- Server-side time validation.
+- Remaining-time calculation.
+- Automatic submission after expiry.
+- Protection against duplicate active sessions.
+
+### Answer Management
+- Objective answer submission.
+- Text-answer submission.
+- Image-answer uploads.
+- Answer validation.
+- Secure answer storage.
+
+### Evaluation
+- Automatic MCQ evaluation.
+- Multiple-select evaluation.
+- Negative marking.
+- AI-assisted subjective evaluation.
+- Suggested marks and evaluation explanations.
+- Examiner review and final grading.
+- OCR support for image-based answers.
+
+### Automated Proctoring
+- Browser webcam support.
+- Face detection.
+- FaceMesh-based gaze estimation.
+- Multiple-person detection.
+- Browser tab visibility monitoring.
+- Window focus monitoring.
+- Proctoring event logging.
+- Suspicion-score calculation.
+- WebSocket heartbeat monitoring.
+
+---
+
+## 3. Technology Stack
 
 ### Backend
 - Python
 - FastAPI
 - SQLAlchemy
 - PostgreSQL
+- Psycopg 3
 - Alembic
+- Pydantic
 
 ### Frontend
 - Next.js
 - React
 - TypeScript
 
+### Authentication and Security
+- JWT
+- Passlib
+- Bcrypt
+- Role-based access control
+
+### AI and Image Processing
+- OpenAI API
+- Pillow
+- Tesseract OCR
+- TensorFlow.js (browser-based proctoring)
+
 ### Testing
 - Pytest
+- HTTPX
 
-## User Roles
+---
+
+## 4. User Roles and Permissions
 
 ### Admin
-- Create and delete Admin accounts.
+- Create Admin accounts.
+- Delete Admin accounts, subject to platform safety checks.
 - Create and delete Examiner accounts.
-- Manage Student accounts.
+- View and manage Student accounts.
+- Activate and deactivate user accounts.
 - Manage platform configuration.
 
 ### Examiner
-- Manage questions.
+- Create and manage questions.
 - Configure examinations.
-- Review and grade subjective answers.
+- Generate examination papers.
+- Review submitted answers.
+- Review and finalize subjective grades.
 
 ### Student
-- Register an account.
-- Log in.
+- Register through public registration.
+- Log in securely.
+- View available examinations.
 - Attend examinations.
 - Submit answers.
+- View permitted examination results.
 
-## Development Scope
+Public registration is restricted to Students.
 
-This implementation focuses on Milestone 1 and Milestone 2, along with the agreed basic UI and web-access requirements.
+The first Admin account must be created through a secure backend bootstrap process.
 
-## Security
+---
+
+## 5. Project Architecture
+
+The project follows a modular architecture with separate backend, frontend, database, testing, and configuration layers.
+
+```text
+examination-ai/
+│
+├── app/
+│   ├── routers/
+│   ├── services/
+│   ├── utils/
+│   ├── models.py
+│   ├── schemas.py
+│   ├── dependencies.py
+│   ├── auth.py
+│   ├── database.py
+│   └── main.py
+│
+├── alembic/
+│   └── versions/
+│
+├── tests/
+│
+├── frontend/
+│   └── src/
+│       ├── app/
+│       ├── components/
+│       ├── hooks/
+│       ├── services/
+│       ├── lib/
+│       └── types/
+│
+├── requirements.txt
+├── .env.example
+├── .gitignore
+├── alembic.ini
+└── README.md
+```
+
+The target implementation contains a 102-file planned architecture. Additional generated migration files may be created when required.
+
+---
+
+## 6. Database
+
+PostgreSQL is used as the primary database.
+
+The existing database includes:
+
+- users
+- question_bank
+- options
+- exams
+- exam_questions
+- exam_sessions
+- answers
+- results
+- proctor_events
+- admin_activity_logs
+
+SQLAlchemy manages database models and queries.
+
+Alembic manages database schema migrations.
+
+### Database Safety
+
+Existing migrations that have already been applied must be preserved.
+
+Future database changes must use reviewed, additive migrations.
+
+Existing tables, records, and columns must not be deleted or reset during routine development.
+
+---
+
+## 7. Development Scope
+
+### Milestone 1
+- Database and backend foundation.
+- Authentication and role permissions.
+- Question bank management.
+- Examination configuration.
+- Randomized examination paper generation.
+- Database migrations.
+- Initial automated tests.
+
+### Milestone 2
+- Timed examination sessions.
+- Secure exam access.
+- Answer submission.
+- Automatic objective evaluation.
+- AI-assisted subjective evaluation.
+- Image answer processing and OCR.
+- Automated browser-based proctoring.
+- Basic frontend interface.
+- Web access and integration.
+
+The current implementation is limited to Milestones 1 and 2 and the agreed UI and web-access requirements.
+
+---
+
+## 8. Security
 
 - JWT-based authentication.
+- Secure password hashing.
 - Role-based access control.
-- Secure examination sessions.
+- Student-specific examination sessions.
+- Exam-specific access tokens.
 - Server-side examination timing.
-- Proctoring event monitoring.
+- Input validation.
+- Secure file upload handling.
+- Protection against duplicate submissions.
+- Proctoring event records.
 
-## Project Status
+API keys, database credentials, and other secrets must be stored in environment variables and must never be committed to GitHub.
 
-Development starting from scratch.
+---
+
+## 9. Testing
+
+The project uses Pytest for automated testing.
+
+Testing areas include:
+
+- Authentication.
+- User permissions.
+- Admin account management.
+- Question validation.
+- Examination configuration.
+- Randomized paper generation.
+- Timed examination sessions.
+- Answer submission.
+- Objective evaluation.
+- Proctoring events.
+
+---
+
+## 10. Project Status
+
+Development is organized around the agreed 102-file target architecture.
+
+Files are reviewed and integrated incrementally.
+
+A feature is considered complete only after its implementation and relevant tests have been checked.
