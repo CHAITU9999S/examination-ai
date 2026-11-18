@@ -99,6 +99,8 @@ export default function FaceProctoring({
       try {
         if (!video) throw new Error("Video element is unavailable.");
         video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
         await video.play();
 
         const vision = await import("@mediapipe/tasks-vision");
@@ -216,7 +218,7 @@ export default function FaceProctoring({
 
   return (
     <div className="rounded-lg border border-white/10 bg-slate-800/70 p-3">
-      <video ref={videoRef} muted playsInline className="hidden" />
+      <video ref={videoRef} muted autoPlay playsInline className="hidden" />
       <p className="text-xs text-slate-300">
         Face and gaze analysis:{" "}
         <span className={status === "ready" ? "font-semibold text-green-400" : "font-semibold text-amber-300"}>
