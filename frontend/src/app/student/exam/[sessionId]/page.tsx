@@ -264,14 +264,19 @@ export default function StudentExamPage() {
     setSaving(true);
 
     try {
+      const clearingAnswer = answerText.trim().length === 0;
       const response = await fetch(
-        `${API_URL}/answers/${sessionId}`,
+        clearingAnswer
+          ? `${API_URL}/answers/${sessionId}/${questionId}`
+          : `${API_URL}/answers/${sessionId}`,
         {
-          method: "POST",
+          method: clearingAnswer ? "DELETE" : "POST",
           headers,
-          body: JSON.stringify({
-            question_id: questionId,
-            answer_text: answerText,
+          ...(clearingAnswer ? {} : {
+            body: JSON.stringify({
+              question_id: questionId,
+              answer_text: answerText,
+            }),
           }),
         }
       );
