@@ -1,23 +1,18 @@
+
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers import auth, users, admin
 
 
 # -----------------------------------------
 # APPLICATION CONFIGURATION
 # -----------------------------------------
 
-APP_NAME = os.getenv(
-    "APP_NAME",
-    "ExamGuard AI"
-)
-
-APP_ENV = os.getenv(
-    "APP_ENV",
-    "development"
-)
-
+APP_NAME = os.getenv("APP_NAME", "ExamGuard AI")
+APP_ENV = os.getenv("APP_ENV", "development")
 DEBUG = APP_ENV == "development"
 
 
@@ -54,9 +49,28 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS"
+    ],
+    allow_headers=[
+        "Authorization",
+        "Content-Type"
+    ],
 )
+
+
+# -----------------------------------------
+# REGISTER API ROUTERS
+# -----------------------------------------
+
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(admin.router)
 
 
 # -----------------------------------------
@@ -82,4 +96,5 @@ def health_check():
     return {
         "status": "healthy",
         "application": APP_NAME
-}
+    }
+    
