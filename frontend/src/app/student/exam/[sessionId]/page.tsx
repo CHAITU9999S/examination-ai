@@ -877,6 +877,15 @@ export default function StudentExamPage() {
                 Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
                 Heartbeat: {websocketStatus}
               </p>
+              {proctoring.isAutoFlagged && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200"
+                >
+                  The configured tab-switch warning limit has been reached.
+                  This session has been flagged for examiner review.
+                </div>
+              )}
               <p className="text-xs text-amber-300">
                 Proctoring checks are automated indicators for examiner review, not proof of misconduct.
               </p>
