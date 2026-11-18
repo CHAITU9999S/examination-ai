@@ -25,7 +25,7 @@ from app.models import (
     ProctorEvent,
     User,
 )
-from app.services.proctoring_service import get_proctoring_summary
+from app.services.proctoring_service import get_proctoring_summary as get_staff_proctoring_summary
 
 
 router = APIRouter(
@@ -369,7 +369,7 @@ def get_proctoring_summary(
             detail="User account not found or inactive.",
         )
 
-    return get_proctoring_summary(
+    return get_staff_proctoring_summary(
         db=db,
         session_id=session_id,
         current_user=current_user,
