@@ -1,7 +1,17 @@
+
+import math
 from datetime import datetime, timezone
 
 
-VALID_DIFFICULTIES = {"Easy", "Medium", "Hard"}
+# -----------------------------------------
+# VALID CONFIGURATION VALUES
+# -----------------------------------------
+
+VALID_DIFFICULTIES = {
+    "easy",
+    "medium",
+    "hard"
+}
 
 VALID_QUESTION_TYPES = {
     "MCQ",
@@ -11,6 +21,10 @@ VALID_QUESTION_TYPES = {
     "image_upload"
 }
 
+
+# -----------------------------------------
+# DATETIME NORMALIZATION
+# -----------------------------------------
 
 def normalize_to_naive_utc(value):
     """
@@ -23,6 +37,9 @@ def normalize_to_naive_utc(value):
     if value is None:
         return None
 
+    if not isinstance(value, datetime):
+        raise ValueError("Schedule values must be valid datetimes")
+
     if value.tzinfo is None:
         return value
 
@@ -31,24 +48,44 @@ def normalize_to_naive_utc(value):
     ).replace(tzinfo=None)
 
 
+# -----------------------------------------
+# DISTRIBUTION VALIDATION
+# -----------------------------------------
+
 def validate_distribution(
     distribution,
     allowed_values,
     total_questions,
     field_name
 ):
+    """Validate question difficulty or type distributions."""
+
     if not isinstance(distribution, dict) or not distribution:
         raise ValueError(
             f"{field_name} must be a non-empty dictionary"
         )
 
+    if (
+        isinstance(total_questions, bool)
+        or not isinstance(total_questions, int)
+        or total_questions <= 0
+    ):
+        raise ValueError(
+            "Total questions must be a positive integer "
+            "when using distributions"
+        )
+
     for key, count in distribution.items():
+
         if key not in allowed_values:
             raise ValueError(
                 f"Invalid {field_name} value: {key}"
             )
 
-        if isinstance(count, bool) or not isinstance(count, int):
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+        ):
             raise ValueError(
                 f"Counts in {field_name} must be integers"
             )
@@ -58,16 +95,15 @@ def validate_distribution(
                 f"Counts in {field_name} cannot be negative"
             )
 
-    if total_questions <= 0:
-        raise ValueError(
-            "Total questions must be positive when using distributions"
-        )
-
     if sum(distribution.values()) != total_questions:
         raise ValueError(
             f"{field_name} counts must equal total_questions"
         )
 
+
+# -----------------------------------------
+# EXAM CONFIGURATION VALIDATION
+# -----------------------------------------
 
 def validate_exam_config(
     duration_minutes,
@@ -78,33 +114,74 @@ def validate_exam_config(
     gaze_tracking_sensitivity=None,
     max_tab_switch_warnings=None
 ):
+    """
+    Validate exam duration, schedule, question selection
+    rules and proctoring configuration.
+    """
+
+    # -------------------------------------
+    # EXAM DURATION
+    # -------------------------------------
+
     if (
         isinstance(duration_minutes, bool)
         or not isinstance(duration_minutes, int)
         or duration_minutes <= 0
     ):
-        raise ValueError("Duration must be a positive integer")
+        raise ValueError(
+            "Duration must be a positive integer"
+        )
+
+    # -------------------------------------
+    # EXAM SCHEDULE
+    # -------------------------------------
 
     normalized_start = normalize_to_naive_utc(start_time)
     normalized_end = normalize_to_naive_utc(end_time)
 
     if normalized_start and normalized_end:
         if normalized_end <= normalized_start:
-            raise ValueError("End time must be after start time")
+            raise ValueError(
+                "End time must be after start time"
+            )
 
     now = datetime.now(timezone.utc).replace(
         tzinfo=None
     )
 
     if normalized_start and normalized_start < now:
-        raise ValueError("Start time cannot be in the past")
+        raise ValueError(
+            "Start time cannot be in the past"
+        )
 
     if normalized_end and normalized_end <= now:
-        raise ValueError("End time must be in the future")
+        raise ValueError(
+            "End time must be in the future"
+        )
+
+    # -------------------------------------
+    # TOTAL QUESTION COUNT
+    # -------------------------------------
+
+    if (
+        isinstance(total_questions, bool)
+        or not isinstance(total_questions, int)
+        or total_questions < 0
+    ):
+        raise ValueError(
+            "Total questions must be a non-negative integer"
+        )
+
+    # -------------------------------------
+    # QUESTION SELECTION RULES
+    # -------------------------------------
 
     if selection_rules is not None:
+
         if not isinstance(selection_rules, dict):
-            raise ValueError("Selection rules must be a dictionary")
+            raise ValueError(
+                "Selection rules must be a dictionary"
+            )
 
         allowed_keys = {
             "difficulty",
@@ -113,7 +190,9 @@ def validate_exam_config(
         }
 
         if not set(selection_rules).issubset(allowed_keys):
-            raise ValueError("Unknown selection rule")
+            raise ValueError(
+                "Unknown selection rule"
+            )
 
         has_difficulty_counts = (
             "difficulty_counts" in selection_rules
@@ -123,21 +202,32 @@ def validate_exam_config(
             "question_type_counts" in selection_rules
         )
 
+        # Both distributions must be configured together.
         if has_difficulty_counts != has_type_counts:
             raise ValueError(
-                "Both difficulty_counts and question_type_counts are required"
+                "Both difficulty_counts and "
+                "question_type_counts are required"
             )
 
+        # Single difficulty selection.
         if "difficulty" in selection_rules:
-            if selection_rules["difficulty"] not in VALID_DIFFICULTIES:
-                raise ValueError("Invalid difficulty")
+
+            difficulty = selection_rules["difficulty"]
+
+            if difficulty not in VALID_DIFFICULTIES:
+                raise ValueError(
+                    "Invalid difficulty. Use easy, medium or hard."
+                )
 
             if has_difficulty_counts:
                 raise ValueError(
-                    "Use either difficulty or distribution rules, not both"
+                    "Use either difficulty or distribution rules, "
+                    "not both"
                 )
 
+        # Distribution-based selection.
         if has_difficulty_counts:
+
             validate_distribution(
                 selection_rules["difficulty_counts"],
                 VALID_DIFFICULTIES,
@@ -152,25 +242,40 @@ def validate_exam_config(
                 "question_type_counts"
             )
 
+    # -------------------------------------
+    # PROCTORING SENSITIVITY
+    # -------------------------------------
+
     if gaze_tracking_sensitivity is not None:
+
         if (
             isinstance(gaze_tracking_sensitivity, bool)
-            or not isinstance(gaze_tracking_sensitivity, (int, float))
+            or not isinstance(
+                gaze_tracking_sensitivity,
+                (int, float)
+            )
+            or not math.isfinite(gaze_tracking_sensitivity)
             or not 0 <= gaze_tracking_sensitivity <= 1
         ):
             raise ValueError(
                 "Gaze tracking sensitivity must be between 0 and 1"
             )
 
+    # -------------------------------------
+    # MAXIMUM TAB-SWITCH WARNINGS
+    # -------------------------------------
+
     if max_tab_switch_warnings is not None:
+
         if (
             isinstance(max_tab_switch_warnings, bool)
             or not isinstance(max_tab_switch_warnings, int)
             or max_tab_switch_warnings < 0
         ):
             raise ValueError(
-                "Maximum tab-switch warnings cannot be negative"
+                "Maximum tab-switch warnings must be "
+                "a non-negative integer"
             )
 
     return True
-        
+    
