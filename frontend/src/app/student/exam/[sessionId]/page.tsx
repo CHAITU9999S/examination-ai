@@ -39,6 +39,7 @@ interface ExamPaper {
   questions: ExamQuestion[];
   proctoring_enabled?: boolean;
   gaze_tracking_sensitivity?: number | null;
+  max_tab_switch_warnings?: number | null;
 }
 
 interface SavedAnswer {
@@ -107,7 +108,7 @@ export default function StudentExamPage() {
   const proctoring = useProctoring({
     enabled: Boolean(paper?.proctoring_enabled),
     onEvent: handleProctoringEvent,
-    maxTabWarnings: 3,
+    maxTabWarnings: paper?.max_tab_switch_warnings ?? 3,
     duplicateEventCooldownMs: 4000,
   });
 
