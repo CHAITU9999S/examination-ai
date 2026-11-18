@@ -15,6 +15,7 @@ from app.models import (
     QuestionBank,
     Result,
 )
+from app.services.subjective_grading import auto_generate_ai_suggestions
 
 
 # ==========================================
@@ -503,6 +504,11 @@ def evaluate_exam_session(
         session_id,
     )
 
+    ai_grading = auto_generate_ai_suggestions(
+        db,
+        session_id,
+    )
+
     result = calculate_session_result(
         db,
         session_id,
@@ -510,5 +516,6 @@ def evaluate_exam_session(
 
     return {
         "objective_evaluation": objective_result,
+        "ai_grading": ai_grading,
         "result": result,
     }
