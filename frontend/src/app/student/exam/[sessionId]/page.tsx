@@ -71,7 +71,7 @@ export default function StudentExamPage() {
 
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
   const examIdKey = `examguard_exam_id_${sessionId}`;
@@ -320,27 +320,24 @@ export default function StudentExamPage() {
         return;
       }
 
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
+      Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
+      saveTimeoutsRef.current = {};
 
-      // Flush edits for a manual submission while time remains. Once the
-      // server timer has expired, submit immediately; the backend scheduler
-      // is responsible for finalizing the expired session.
-      if (!automatic && remainingSeconds !== 0) {
-        const saveResults = await Promise.all(
-          Object.entries(answersRef.current)
-            .filter(([questionId]) =>
-              paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
-            )
-            .map(([questionId, answerText]) =>
-              saveAnswer(Number(questionId), answerText)
-            )
+      // Flush every written answer before submission. If the server has
+      // already expired the session, automatic submission must still proceed;
+      // the backend expiry workflow remains authoritative in that case.
+      const pendingSaves = Object.entries(answersRef.current)
+        .filter(([questionId]) =>
+          paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
+        )
+        .map(([questionId, answerText]) =>
+          saveAnswer(Number(questionId), answerText)
         );
-        if (saveResults.some((result) => result === false)) {
-          throw new Error("One or more answers could not be saved. Please retry before submitting.");
-        }
+
+      const saveResults = await Promise.allSettled(pendingSaves);
+      const saveFailed = saveResults.some((result) => result.status === "rejected");
+      if (saveFailed && !automatic) {
+        throw new Error("One or more answers could not be saved. Please retry before submitting.");
       }
 
       const response = await fetch(
@@ -403,11 +400,13 @@ export default function StudentExamPage() {
     setAnswers(updated);
     setMessage("");
 
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    const existingTimeout = saveTimeoutsRef.current[questionId];
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
     }
 
-    saveTimeoutRef.current = setTimeout(() => {
+    saveTimeoutsRef.current[questionId] = setTimeout(() => {
+      delete saveTimeoutsRef.current[questionId];
       void saveAnswer(questionId, answerText).catch(() => {
         // The visible error state is set by saveAnswer.
       });
@@ -458,9 +457,8 @@ export default function StudentExamPage() {
     return () => {
       clearInterval(timeInterval);
 
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
+      saveTimeoutsRef.current = {};
     };
   }, [examTokenKey, loadPaper, loadRemainingTime, router, sessionId]);
 
