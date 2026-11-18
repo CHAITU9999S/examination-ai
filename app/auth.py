@@ -68,12 +68,16 @@ def create_access_token(
             minutes=ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
+    if expires_delta.total_seconds() <= 0:
+        raise ValueError("Token expiry must be in the future")
+
     expire = now + expires_delta
 
     payload = {
         "sub": str(subject),
         "iat": now,
         "exp": expire,
+        "token_type": "access",
     }
 
     return jwt.encode(
@@ -87,21 +91,37 @@ def create_access_token(
 # JWT TOKEN VERIFICATION
 # -----------------------------------------
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(
+    token: str,
+    expected_token_type: Optional[str] = None
+) -> Optional[dict]:
     """
     Decode and verify a JWT token.
 
-    Returns the decoded payload when valid.
-    Returns None when the token is invalid or expired.
+    Args:
+        token: Encoded JWT token.
+        expected_token_type: Optional required token type,
+            such as "access" or "exam".
+
+    Returns:
+        Decoded payload when valid.
+        None when invalid, expired or of the wrong type.
     """
 
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM]
         )
 
+        if (
+            expected_token_type is not None
+            and payload.get("token_type") != expected_token_type
+        ):
+            return None
+
+        return payload
+
     except JWTError:
         return None
-            
