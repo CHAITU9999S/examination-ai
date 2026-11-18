@@ -1,4 +1,7 @@
+import io
 from datetime import datetime, timedelta, timezone
+
+from PIL import Image
 
 import pytest
 
@@ -173,4 +176,50 @@ def test_examiner_can_load_pending_grading_queue(
     assert pending["exam_id"] == data["exam"].id
     assert pending["marks"] == pytest.approx(5.0)
     assert pending["answer_text"] == data["answer"].answer_text
+
+def test_examiner_can_view_uploaded_answer_image(
+    client,
+    db_session,
+    grading_data,
+    monkeypatch,
+    tmp_path,
+):
+    data = grading_data
+    upload_root = tmp_path / "uploads"
+    answer_directory = upload_root / "answers"
+    answer_directory.mkdir(parents=True)
+    image_path = answer_directory / "grading-answer.png"
+
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), color="white").save(image_buffer, format="PNG")
+    expected_bytes = image_buffer.getvalue()
+    image_path.write_bytes(expected_bytes)
+
+    data["answer"].image_path = "answers/grading-answer.png"
+    db_session.commit()
+    monkeypatch.setenv("UPLOAD_DIRECTORY", str(upload_root))
+
+    response = client.get(
+        f"/grading/answers/{data['answer'].id}/image",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == expected_bytes
+
+
+def test_student_cannot_view_uploaded_answer_image(
+    client,
+    grading_data,
+):
+    data = grading_data
+    data["answer"].image_path = "answers/private.png"
+
+    response = client.get(
+        f"/grading/answers/{data['answer'].id}/image",
+        headers=auth_headers(data["student"]),
+    )
+
+    assert response.status_code == 403
 
