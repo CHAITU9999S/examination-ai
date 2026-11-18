@@ -513,6 +513,9 @@ class Result(Base):
 
     obtained_marks = Column(Float, nullable=True)
 
+    # Per-question score breakdown required for result review.
+    question_scores = Column(JSON, nullable=True)
+
     # Compatibility with existing result-handling code.
     marks_obtained = synonym("obtained_marks")
 
