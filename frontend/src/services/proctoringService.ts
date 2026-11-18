@@ -98,7 +98,7 @@ export const proctoringService = {
     return api.get<ProctoringSummary>(
       `/exam-sessions/${sessionId}/proctoring/summary`,
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
