@@ -1,5 +1,5 @@
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.auth import (
     hash_password,
@@ -34,9 +34,13 @@ def test_access_token_creation():
 
 
 def test_exam_token_creation():
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+
     token = create_exam_access_token(
         exam_id=10,
-        student_id=101
+        student_id=101,
+        session_id=501,
+        expires_at=expires_at
     )
 
     payload = verify_token(token)
@@ -45,7 +49,9 @@ def test_exam_token_creation():
     assert payload["token_type"] == "exam"
     assert payload["exam_id"] == 10
     assert payload["student_id"] == 101
+    assert payload["session_id"] == 501
     assert payload["sub"] == "101"
+    assert payload["exp"] > datetime.now(timezone.utc).timestamp()
 
 
 def test_expired_token_rejected():
