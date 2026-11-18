@@ -127,6 +127,80 @@ def _get_submitted_answer_context(
     return answer, session, exam, question
 
 
+@router.get("/pending")
+def get_all_pending_subjective_answers(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List pending subjective answers for exams visible to this staff member."""
+    require_examiner_or_admin(current_user)
+
+    query = db.query(
+        Answer,
+        ExamSession,
+        QuestionBank,
+        Exam,
+    ).join(
+        ExamSession,
+        Answer.session_id == ExamSession.id,
+    ).join(
+        QuestionBank,
+        Answer.question_id == QuestionBank.id,
+    ).join(
+        Exam,
+        ExamSession.exam_id == Exam.id,
+    ).filter(
+        ExamSession.status == "submitted",
+        QuestionBank.question_type.in_([
+            "short_answer",
+            "long_answer",
+            "image_upload",
+        ]),
+        Answer.awarded_marks.is_(None),
+    )
+
+    role = getattr(current_user.role, "value", current_user.role)
+    if role == "examiner":
+        query = query.filter(Exam.created_by == current_user.id)
+
+    rows = query.order_by(
+        ExamSession.submitted_at.asc(),
+        Answer.id.asc(),
+    ).all()
+
+    return {
+        "total_pending": len(rows),
+        "answers": [
+            {
+                "answer_id": answer.id,
+                "session_id": session.id,
+                "student_id": session.student_id,
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "question_id": question.id,
+                "question_text": question.question_text,
+                "question_type": getattr(
+                    question.question_type,
+                    "value",
+                    question.question_type,
+                ),
+                "answer_text": answer.answer_text,
+                "image_path": answer.image_path,
+                "image_url": (
+                    f"/grading/answers/{answer.id}/image"
+                    if answer.image_path
+                    else None
+                ),
+                "marks": question.marks,
+                "maximum_marks": question.marks,
+                "awarded_marks": answer.awarded_marks,
+                "submitted_at": session.submitted_at,
+            }
+            for answer, session, question, exam in rows
+        ],
+    }
+
+
 @router.get("/exams/{exam_id}/pending")
 def get_pending_subjective_answers(
     exam_id: int,
