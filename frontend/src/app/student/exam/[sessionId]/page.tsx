@@ -593,7 +593,7 @@ export default function StudentExamPage() {
       question.question_type === "long_answer"
     ) {
       const wordCount = currentAnswer.trim()
-        ? currentAnswer.trim().split(/\\s+/).length
+        ? currentAnswer.trim().split(/\s+/).length
         : 0;
       const wordLimit = question.question_type === "short_answer" ? 1000 : 10000;
 
