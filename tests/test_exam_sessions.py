@@ -411,3 +411,47 @@ def test_saved_question_selection_uses_filtered_pool_when_total_is_unset(
     assert set(selected_ids) == {
         question.id for question in easy_questions
     }
+
+def test_student_starts_exam_using_exam_id_path(
+    client,
+    db_session,
+):
+    student = create_student(
+        db_session,
+        email="start-exam-contract@test.com",
+    )
+    exam = create_exam(db_session, title="Start Contract Exam")
+    question = QuestionBank(
+        question_text="A sample question",
+        question_type="MCQ",
+        subject="General",
+        difficulty="easy",
+        marks=1,
+        negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add(
+        ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=1,
+        )
+    )
+    db_session.commit()
+
+    access_token = create_access_token({"sub": str(student.id)})
+    response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["exam_id"] == exam.id
+    assert data["session_id"] > 0
+    assert data["access_token"]
+    assert data["token_type"] == "bearer"
+    assert data["total_questions"] == 1
+
