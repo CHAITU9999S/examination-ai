@@ -480,6 +480,12 @@ def test_student_can_access_own_proctoring_history(
     data = proctoring_data
     heartbeat_time = datetime.now(timezone.utc).replace(tzinfo=None)
     data["session"].last_heartbeat_at = heartbeat_time
+    data["session"].last_heartbeat_signals = {
+        "event_counts": {"tab_switch": 2, "gaze_away": 1},
+        "total_event_count": 3,
+        "tab_switch_count": 2,
+        "auto_flagged": False,
+    }
     db_session.commit()
 
     response = client.get(
@@ -490,3 +496,5 @@ def test_student_can_access_own_proctoring_history(
     assert response.status_code == 200
     assert response.json()["session_id"] == data["session"].id
     assert response.json()["last_heartbeat_at"] is not None
+    assert response.json()["last_heartbeat_signals"]["total_event_count"] == 3
+    assert response.json()["last_heartbeat_signals"]["event_counts"]["tab_switch"] == 2
