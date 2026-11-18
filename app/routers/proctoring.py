@@ -12,6 +12,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -19,16 +20,21 @@ from sqlalchemy.orm import Session
 from app.auth import verify_token
 from app.database import get_db
 from app.models import (
+    Exam,
     ExamSession,
     ProctorEvent,
     User,
 )
+from app.services.proctoring_service import get_proctoring_summary
 
 
 router = APIRouter(
     prefix="/exam-sessions",
     tags=["AI Proctoring"],
 )
+
+exam_token_scheme = HTTPBearer(auto_error=False)
+user_token_scheme = HTTPBearer(auto_error=False)
 
 
 # ==========================================
@@ -38,6 +44,7 @@ router = APIRouter(
 EVENT_SUSPICION_POINTS = {
     "tab_switch": 10,
     "window_blur": 5,
+    "window_focus": 0,
     "face_not_detected": 5,
     "multiple_faces": 20,
     "gaze_away": 3,
@@ -199,18 +206,40 @@ def validate_active_proctoring_session(
 def record_proctoring_event(
     session_id: int,
     submission: ProctorEventSubmission,
-    token: str = Query(...),
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
     """Record a proctoring event for the authenticated exam session."""
 
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Exam access token is required.",
+        )
+
     session = validate_proctoring_token(
-        token=token,
+        token=credentials.credentials,
         session_id=session_id,
         db=db,
     )
 
     validate_active_proctoring_session(session)
+
+    exam = db.query(Exam).filter(
+        Exam.id == session.exam_id,
+    ).first()
+
+    if exam is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Examination not found.",
+        )
+
+    if not exam.proctoring_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Proctoring is not enabled for this examination.",
+        )
 
     event_type = submission.event_type.strip().lower()
 
@@ -303,47 +332,48 @@ def record_proctoring_event(
 )
 def get_proctoring_summary(
     session_id: int,
-    token: str = Query(...),
+    credentials: HTTPAuthorizationCredentials = Depends(user_token_scheme),
     db: Session = Depends(get_db),
 ):
-    """Return the authenticated student's proctoring summary."""
+    """Return proctoring history to an authorized examiner or administrator."""
 
-    session = validate_proctoring_token(
-        token=token,
-        session_id=session_id,
-        db=db,
-    )
-
-    events = db.query(ProctorEvent).filter(
-        ProctorEvent.session_id == session_id,
-    ).order_by(
-        ProctorEvent.created_at.asc(),
-    ).all()
-
-    event_counts = {}
-
-    for event in events:
-        event_counts[event.event_type] = (
-            event_counts.get(event.event_type, 0) + 1
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Staff authentication is required.",
         )
 
-    return {
-        "session_id": session_id,
-        "status": session.status,
-        "suspicion_score": session.suspicion_score or 0,
-        "total_events": len(events),
-        "event_counts": event_counts,
-        "events": [
-            {
-                "event_id": event.id,
-                "event_type": event.event_type,
-                "description": event.description,
-                "suspicion_points": event.suspicion_points,
-                "created_at": event.created_at,
-            }
-            for event in events
-        ],
-    }
+    payload = verify_token(credentials.credentials)
+
+    if not payload or payload.get("token_type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only authenticated staff can review proctoring history.",
+        )
+
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+        )
+
+    current_user = db.query(User).filter(
+        User.id == user_id,
+    ).first()
+
+    if current_user is None or not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account not found or inactive.",
+        )
+
+    return get_proctoring_summary(
+        db=db,
+        session_id=session_id,
+        current_user=current_user,
+    )
 
 
 # ==========================================
