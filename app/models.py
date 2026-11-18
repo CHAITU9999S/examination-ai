@@ -382,6 +382,7 @@ class ExamSession(Base):
     )
 
     last_heartbeat_at = Column(DateTime(), nullable=True)
+    last_heartbeat_signals = Column(JSON, nullable=True)
 
     selected_question_ids = Column(
         JSON,
