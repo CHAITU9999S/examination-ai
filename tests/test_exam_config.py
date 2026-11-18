@@ -44,12 +44,16 @@ def test_rejects_past_end_time():
         validate_exam_config(60, end_time=end)
 
 
-def test_rejects_mismatched_timezones():
+def test_accepts_mixed_timezone_representations():
     start = datetime.now(timezone.utc) + timedelta(hours=1)
-    end = datetime.now() + timedelta(hours=2)
 
-    with pytest.raises(ValueError):
-        validate_exam_config(60, start, end)
+    # Naive datetime values are interpreted as UTC
+    # by the application.
+    end = (
+        datetime.now(timezone.utc) + timedelta(hours=2)
+    ).replace(tzinfo=None)
+
+    assert validate_exam_config(60, start, end) is True
 
 
 def test_valid_distribution_rules():
@@ -152,5 +156,5 @@ def test_rejects_distribution_with_wrong_total():
             60,
             selection_rules=rules,
             total_questions=4
-                            )
+)
         
