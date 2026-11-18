@@ -710,7 +710,6 @@ export default function StudentExamPage() {
       onCopy={(event) => event.preventDefault()}
       onCut={(event) => event.preventDefault()}
       onPaste={(event) => event.preventDefault()}
-      onSelectStart={(event) => event.preventDefault()}
     >
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
