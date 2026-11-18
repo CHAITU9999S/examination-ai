@@ -1,14 +1,33 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg[binary]
-alembic
-pydantic
-pydantic-settings
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-email-validator
-apscheduler
-pytest
-httpx
+
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+
+# Database and migrations
+sqlalchemy==2.0.41
+psycopg[binary]==3.2.9
+alembic==1.15.2
+
+# Validation and settings
+pydantic==2.11.5
+pydantic-settings==2.9.1
+email-validator==2.2.0
+
+# Authentication and security
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.20
+
+# Scheduling
+apscheduler==3.11.0
+
+# Image processing and OCR support
+Pillow==11.2.1
+pytesseract==0.3.13
+
+# AI integration
+openai==1.82.0
+
+# Testing
+pytest==8.3.5
+httpx==0.28.1
