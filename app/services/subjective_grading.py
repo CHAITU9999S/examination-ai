@@ -25,6 +25,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 SUPPORTED_QUESTION_TYPES = {
     "short_answer",
     "long_answer",
+    "image_upload",
 }
 
 
