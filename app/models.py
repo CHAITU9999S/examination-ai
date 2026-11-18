@@ -456,6 +456,18 @@ class Answer(Base):
 
     awarded_marks = Column(Float, nullable=True)
 
+    ai_suggested_marks = Column(Float, nullable=True)
+
+    ai_justification = Column(Text, nullable=True)
+
+    ai_matched_points = Column(JSON, nullable=True)
+
+    ai_missed_points = Column(JSON, nullable=True)
+
+    ai_model = Column(String(100), nullable=True)
+
+    ai_suggestion_generated_at = Column(DateTime(), nullable=True)
+
     # Compatibility with existing evaluation code.
     marks_awarded = synonym("awarded_marks")
 
