@@ -173,18 +173,13 @@ def _validate_event_data(
             detail="Gaze data must be a JSON object.",
         )
 
+    # The project requirements specify that webcam frames stay in the
+    # browser. Only derived signals may be sent to the backend.
     if snapshot_data is not None:
-        if not isinstance(snapshot_data, str):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Snapshot data must be text.",
-            )
-
-        if len(snapshot_data) > MAX_SNAPSHOT_LENGTH:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Snapshot data exceeds the allowed size.",
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Webcam snapshots must remain client-side; submit derived proctoring signals only.",
+        )
 
 
 # ==========================================
@@ -265,25 +260,27 @@ def record_proctor_event(
 
             tab_switch_count = previous_count + 1
 
+        current_score = float(session.suspicion_score or 0)
+        cumulative_score = min(
+            MAX_SUSPICION_SCORE,
+            current_score + suspicion_points,
+        )
+
         event = ProctorEvent(
             session_id=session_id,
             event_type=event_type,
             description=description,
             suspicion_points=suspicion_points,
+            cumulative_suspicion_score=cumulative_score,
             gaze_data=gaze_data,
-            snapshot_data=snapshot_data,
+            # Webcam frames are intentionally never persisted or uploaded.
+            snapshot_data=None,
             tab_switch_count=tab_switch_count,
             created_at=now,
         )
 
         db.add(event)
-
-        current_score = float(session.suspicion_score or 0)
-
-        session.suspicion_score = min(
-            MAX_SUSPICION_SCORE,
-            current_score + suspicion_points,
-        )
+        session.suspicion_score = cumulative_score
 
         db.commit()
         db.refresh(event)
@@ -293,6 +290,7 @@ def record_proctor_event(
             "event_id": event.id,
             "event_type": event.event_type,
             "suspicion_points": event.suspicion_points,
+            "cumulative_suspicion_score": event.cumulative_suspicion_score,
             "suspicion_score": session.suspicion_score,
             "tab_switch_count": tab_switch_count,
         }
