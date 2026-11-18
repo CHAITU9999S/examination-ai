@@ -1,6 +1,10 @@
 import math
+import mimetypes
+import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -181,6 +185,11 @@ def get_pending_subjective_answers(
                 ),
                 "answer_text": answer.answer_text,
                 "image_path": answer.image_path,
+                "image_url": (
+                    f"/grading/answers/{answer.id}/image"
+                    if answer.image_path
+                    else None
+                ),
                 "maximum_marks": question.marks,
                 "model_answer": question.model_answer_text,
                 "submitted_at": session.submitted_at,
@@ -188,6 +197,68 @@ def get_pending_subjective_answers(
             for answer, session, question in rows
         ],
     }
+
+
+@router.get("/answers/{answer_id}/image")
+def get_subjective_answer_image(
+    answer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serve an uploaded answer image to its authorized examiner or admin."""
+
+    require_examiner_or_admin(current_user)
+
+    answer, session, exam, question = _get_submitted_answer_context(
+        answer_id,
+        current_user,
+        db,
+    )
+
+    if not answer.image_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No image is attached to this answer.",
+        )
+
+    upload_root = Path(
+        os.getenv("ANSWER_UPLOAD_DIR", "uploads")
+    ).resolve()
+
+    relative_path = Path(answer.image_path)
+
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Answer image not found.",
+        )
+
+    image_file = (upload_root / relative_path).resolve()
+
+    if upload_root not in image_file.parents or not image_file.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Answer image not found.",
+        )
+
+    media_type, _ = mimetypes.guess_type(image_file.name)
+
+    if media_type not in {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/tiff",
+        "image/bmp",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Stored answer image has an unsupported format.",
+        )
+
+    return FileResponse(
+        path=image_file,
+        media_type=media_type,
+    )
 
 
 @router.post("/sessions/{session_id}/evaluate-objective")
