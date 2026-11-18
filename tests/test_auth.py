@@ -1,7 +1,11 @@
 
 from datetime import datetime, timedelta, timezone
 
+from jose import jwt
+
 from app.auth import (
+    JWT_SECRET_KEY,
+    JWT_ALGORITHM,
     hash_password,
     verify_password,
     create_access_token,
@@ -55,9 +59,17 @@ def test_exam_token_creation():
 
 
 def test_expired_token_rejected():
-    token = create_access_token(
-        {"sub": "101"},
-        expires_delta=timedelta(seconds=-1)
+    now = datetime.now(timezone.utc)
+
+    token = jwt.encode(
+        {
+            "sub": "101",
+            "iat": now - timedelta(minutes=2),
+            "exp": now - timedelta(minutes=1),
+            "token_type": "access",
+        },
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
     )
 
     assert verify_token(token) is None
