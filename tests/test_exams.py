@@ -236,19 +236,40 @@ def test_student_cannot_create_exam(client, db_session):
     assert response.status_code == 403
 
 
-def test_student_cannot_list_exams(client, db_session):
+def test_student_can_list_available_exams(client, db_session):
     student = create_user(
         db_session,
         "student",
         "student_list_exams@test.com",
     )
+    examiner = create_user(
+        db_session,
+        "examiner",
+        "examiner_student_list@test.com",
+    )
+    exam = Exam(
+        title="Student Visible Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=5,
+        start_time=datetime.now(timezone.utc) - timedelta(minutes=1),
+        end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        created_by=examiner.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
 
     response = client.get(
         "/exams/",
         headers=get_auth_headers(student),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    exams = response.json()
+    visible_exam = next(item for item in exams if item["id"] == exam.id)
+    assert visible_exam["title"] == "Student Visible Exam"
+    assert "options" not in visible_exam
+    assert "answers" not in visible_exam
 
 
 def test_examiner_cannot_list_another_examiners_exams(
