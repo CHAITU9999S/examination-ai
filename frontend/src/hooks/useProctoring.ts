@@ -96,7 +96,8 @@ export function useProctoring({
 
         const threshold = Math.max(0, Math.floor(maxTabWarnings));
         if (
-          !autoFlaggedRef.current
+          threshold > 0
+          && !autoFlaggedRef.current
           && tabSwitchCountRef.current >= threshold
         ) {
           autoFlaggedRef.current = true;
