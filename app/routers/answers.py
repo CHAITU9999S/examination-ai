@@ -357,6 +357,56 @@ def get_saved_answers(
 # SAVE OR UPDATE EXAM ANSWER
 # ==========================================
 
+@legacy_router.delete("/{session_id}/{question_id}")
+def delete_saved_answer(
+    session_id: int,
+    question_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    """Clear a student's saved text/objective answer while the session is active."""
+    validated_session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db,
+    )
+    session = get_active_session_for_update(
+        session_id=session_id,
+        exam_id=validated_session.exam_id,
+        student_id=validated_session.student_id,
+        db=db,
+    )
+
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question does not belong to your examination paper.",
+        )
+
+    answer = db.query(Answer).filter(
+        Answer.session_id == session_id,
+        Answer.question_id == question_id,
+    ).first()
+
+    if answer is not None:
+        try:
+            db.delete(answer)
+            db.commit()
+        except SQLAlchemyError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to clear the saved answer.",
+            )
+
+    return {
+        "message": "Saved answer cleared.",
+        "session_id": session_id,
+        "question_id": question_id,
+        "deleted": True,
+    }
+
+
 @legacy_router.get("/{session_id}/{question_id}")
 def get_saved_answer(
     session_id: int,
