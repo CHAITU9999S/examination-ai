@@ -1,0 +1,18 @@
+services:
+  examguard-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      UPLOAD_DIRECTORY: /app/data/uploads
+      TESSERACT_CMD: /usr/bin/tesseract
+    ports:
+      - "8000:8000"
+    volumes:
+      - examguard_uploads:/app/data/uploads
+    restart: unless-stopped
+
+volumes:
+  examguard_uploads:
