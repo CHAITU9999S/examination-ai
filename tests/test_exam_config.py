@@ -59,9 +59,9 @@ def test_accepts_mixed_timezone_representations():
 def test_valid_distribution_rules():
     rules = {
         "difficulty_counts": {
-            "Easy": 2,
-            "Medium": 1,
-            "Hard": 1
+            "easy": 2,
+            "medium": 1,
+            "hard": 1
         },
         "question_type_counts": {
             "MCQ": 2,
