@@ -529,3 +529,76 @@ def test_webcam_snapshot_upload_is_rejected(
 
     assert response.status_code == 400
     assert "client-side" in response.json()["detail"]
+
+
+
+def test_zero_tab_switch_threshold_disables_auto_flag(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["exam"].max_tab_switch_warnings = 0
+    db_session.commit()
+
+    submit_response = submit_event(client, data, "tab_switch")
+    assert submit_response.status_code in (200, 201)
+
+    admin = User(
+        full_name="Zero Threshold Admin",
+        email="zero-threshold-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    from app.auth import create_access_token
+
+    token = create_access_token({"sub": str(admin.id)})
+    response = client.get(
+        f"/exam-sessions/{data['session'].id}/proctoring/summary",
+        headers=proctoring_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["auto_flag_threshold"] == 0
+    assert response.json()["auto_flagged"] is False
+
+
+def test_positive_tab_switch_threshold_flags_session(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["exam"].max_tab_switch_warnings = 1
+    db_session.commit()
+
+    submit_response = submit_event(client, data, "tab_switch")
+    assert submit_response.status_code in (200, 201)
+
+    admin = User(
+        full_name="Threshold Admin",
+        email="threshold-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    from app.auth import create_access_token
+
+    token = create_access_token({"sub": str(admin.id)})
+    response = client.get(
+        f"/exam-sessions/{data['session'].id}/proctoring/summary",
+        headers=proctoring_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["auto_flag_threshold"] == 1
+    assert response.json()["auto_flagged"] is True
