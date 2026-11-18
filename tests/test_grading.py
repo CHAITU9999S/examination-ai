@@ -154,3 +154,23 @@ def test_student_cannot_manually_grade_subjective_answer(
     )
 
     assert response.status_code == 403
+
+def test_examiner_can_load_pending_grading_queue(
+    client,
+    grading_data,
+):
+    data = grading_data
+    response = client.get(
+        "/grading/pending",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_pending"] == 1
+    pending = payload["answers"][0]
+    assert pending["answer_id"] == data["answer"].id
+    assert pending["exam_id"] == data["exam"].id
+    assert pending["marks"] == pytest.approx(5.0)
+    assert pending["answer_text"] == data["answer"].answer_text
+
