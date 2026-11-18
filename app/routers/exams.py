@@ -1,17 +1,19 @@
 
 from datetime import timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Exam
-from app.schemas import ExamCreate
+from app.schemas import ExamCreate, UserRole
 from app.dependencies import require_role
 from app.services.exam_config import (
     validate_exam_config,
-    normalize_to_naive_utc
+    normalize_to_naive_utc,
 )
+
 
 router = APIRouter(
     prefix="/exams",
@@ -19,7 +21,11 @@ router = APIRouter(
 )
 
 
-@router.post("/")
+# ==========================================
+# CREATE EXAM
+# ==========================================
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
 def create_exam(
     data: ExamCreate,
     db: Session = Depends(get_db),
@@ -35,11 +41,12 @@ def create_exam(
             data.selection_rules,
             data.total_questions,
             data.gaze_tracking_sensitivity,
-            data.max_tab_switch_warnings
+            data.max_tab_switch_warnings,
         )
+
     except ValueError as error:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error)
         )
 
@@ -51,10 +58,10 @@ def create_exam(
         randomize_questions=data.randomize_questions,
         selection_rules=data.selection_rules,
 
-        # Store schedule timestamps as naive UTC.
         start_time=normalize_to_naive_utc(
             data.start_time
         ),
+
         end_time=normalize_to_naive_utc(
             data.end_time
         ),
@@ -63,18 +70,30 @@ def create_exam(
         proctoring_enabled=data.proctoring_enabled,
         gaze_tracking_sensitivity=data.gaze_tracking_sensitivity,
         max_tab_switch_warnings=data.max_tab_switch_warnings,
-        created_by=current_user.id
+        created_by=current_user.id,
     )
 
-    db.add(exam)
-    db.commit()
-    db.refresh(exam)
+    try:
+        db.add(exam)
+        db.commit()
+        db.refresh(exam)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Exam could not be created because of a database constraint."
+        )
 
     return {
         "message": "Exam created successfully",
-        "exam_id": exam.id
+        "exam_id": exam.id,
     }
 
+
+# ==========================================
+# LIST EXAMS
+# ==========================================
 
 @router.get("/")
 def list_exams(
@@ -83,7 +102,27 @@ def list_exams(
         require_role("examiner", "admin")
     )
 ):
-    exams = db.query(Exam).all()
+    query = db.query(Exam)
+
+    # Examiners can access only their own exams.
+    # Admins can view all exams.
+    if current_user.role != UserRole.ADMIN.value:
+        query = query.filter(
+            Exam.created_by == current_user.id
+        )
+
+    exams = query.order_by(
+        Exam.id.desc()
+    ).all()
+
+    def utc_timestamp(value):
+        if value is None:
+            return None
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(timezone.utc)
 
     return [
         {
@@ -94,22 +133,14 @@ def list_exams(
             "total_questions": exam.total_questions,
             "randomize_questions": exam.randomize_questions,
             "selection_rules": exam.selection_rules,
-
-            # Return timestamps with an explicit UTC offset.
-            "start_time": (
-                exam.start_time.replace(tzinfo=timezone.utc)
-                if exam.start_time else None
-            ),
-            "end_time": (
-                exam.end_time.replace(tzinfo=timezone.utc)
-                if exam.end_time else None
-            ),
-
+            "start_time": utc_timestamp(exam.start_time),
+            "end_time": utc_timestamp(exam.end_time),
             "negative_marking": exam.negative_marking,
             "proctoring_enabled": exam.proctoring_enabled,
             "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
-            "max_tab_switch_warnings": exam.max_tab_switch_warnings
+            "max_tab_switch_warnings": exam.max_tab_switch_warnings,
+            "created_by": exam.created_by,
         }
         for exam in exams
-]
+    ]
     
