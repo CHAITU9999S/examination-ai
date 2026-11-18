@@ -91,6 +91,11 @@ def _get_selection_question_pool(
 
     rules = exam.selection_rules or {}
 
+    if not isinstance(rules, dict):
+        raise ValueError(
+            "Examination selection rules must be a dictionary."
+        )
+
     if (
         rules.get("difficulty")
         and not rules.get("difficulty_counts")
