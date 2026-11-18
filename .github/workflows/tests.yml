@@ -3,34 +3,48 @@ name: ExamGuard AI Tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    name: Backend Automated Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
-      - name: Install dependencies
+      - name: Upgrade pip
         run: |
           python -m pip install --upgrade pip
+
+      - name: Install project dependencies
+        run: |
           pip install -r requirements.txt
 
-      - name: Run tests
-        env:
-          APP_ENV: test
-          DEBUG: "False"
-          JWT_SECRET_KEY: "examguard-test-only-secret-for-ci"
-          JWT_ALGORITHM: HS256
-          DATABASE_URL: "sqlite:///./examguard_test.db"
+      - name: Configure test environment
+        run: |
+          echo "APP_ENV=test" >> $GITHUB_ENV
+          echo "DEBUG=False" >> $GITHUB_ENV
+          echo "JWT_SECRET_KEY=examguard-test-only-secret-for-ci" >> $GITHUB_ENV
+          echo "JWT_ALGORITHM=HS256" >> $GITHUB_ENV
+          echo "DATABASE_URL=sqlite:///./examguard_test.db" >> $GITHUB_ENV
+
+      - name: Run automated tests
         run: |
           python -m pytest -v
+          
