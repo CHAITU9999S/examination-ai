@@ -1,4 +1,6 @@
+
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,10 @@ from app.routers import (
     answers,
     proctoring,
     grading,
+)
+from app.services.exam_scheduler import (
+    start_exam_scheduler,
+    stop_exam_scheduler,
 )
 
 
@@ -31,6 +37,33 @@ JWT_SECRET_KEY = os.getenv(
 
 
 # ==========================================
+# APPLICATION LIFECYCLE
+# ==========================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application startup and shutdown."""
+
+    if APP_ENV == "production":
+        if (
+            JWT_SECRET_KEY
+            == "development-only-secret-change-before-deployment"
+            or len(JWT_SECRET_KEY) < 32
+        ):
+            raise RuntimeError(
+                "Production requires a strong JWT_SECRET_KEY "
+                "of at least 32 characters."
+            )
+
+    start_exam_scheduler()
+
+    try:
+        yield
+    finally:
+        stop_exam_scheduler()
+
+
+# ==========================================
 # CREATE FASTAPI APPLICATION
 # ==========================================
 
@@ -43,6 +76,7 @@ app = FastAPI(
     ),
     version="1.0.0",
     debug=DEBUG,
+    lifespan=lifespan,
 )
 
 
@@ -94,24 +128,6 @@ app.include_router(grading.router)
 
 
 # ==========================================
-# APPLICATION STARTUP CHECK
-# ==========================================
-
-@app.on_event("startup")
-def validate_production_configuration():
-    if APP_ENV == "production":
-        if (
-            JWT_SECRET_KEY
-            == "development-only-secret-change-before-deployment"
-            or len(JWT_SECRET_KEY) < 32
-        ):
-            raise RuntimeError(
-                "Production requires a strong JWT_SECRET_KEY "
-                "of at least 32 characters."
-            )
-
-
-# ==========================================
 # ROOT ENDPOINT
 # ==========================================
 
@@ -134,4 +150,4 @@ def health_check():
     return {
         "status": "healthy",
         "application": APP_NAME,
-}
+    }
