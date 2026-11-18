@@ -1,4 +1,3 @@
-
 import pytest
 
 from app.services.paper_generator import generate_paper
@@ -64,7 +63,7 @@ def test_distribution_based_paper_has_correct_counts():
         5: {"difficulty": "Medium", "question_type": "short_answer"},
         6: {"difficulty": "Hard", "question_type": "MCQ"},
         7: {"difficulty": "Hard", "question_type": "long_answer"},
-        8: {"difficulty": "Hard", "question_type": "long_answer"}
+        8: {"difficulty": "Hard", "question_type": "long_answer"},
     }
 
     paper = generate_paper(
@@ -76,13 +75,13 @@ def test_distribution_based_paper_has_correct_counts():
         difficulty_counts={
             "Easy": 2,
             "Medium": 1,
-            "Hard": 1
+            "Hard": 1,
         },
         question_type_counts={
             "MCQ": 2,
             "short_answer": 1,
-            "long_answer": 1
-        }
+            "long_answer": 1,
+        },
     )
 
     assert len(paper) == 4
@@ -127,7 +126,7 @@ def test_distribution_based_paper_is_deterministic():
         3: {"difficulty": "Medium", "question_type": "short_answer"},
         4: {"difficulty": "Medium", "question_type": "short_answer"},
         5: {"difficulty": "Hard", "question_type": "long_answer"},
-        6: {"difficulty": "Hard", "question_type": "long_answer"}
+        6: {"difficulty": "Hard", "question_type": "long_answer"},
     }
 
     rules = {
@@ -135,29 +134,21 @@ def test_distribution_based_paper_is_deterministic():
         "difficulty_counts": {
             "Easy": 1,
             "Medium": 1,
-            "Hard": 1
+            "Hard": 1,
         },
         "question_type_counts": {
             "MCQ": 1,
             "short_answer": 1,
-            "long_answer": 1
-        }
+            "long_answer": 1,
+        },
     }
 
     first = generate_paper(
-        question_ids,
-        101,
-        1,
-        3,
-        **rules
+        question_ids, 101, 1, 3, **rules
     )
 
     second = generate_paper(
-        question_ids,
-        101,
-        1,
-        3,
-        **rules
+        question_ids, 101, 1, 3, **rules
     )
 
     assert first == second
@@ -170,7 +161,7 @@ def test_rejects_incomplete_distribution_rules():
             101,
             1,
             2,
-            difficulty_counts={"Easy": 2}
+            difficulty_counts={"Easy": 2},
         )
 
 
@@ -181,7 +172,7 @@ def test_rejects_impossible_distribution():
         1: {"difficulty": "Easy", "question_type": "MCQ"},
         2: {"difficulty": "Easy", "question_type": "MCQ"},
         3: {"difficulty": "Medium", "question_type": "MCQ"},
-        4: {"difficulty": "Medium", "question_type": "MCQ"}
+        4: {"difficulty": "Medium", "question_type": "MCQ"},
     }
 
     with pytest.raises(ValueError):
@@ -193,12 +184,12 @@ def test_rejects_impossible_distribution():
             question_details=question_details,
             difficulty_counts={
                 "Easy": 2,
-                "Medium": 2
+                "Medium": 2,
             },
             question_type_counts={
                 "MCQ": 2,
-                "short_answer": 2
-            }
+                "short_answer": 2,
+            },
         )
 
 
@@ -215,4 +206,30 @@ def test_randomization_can_be_disabled():
 
     assert first == [1, 2, 3, 4]
     assert second == [1, 2, 3, 4]
-                        
+
+
+def test_generated_paper_contains_only_available_questions():
+    questions = [10, 20, 30, 40, 50]
+
+    paper = generate_paper(questions, 101, 1, 3)
+
+    assert all(question_id in questions for question_id in paper)
+
+
+def test_randomized_paper_is_repeatable_for_same_exam_and_student():
+    questions = list(range(1, 31))
+
+    first = generate_paper(questions, 101, 7, 12)
+    second = generate_paper(questions, 101, 7, 12)
+
+    assert first == second
+
+
+def test_different_exams_can_have_different_papers():
+    questions = list(range(1, 101))
+
+    first = generate_paper(questions, 101, 1, 50)
+    second = generate_paper(questions, 101, 2, 50)
+
+    assert first != second
+    
