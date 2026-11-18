@@ -123,6 +123,7 @@ app.include_router(questions.router)
 app.include_router(exams.router)
 app.include_router(exam_sessions.router)
 app.include_router(answers.router)
+app.include_router(answers.legacy_router)
 app.include_router(proctoring.router)
 app.include_router(grading.router)
 
