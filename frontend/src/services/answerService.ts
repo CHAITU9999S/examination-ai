@@ -41,12 +41,12 @@ export interface ImageUploadResponse {
 
 const EXAM_TOKEN_KEY = "examguard_exam_token";
 
-function getExamToken(): string {
+function getExamToken(sessionId: number): string {
   if (typeof window === "undefined") {
     throw new Error("Examination session is unavailable.");
   }
 
-  const token = sessionStorage.getItem(EXAM_TOKEN_KEY);
+  const token = sessionStorage.getItem(`examguard_exam_token_${sessionId}`) || sessionStorage.getItem(EXAM_TOKEN_KEY);
 
   if (!token) {
     throw new Error("Exam access token is missing.");
@@ -130,7 +130,7 @@ export const answerService = {
         answer_text: answerText,
       },
       {
-        token: getExamToken(),
+        token: getExamToken(sessionId),
       }
     );
   },
