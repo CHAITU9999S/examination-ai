@@ -792,7 +792,7 @@ async def upload_image_answer(
         )
 
     upload_root = Path(
-        os.getenv("ANSWER_UPLOAD_DIR", "uploads")
+        os.getenv("ANSWER_UPLOAD_DIR") or os.getenv("UPLOAD_DIRECTORY", "uploads")
     ).resolve()
     answer_directory = upload_root / "answers"
     answer_directory.mkdir(
