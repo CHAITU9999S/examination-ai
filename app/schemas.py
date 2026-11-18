@@ -1,7 +1,13 @@
+
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+)
 
 
 # -----------------------------------------
@@ -12,6 +18,24 @@ class UserRole(str, Enum):
     STUDENT = "student"
     EXAMINER = "examiner"
     ADMIN = "admin"
+
+
+# -----------------------------------------
+# QUESTION ENUMERATIONS
+# -----------------------------------------
+
+class QuestionTypeSchema(str, Enum):
+    MCQ = "mcq"
+    MULTI_SELECT = "multi_select"
+    SHORT_ANSWER = "short_answer"
+    LONG_ANSWER = "long_answer"
+    IMAGE_UPLOAD = "image_upload"
+
+
+class DifficultyLevelSchema(str, Enum):
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
 
 
 # -----------------------------------------
@@ -65,8 +89,6 @@ class UserResponse(BaseSchema):
 
 # -----------------------------------------
 # ADMIN USER CREATION
-# Only Admins and Examiners can be
-# created through the admin interface.
 # -----------------------------------------
 
 class AdminUserCreate(BaseModel):
@@ -94,8 +116,36 @@ class PasswordChange(BaseModel):
 
 
 # -----------------------------------------
+# QUESTION CREATION
+# -----------------------------------------
+
+class QuestionCreate(BaseModel):
+    question_text: str = Field(min_length=1)
+    question_type: QuestionTypeSchema
+
+    subject: str = Field(min_length=1, max_length=100)
+    topic: Optional[str] = Field(default=None, max_length=150)
+
+    difficulty: DifficultyLevelSchema
+
+    options: Optional[list[str]] = None
+
+    expected_answer: Optional[str] = None
+    model_answer: Optional[str] = None
+
+    keywords: Optional[list[str]] = None
+
+    marks: float = Field(gt=0)
+    negative_marks: float = Field(default=0.0, ge=0)
+
+    correct_option_index: Optional[int] = Field(default=None, ge=0)
+    correct_option_indices: Optional[list[int]] = None
+
+
+# -----------------------------------------
 # GENERAL MESSAGE RESPONSE
 # -----------------------------------------
 
 class MessageResponse(BaseModel):
     message: str
+    
