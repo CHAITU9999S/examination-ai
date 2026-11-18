@@ -1,5 +1,5 @@
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,67 +15,93 @@ router = APIRouter(
 )
 
 
-@router.post("/")
+# ==========================================
+# CREATE QUESTION
+# ==========================================
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
 def create_question(
     data: QuestionCreate,
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
+    question_type = getattr(
+        data.question_type,
+        "value",
+        data.question_type
+    )
+
+    options = data.options or []
+
     try:
         validate_question(
-            data.question_type,
+            question_type,
             data.question_text,
             data.marks,
-            data.options,
+            options,
             data.negative_marks,
             data.correct_option_index,
             data.correct_option_indices
         )
     except ValueError as error:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error)
         )
 
+    # Preserve topic information using the existing tags column.
+    tags = list(data.tags or [])
+
+    if data.topic and data.topic not in tags:
+        tags.append(data.topic)
+
     question = QuestionBank(
         question_text=data.question_text,
-        question_type=data.question_type,
+        question_type=question_type,
         subject=data.subject,
-        difficulty=data.difficulty,
+        difficulty=data.difficulty.value,
         expected_answer=data.expected_answer,
         model_answer_text=data.model_answer_text,
         marks=data.marks,
         negative_marks=data.negative_marks,
-        tags=data.tags,
+        tags=tags,
         created_by=current_user.id
     )
 
-    db.add(question)
-    db.flush()
+    try:
+        db.add(question)
+        db.flush()
 
-    for index, option_text in enumerate(data.options):
-        db.add(
-            Option(
-                question_id=question.id,
-                option_text=option_text,
-                is_correct=(
-                    (
-                        data.question_type == "MCQ"
-                        and index == data.correct_option_index
-                    )
-                    or
-                    (
-                        data.question_type == "multi_select"
-                        and index in (
-                            data.correct_option_indices or []
-                        )
-                    )
+        for index, option_text in enumerate(options):
+            is_correct = (
+                question_type == "MCQ"
+                and index == data.correct_option_index
+            ) or (
+                question_type == "multi_select"
+                and index in (data.correct_option_indices or [])
+            )
+
+            db.add(
+                Option(
+                    question_id=question.id,
+                    option_text=option_text,
+                    is_correct=is_correct
                 )
             )
+
+        db.commit()
+        db.refresh(question)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The question could not be saved because of a database constraint."
         )
 
-    db.commit()
-    db.refresh(question)
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Question created successfully",
@@ -83,27 +109,38 @@ def create_question(
     }
 
 
+# ==========================================
+# LIST QUESTIONS
+# ==========================================
+
 @router.get("/")
 def list_questions(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
-    questions = db.query(QuestionBank).all()
+    questions = db.query(QuestionBank).order_by(
+        QuestionBank.id
+    ).all()
 
-    question_ids = [question.id for question in questions]
+    question_ids = [
+        question.id for question in questions
+    ]
 
     all_options = []
 
     if question_ids:
         all_options = db.query(Option).filter(
             Option.question_id.in_(question_ids)
+        ).order_by(
+            Option.id
         ).all()
 
     options_by_question = {}
 
     for option in all_options:
         options_by_question.setdefault(
-            option.question_id, []
+            option.question_id,
+            []
         ).append({
             "id": option.id,
             "option_text": option.option_text,
@@ -114,21 +151,30 @@ def list_questions(
         {
             "id": question.id,
             "question_text": question.question_text,
-            "question_type": question.question_type,
+            "question_type": getattr(
+                question.question_type,
+                "value",
+                question.question_type
+            ),
             "subject": question.subject,
             "difficulty": question.difficulty,
             "expected_answer": question.expected_answer,
             "model_answer_text": question.model_answer_text,
             "marks": question.marks,
             "negative_marks": question.negative_marks,
-            "tags": question.tags,
+            "tags": question.tags or [],
             "options": options_by_question.get(
-                question.id, []
+                question.id,
+                []
             )
         }
         for question in questions
     ]
 
+
+# ==========================================
+# DELETE QUESTION
+# ==========================================
 
 @router.delete("/{question_id}")
 def delete_question(
@@ -140,16 +186,27 @@ def delete_question(
         QuestionBank.id == question_id
     ).first()
 
-    if not question:
+    if question is None:
         raise HTTPException(
-            status_code=404,
-            detail="Question not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found."
         )
 
-    db.delete(question)
-    db.commit()
+    try:
+        db.delete(question)
+        db.commit()
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This question is linked to an examination or existing "
+                "records and cannot be deleted safely."
+            )
+        )
 
     return {
-        "message": "Question deleted successfully"
-    }
+        "message": "Question deleted successfully."
+}
     
