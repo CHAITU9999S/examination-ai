@@ -1,4 +1,6 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
@@ -10,6 +12,7 @@ from app.schemas import (
     MessageResponse,
     UserResponse,
     UserRole,
+    UserStatusUpdate,
 )
 
 
@@ -18,10 +21,6 @@ router = APIRouter(
     tags=["Admin Management"]
 )
 
-
-# -----------------------------------------
-# CREATE ADMIN OR EXAMINER ACCOUNT
-# -----------------------------------------
 
 @router.post(
     "/users",
@@ -33,10 +32,7 @@ def create_staff_account(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    Only an authenticated Admin can create
-    Admin and Examiner accounts.
-    """
+    """Allow Admins to create Admin and Examiner accounts."""
 
     if user_data.role not in (
         UserRole.ADMIN,
@@ -65,16 +61,19 @@ def create_staff_account(
         is_active=True
     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists."
+        )
 
     return new_user
 
-
-# -----------------------------------------
-# LIST ALL USERS
-# -----------------------------------------
 
 @router.get(
     "/users",
@@ -84,16 +83,10 @@ def list_users(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    Only Admins can view the user account list.
-    """
+    """Allow Admins to view all user accounts."""
 
     return db.query(User).order_by(User.id).all()
 
-
-# -----------------------------------------
-# DELETE ADMIN, EXAMINER OR STUDENT
-# -----------------------------------------
 
 @router.delete(
     "/users/{user_id}",
@@ -104,12 +97,7 @@ def delete_user(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    Only an Admin can delete user accounts.
-
-    An Admin cannot delete their own account.
-    The last active Admin account cannot be deleted.
-    """
+    """Allow Admins to delete Student, Examiner and Admin accounts."""
 
     target_user = db.query(User).filter(
         User.id == user_id
@@ -127,30 +115,39 @@ def delete_user(
             detail="You cannot delete your own account."
         )
 
-    if target_user.role == UserRole.ADMIN:
+    if target_user.role not in (
+        UserRole.STUDENT,
+        UserRole.EXAMINER,
+        UserRole.ADMIN
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account type cannot be deleted."
+        )
+
+    if target_user.role == UserRole.ADMIN and target_user.is_active:
         active_admin_count = db.query(User).filter(
             User.role == UserRole.ADMIN,
             User.is_active.is_(True)
         ).count()
 
-        if target_user.is_active and active_admin_count <= 1:
+        if active_admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="The last active Admin account cannot be deleted."
             )
 
-    db.delete(target_user)
-
     try:
+        db.delete(target_user)
         db.commit()
-    except Exception:
+    except IntegrityError:
         db.rollback()
-
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "This account is linked to existing examination records "
-                "and cannot currently be deleted."
+                "This account is linked to existing examination records. "
+                "It cannot be permanently deleted until those references "
+                "are handled safely."
             )
         )
 
@@ -159,23 +156,17 @@ def delete_user(
     )
 
 
-# -----------------------------------------
-# ACTIVATE OR DEACTIVATE USER ACCOUNT
-# -----------------------------------------
-
 @router.patch(
     "/users/{user_id}/status",
     response_model=UserResponse
 )
 def update_user_status(
     user_id: int,
-    is_active: bool,
+    status_data: UserStatusUpdate,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """
-    Only Admins can activate or deactivate accounts.
-    """
+    """Allow Admins to activate or deactivate user accounts."""
 
     target_user = db.query(User).filter(
         User.id == user_id
@@ -187,27 +178,32 @@ def update_user_status(
             detail="User account not found."
         )
 
-    if target_user.id == current_admin.id and not is_active:
+    if target_user.id == current_admin.id and not status_data.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own account."
         )
 
-    if target_user.role == UserRole.ADMIN and not is_active:
+    if (
+        target_user.role == UserRole.ADMIN
+        and target_user.is_active
+        and not status_data.is_active
+    ):
         active_admin_count = db.query(User).filter(
             User.role == UserRole.ADMIN,
             User.is_active.is_(True)
         ).count()
 
-        if target_user.is_active and active_admin_count <= 1:
+        if active_admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="The last active Admin cannot be deactivated."
             )
 
-    target_user.is_active = is_active
+    target_user.is_active = status_data.is_active
 
     db.commit()
     db.refresh(target_user)
 
     return target_user
+    
