@@ -12,7 +12,7 @@ def test_public_registration_always_creates_student(client):
         }
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["role"] == "student"
 
 
@@ -48,11 +48,12 @@ def test_student_cannot_create_examiner(client, db_session):
     token = create_access_token({"sub": str(student.id)})
 
     response = client.post(
-        "/auth/create-examiner",
+        "/admin/users",
         json={
             "full_name": "New Examiner",
             "email": "new_examiner@test.com",
-            "password": "TestPassword123"
+            "password": "TestPassword123",
+            "role": "examiner",
         },
         headers={"Authorization": f"Bearer {token}"}
     )
