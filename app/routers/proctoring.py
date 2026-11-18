@@ -196,6 +196,31 @@ def validate_active_proctoring_session(
     return session
 
 
+def validate_proctoring_enabled(
+    session: ExamSession,
+    db: Session,
+):
+    """Ensure proctoring is enabled for the session's examination."""
+
+    exam = db.query(Exam).filter(
+        Exam.id == session.exam_id,
+    ).first()
+
+    if exam is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Examination not found.",
+        )
+
+    if not exam.proctoring_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Proctoring is not enabled for this examination.",
+        )
+
+    return exam
+
+
 # ==========================================
 # RECORD PROCTORING EVENT
 # ==========================================
@@ -330,6 +355,7 @@ async def proctoring_heartbeat(
         )
 
         validate_active_proctoring_session(session)
+        validate_proctoring_enabled(session, db)
 
     except HTTPException as error:
         await websocket.close(
@@ -379,6 +405,7 @@ async def proctoring_heartbeat(
 
             try:
                 validate_active_proctoring_session(session)
+        validate_proctoring_enabled(session, db)
 
             except HTTPException:
                 await websocket.send_json({
