@@ -423,8 +423,10 @@ def test_result_calculation_waits_for_subjective_grading(
         data["session"].id,
     )
 
-    assert result_status["status"] == "pending"
-    assert result_status["pending_answers"] == 1
+    assert result_status["status"] == "pending_subjective_grading"
+    assert result_status["pending_question_ids"] == [
+        data["subjective"].id
+    ]
 
     saved_result = db_session.query(Result).filter_by(
         session_id=data["session"].id,
@@ -547,11 +549,15 @@ def test_evaluation_rejects_unsubmitted_session(
     data["session"].status = "in_progress"
     db_session.commit()
 
-    with pytest.raises(ValueError):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as error:
         calculate_session_result(
             db_session,
             data["session"].id,
         )
+
+    assert error.value.status_code == 409
 
 
 def test_full_evaluation_workflow(
@@ -591,4 +597,4 @@ def test_full_evaluation_workflow(
 
     assert "objective_evaluation" in workflow
     assert "result" in workflow
-    assert workflow["result"]["status"] == "pending"
+    assert workflow["result"]["status"] == "pending_subjective_grading"
