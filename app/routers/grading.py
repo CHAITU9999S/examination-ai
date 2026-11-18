@@ -199,6 +199,12 @@ def get_all_pending_subjective_answers(
                 "marks": question.marks,
                 "maximum_marks": question.marks,
                 "awarded_marks": answer.awarded_marks,
+                "ai_suggested_marks": answer.ai_suggested_marks,
+                "ai_justification": answer.ai_justification,
+                "ai_matched_points": answer.ai_matched_points or [],
+                "ai_missed_points": answer.ai_missed_points or [],
+                "ai_model": answer.ai_model,
+                "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
             }
             for answer, session, question, exam in rows
