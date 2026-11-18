@@ -48,6 +48,7 @@ export default function ExaminerGradingPage() {
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [awardedMarks, setAwardedMarks] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -115,6 +116,46 @@ export default function ExaminerGradingPage() {
   useEffect(() => {
     loadPendingAnswers();
   }, [loadPendingAnswers]);
+
+  useEffect(() => {
+    if (!selectedAnswer?.image_path) {
+      setImagePreviewUrl("");
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const token = localStorage.getItem("examguard_access_token");
+
+    if (!token) return;
+
+    fetch(`${API_URL}/grading/answers/${selectedAnswer.answer_id}/image`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Unable to load the uploaded answer image.");
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setImagePreviewUrl(objectUrl);
+        else URL.revokeObjectURL(objectUrl);
+      })
+      .catch((imageError) => {
+        if (!cancelled) {
+          setImagePreviewUrl("");
+          setError(imageError instanceof Error ? imageError.message : "Unable to load answer image.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedAnswer?.answer_id, selectedAnswer?.image_path]);
 
   function openAnswer(answer: PendingAnswer) {
     setSelectedAnswer(answer);
@@ -196,9 +237,9 @@ export default function ExaminerGradingPage() {
       if (!headers) return;
 
       const response = await fetch(
-        `${API_URL}/grading/answers/${selectedAnswer.answer_id}`,
+        `${API_URL}/grading/answers/${selectedAnswer.answer_id}/grade`,
         {
-          method: "PATCH",
+          method: "POST",
           headers,
           body: JSON.stringify({
             awarded_marks: marks,
@@ -411,18 +452,27 @@ export default function ExaminerGradingPage() {
                   Student Answer
                 </p>
 
-                {selectedAnswer.answer_text ? (
+                {selectedAnswer.answer_text && (
                   <div className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-800 p-4 text-slate-200">
                     {selectedAnswer.answer_text}
                   </div>
-                ) : selectedAnswer.image_path ? (
-                  <p className="mt-2 rounded-lg bg-slate-800 p-4 text-sm text-slate-300">
-                    An image answer was uploaded. Image preview requires
-                    a protected backend image endpoint.
-                  </p>
-                ) : (
+                )}
+                {selectedAnswer.image_path && (
+                  <div className="mt-3 rounded-lg bg-slate-800 p-4">
+                    {imagePreviewUrl ? (
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Uploaded handwritten examination answer"
+                        className="max-h-[32rem] w-full rounded-lg object-contain"
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400">Loading uploaded answer image...</p>
+                    )}
+                  </div>
+                )}
+                {!selectedAnswer.answer_text && !selectedAnswer.image_path && (
                   <p className="mt-2 text-slate-400">
-                    No text answer was submitted.
+                    No text or image answer was submitted.
                   </p>
                 )}
               </div>
