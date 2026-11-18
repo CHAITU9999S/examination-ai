@@ -113,7 +113,6 @@ The platform provides separate access and functionality for Students, Examiners,
 - OpenAI API
 - Pillow
 - Tesseract OCR
-- TensorFlow.js (browser-based proctoring)
 
 ### Testing
 - Pytest
