@@ -344,6 +344,7 @@ def get_student_proctoring_history(
     return {
         "session_id": session_id,
         "suspicion_score": session.suspicion_score or 0,
+        "last_heartbeat_at": session.last_heartbeat_at,
         "total_events": len(events),
         "events": events,
     }
@@ -406,6 +407,7 @@ def get_proctoring_history_for_staff(
         "student_id": session.student_id,
         "session_status": session.status,
         "suspicion_score": session.suspicion_score or 0,
+        "last_heartbeat_at": session.last_heartbeat_at,
         "tab_switch_count": tab_switch_count,
         "auto_flagged": (
             tab_switch_count >= max(0, int(exam.max_tab_switch_warnings or 0))
@@ -447,6 +449,7 @@ def get_proctoring_summary(
         "student_id": history["student_id"],
         "session_status": history["session_status"],
         "suspicion_score": history["suspicion_score"],
+        "last_heartbeat_at": history["last_heartbeat_at"],
         "tab_switch_count": history["tab_switch_count"],
         "auto_flagged": history["auto_flagged"],
         "total_events": history["total_events"],
