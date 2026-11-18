@@ -99,14 +99,15 @@ def create_exam(
 def list_exams(
     db: Session = Depends(get_db),
     current_user=Depends(
-        require_role("examiner", "admin")
+        require_role("student", "examiner", "admin")
     )
 ):
     query = db.query(Exam)
 
+    # Students can discover available examinations.
     # Examiners can access only their own exams.
     # Admins can view all exams.
-    if current_user.role != UserRole.ADMIN.value:
+    if current_user.role == UserRole.EXAMINER.value:
         query = query.filter(
             Exam.created_by == current_user.id
         )
