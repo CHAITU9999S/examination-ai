@@ -222,7 +222,7 @@ def get_subjective_answer_image(
         )
 
     upload_root = Path(
-        os.getenv("ANSWER_UPLOAD_DIR", "uploads")
+        os.getenv("ANSWER_UPLOAD_DIR") or os.getenv("UPLOAD_DIRECTORY", "uploads")
     ).resolve()
 
     relative_path = Path(answer.image_path)
