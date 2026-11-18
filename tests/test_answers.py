@@ -478,7 +478,7 @@ def test_student_can_update_existing_answer(
     ).all()
 
     assert len(saved_answers) == 1
-    assert saved_answers[0].answer_text == str(options[1].id)
+    assert saved_answers[0].answer_text == json.dumps([options[1].id])
 
 
 def test_reject_oversized_short_answer(
