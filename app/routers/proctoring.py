@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.services.proctoring_service import (
     get_proctoring_summary as get_staff_proctoring_summary,
+    get_student_proctoring_history,
     record_proctor_event,
 )
 
@@ -291,10 +292,29 @@ def get_proctoring_summary(
 
     payload = verify_token(credentials.credentials)
 
-    if not payload or payload.get("token_type") != "access":
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token.",
+        )
+
+    if payload.get("token_type") == "exam":
+        session = validate_proctoring_token(
+            token=credentials.credentials,
+            session_id=session_id,
+            db=db,
+        )
+
+        return get_student_proctoring_history(
+            db=db,
+            session_id=session_id,
+            current_user=session.student,
+        )
+
+    if payload.get("token_type") != "access":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only authenticated staff can review proctoring history.",
+            detail="Unsupported authentication token type.",
         )
 
     try:
