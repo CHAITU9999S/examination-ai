@@ -191,9 +191,12 @@ def start_exam(
             detail="Only students can start examinations.",
         )
 
+    # Serialize session creation per examination. The row lock is held
+    # until the session transaction commits, so another student cannot
+    # select a paper from a stale view of previously assigned papers.
     exam = db.query(Exam).filter(
         Exam.id == exam_id
-    ).first()
+    ).with_for_update().first()
 
     if exam is None:
         raise HTTPException(
