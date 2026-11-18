@@ -1,8 +1,9 @@
+
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from jose import jwt
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 
@@ -33,9 +34,7 @@ password_context = CryptContext(
 
 
 def hash_password(password: str) -> str:
-    """
-    Hash a password before storing it in the database.
-    """
+    """Hash a password before storing it in the database."""
 
     return password_context.hash(password)
 
@@ -44,9 +43,7 @@ def verify_password(
     plain_password: str,
     hashed_password: str
 ) -> bool:
-    """
-    Verify a submitted password against its stored hash.
-    """
+    """Verify a submitted password against its stored hash."""
 
     return password_context.verify(
         plain_password,
@@ -62,11 +59,7 @@ def create_access_token(
     subject: str,
     expires_delta: Optional[timedelta] = None
 ) -> str:
-    """
-    Create a signed JWT access token.
-
-    The subject identifies the authenticated user.
-    """
+    """Create a signed JWT access token."""
 
     now = datetime.now(timezone.utc)
 
@@ -83,10 +76,32 @@ def create_access_token(
         "exp": expire,
     }
 
-    encoded_token = jwt.encode(
+    return jwt.encode(
         payload,
         JWT_SECRET_KEY,
         algorithm=JWT_ALGORITHM
     )
 
-    return encoded_token
+
+# -----------------------------------------
+# JWT TOKEN VERIFICATION
+# -----------------------------------------
+
+def verify_token(token: str) -> Optional[dict]:
+    """
+    Decode and verify a JWT token.
+
+    Returns the decoded payload when valid.
+    Returns None when the token is invalid or expired.
+    """
+
+    try:
+        return jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+    except JWTError:
+        return None
+            
