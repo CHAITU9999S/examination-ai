@@ -488,6 +488,29 @@ def test_result_is_calculated_after_subjective_grading(
     assert saved_result.total_marks == pytest.approx(10.0)
     assert saved_result.obtained_marks == pytest.approx(9.0)
     assert saved_result.percentage == pytest.approx(90.0)
+    assert saved_result.question_scores == [
+        {
+            "question_id": data["mcq"].id,
+            "question_type": "MCQ",
+            "maximum_marks": 2.0,
+            "awarded_marks": 2.0,
+            "status": "evaluated",
+        },
+        {
+            "question_id": data["multi_select"].id,
+            "question_type": "multi_select",
+            "maximum_marks": 3.0,
+            "awarded_marks": 3.0,
+            "status": "evaluated",
+        },
+        {
+            "question_id": data["subjective"].id,
+            "question_type": "short_answer",
+            "maximum_marks": 5.0,
+            "awarded_marks": 4.0,
+            "status": "graded",
+        },
+    ]
 
 
 def test_unanswered_objective_question_receives_zero(
