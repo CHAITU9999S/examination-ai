@@ -14,7 +14,6 @@ from fastapi import (
 )
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth import verify_token
@@ -22,10 +21,12 @@ from app.database import get_db
 from app.models import (
     Exam,
     ExamSession,
-    ProctorEvent,
     User,
 )
-from app.services.proctoring_service import get_proctoring_summary as get_staff_proctoring_summary
+from app.services.proctoring_service import (
+    get_proctoring_summary as get_staff_proctoring_summary,
+    record_proctor_event,
+)
 
 
 router = APIRouter(
@@ -217,111 +218,37 @@ def record_proctoring_event(
             detail="Exam access token is required.",
         )
 
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Exam access token is required.",
+        )
+
     session = validate_proctoring_token(
         token=credentials.credentials,
         session_id=session_id,
         db=db,
     )
 
-    validate_active_proctoring_session(session)
-
-    exam = db.query(Exam).filter(
-        Exam.id == session.exam_id,
-    ).first()
-
-    if exam is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Examination not found.",
-        )
-
-    if not exam.proctoring_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Proctoring is not enabled for this examination.",
-        )
-
-    event_type = submission.event_type.strip().lower()
-
-    if event_type not in EVENT_SUSPICION_POINTS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported proctoring event type.",
-        )
-
-    if (
-        submission.snapshot_data is not None
-        and len(submission.snapshot_data) > MAX_SNAPSHOT_LENGTH
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Proctoring snapshot is too large.",
-        )
-
-    suspicion_points = EVENT_SUSPICION_POINTS[event_type]
-
-    description = (
-        submission.description.strip()
-        if submission.description
-        else event_type.replace("_", " ").capitalize()
+    result = record_proctor_event(
+        db=db,
+        session_id=session_id,
+        current_user=session.student,
+        event_type=submission.event_type.strip().lower(),
+        description=(
+            submission.description.strip()
+            if submission.description
+            else None
+        ),
+        gaze_data=submission.gaze_data,
+        snapshot_data=submission.snapshot_data,
     )
 
-    if not description:
-        description = event_type.replace("_", " ").capitalize()
-
-    try:
-        tab_switch_count = None
-
-        if event_type == "tab_switch":
-            previous_tab_switches = db.query(ProctorEvent).filter(
-                ProctorEvent.session_id == session_id,
-                ProctorEvent.event_type == "tab_switch",
-            ).count()
-
-            tab_switch_count = previous_tab_switches + 1
-
-        event = ProctorEvent(
-            session_id=session_id,
-            event_type=event_type,
-            description=description,
-            suspicion_points=suspicion_points,
-            snapshot_data=submission.snapshot_data,
-            gaze_data=submission.gaze_data,
-            tab_switch_count=tab_switch_count,
-            created_at=get_current_utc_time(),
-        )
-
-        db.add(event)
-
-        current_score = session.suspicion_score or 0
-
-        session.suspicion_score = min(
-            100,
-            max(0, current_score + suspicion_points),
-        )
-
-        db.commit()
-        db.refresh(event)
-
-    except SQLAlchemyError:
-        db.rollback()
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to save the proctoring event.",
-        )
-
     return {
-        "message": "Proctoring event recorded successfully.",
-        "event_id": event.id,
+        **result,
         "session_id": session_id,
-        "event_type": event_type,
-        "suspicion_points": suspicion_points,
-        "suspicion_score": session.suspicion_score,
-        "tab_switch_count": tab_switch_count,
         "recorded": True,
     }
-
 
 # ==========================================
 # GET PROCTORING SUMMARY
