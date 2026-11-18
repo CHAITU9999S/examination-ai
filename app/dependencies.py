@@ -37,6 +37,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> User:
+    """Authenticate a normal user access token."""
 
     if credentials is None:
         raise HTTPException(
@@ -51,6 +52,10 @@ def get_current_user(
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM]
         )
+
+        # Examination tokens must not authenticate normal API requests.
+        if payload.get("token_type") == "exam":
+            raise ValueError("Examination token cannot be used here")
 
         user_id = payload.get("sub")
 
@@ -84,6 +89,7 @@ def get_current_user(
 # -----------------------------------------
 
 def require_roles(*allowed_roles: UserRole) -> Callable:
+    """Allow access only to the specified user roles."""
 
     def role_checker(
         current_user: User = Depends(get_current_user)
@@ -100,15 +106,19 @@ def require_roles(*allowed_roles: UserRole) -> Callable:
     return role_checker
 
 
-# Backward-compatible singular function name.
+# -----------------------------------------
+# BACKWARD-COMPATIBLE ROLE FUNCTION
+# -----------------------------------------
+
 def require_role(*roles) -> Callable:
+    """Accept role strings or UserRole enum values."""
 
     normalized_roles = []
 
     for role in roles:
         try:
             normalized_roles.append(UserRole(role))
-        except ValueError:
+        except (ValueError, TypeError):
             raise ValueError(f"Unsupported user role: {role}")
 
     return require_roles(*normalized_roles)
@@ -123,4 +133,4 @@ get_current_admin = require_roles(UserRole.ADMIN)
 get_current_examiner = require_roles(UserRole.EXAMINER)
 
 get_current_student = require_roles(UserRole.STUDENT)
-        
+    
