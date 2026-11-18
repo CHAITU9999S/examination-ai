@@ -243,12 +243,6 @@ def record_proctoring_event(
             detail="Exam access token is required.",
         )
 
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Exam access token is required.",
-        )
-
     session = validate_proctoring_token(
         token=credentials.credentials,
         session_id=session_id,
@@ -405,7 +399,7 @@ async def proctoring_heartbeat(
 
             try:
                 validate_active_proctoring_session(session)
-        validate_proctoring_enabled(session, db)
+                validate_proctoring_enabled(session, db)
 
             except HTTPException:
                 await websocket.send_json({
