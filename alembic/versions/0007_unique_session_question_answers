@@ -1,0 +1,26 @@
+
+from alembic import op
+import sqlalchemy as sa
+
+
+revision = "0007_unique_session_question_answers"
+down_revision = "0006_timed_exam_engine"
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    op.create_unique_constraint(
+        "uq_answers_session_question",
+        "answers",
+        ["session_id", "question_id"]
+    )
+
+
+def downgrade():
+    op.drop_constraint(
+        "uq_answers_session_question",
+        "answers",
+        type_="unique"
+    )
+  
