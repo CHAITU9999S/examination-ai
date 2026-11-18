@@ -3,7 +3,7 @@ import mimetypes
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
@@ -191,6 +191,11 @@ def get_all_pending_subjective_answers(
                     if answer.image_path
                     else None
                 ),
+                "thumbnail_url": (
+                    f"/grading/answers/{answer.id}/image?thumbnail=true"
+                    if answer.image_path
+                    else None
+                ),
                 "marks": question.marks,
                 "maximum_marks": question.marks,
                 "awarded_marks": answer.awarded_marks,
@@ -276,6 +281,7 @@ def get_pending_subjective_answers(
 @router.get("/answers/{answer_id}/image")
 def get_subjective_answer_image(
     answer_id: int,
+    thumbnail: bool = Query(default=False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -309,6 +315,14 @@ def get_subjective_answer_image(
 
     image_file = (upload_root / relative_path).resolve()
 
+    if thumbnail:
+        image_file = (
+            upload_root
+            / "answers"
+            / "thumbnails"
+            / f"{image_file.stem}.webp"
+        ).resolve()
+
     if upload_root not in image_file.parents or not image_file.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -323,6 +337,7 @@ def get_subjective_answer_image(
         "image/webp",
         "image/tiff",
         "image/bmp",
+        "image/webp",
     }:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
