@@ -449,6 +449,31 @@ def calculate_session_result(
             else 0.0
         )
 
+        # Persist the complete per-question breakdown with the final result.
+        question_scores = []
+        for question_id in question_ids:
+            question = question_map[question_id]
+            answer = answer_map.get(question_id)
+            question_type = _value(question.question_type)
+            if answer is None:
+                grading_status = "unanswered"
+                awarded = 0.0
+            else:
+                awarded = float(answer.awarded_marks or 0)
+                grading_status = (
+                    "graded"
+                    if question_type in SUBJECTIVE_QUESTION_TYPES
+                    else "evaluated"
+                )
+
+            question_scores.append({
+                "question_id": question_id,
+                "question_type": question_type,
+                "maximum_marks": float(question.marks or 0),
+                "awarded_marks": awarded,
+                "status": grading_status,
+            })
+
         result = db.query(Result).filter(
             Result.session_id == session_id,
         ).with_for_update().first()
@@ -459,6 +484,7 @@ def calculate_session_result(
                 total_marks=total_marks,
                 obtained_marks=obtained_marks,
                 percentage=percentage,
+                question_scores=question_scores,
                 evaluated_at=datetime.utcnow(),
             )
 
@@ -468,6 +494,7 @@ def calculate_session_result(
             result.total_marks = total_marks
             result.obtained_marks = obtained_marks
             result.percentage = percentage
+            result.question_scores = question_scores
             result.evaluated_at = datetime.utcnow()
 
         db.commit()
@@ -479,6 +506,7 @@ def calculate_session_result(
             "total_marks": result.total_marks,
             "obtained_marks": result.obtained_marks,
             "percentage": result.percentage,
+            "question_scores": result.question_scores,
             "message": "Examination result calculated successfully.",
         }
 
