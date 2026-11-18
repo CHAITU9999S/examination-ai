@@ -252,7 +252,7 @@ The current implementation is limited to Milestones 1 and 2 and the agreed UI an
 
 ---
 
-## 8. Milestone 2 Runtime Requirements and Known Integration Work
+## Milestone 2 Runtime Requirements and Known Integration Work
 
 - AI-assisted grading is disabled by default. It requires an explicitly enabled setting and a valid server-side OpenAI API key. The examiner must review and approve marks; AI suggestions do not directly finalize grades.
 - OCR requires the Tesseract executable to be installed on the backend host. Installing the Python package alone is not sufficient.
