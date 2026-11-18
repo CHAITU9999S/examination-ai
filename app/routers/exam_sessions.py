@@ -32,6 +32,7 @@ from app.services.session_service import (
     generate_session_question_ids,
     get_or_create_session_question_ids,
 )
+from app.services.evaluation_service import evaluate_exam_session
 
 
 router = APIRouter(
@@ -81,6 +82,20 @@ def expire_session_if_needed(
         session.submitted_at = now
         db.commit()
         db.refresh(session)
+
+        try:
+            evaluate_exam_session(
+                db,
+                session.id,
+            )
+        except Exception as error:
+            # Submission must remain committed even if grading needs
+            # examiner intervention because of a question configuration issue.
+            print(
+                "Automatic evaluation could not be completed:",
+                str(error),
+            )
+
         return True
 
     return False
@@ -399,11 +414,23 @@ def submit_exam(
         )
 
     if session.status == "submitted":
+        try:
+            evaluation = evaluate_exam_session(
+                db,
+                session.id,
+            )
+        except Exception as error:
+            evaluation = {
+                "status": "pending_manual_review",
+                "message": str(error),
+            }
+
         return {
             "message": "Exam has already been submitted.",
             "session_id": session.id,
             "status": session.status,
             "submitted_at": session.submitted_at,
+            "evaluation": evaluation,
         }
 
     if session.status != "in_progress":
@@ -433,8 +460,20 @@ def submit_exam(
         db.rollback()
         raise
 
+    try:
+        evaluation = evaluate_exam_session(
+            db,
+            session.id,
+        )
+    except Exception as error:
+        evaluation = {
+            "status": "pending_manual_review",
+            "message": str(error),
+        }
+
     return {
         "message": "Exam submitted successfully.",
+        "evaluation": evaluation,
         "session_id": session.id,
         "exam_id": session.exam_id,
         "status": session.status,
