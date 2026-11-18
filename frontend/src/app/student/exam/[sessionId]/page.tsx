@@ -7,6 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import WebcamPreview from "@/components/WebcamPreview";
+import FaceProctoring from "@/components/FaceProctoring";
+import ImageUpload from "@/components/ImageUpload";
+import { useProctoring } from "@/hooks/useProctoring";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import proctoringService from "@/services/proctoringService";
 import { useParams, useRouter } from "next/navigation";
 
 const API_URL =
@@ -31,6 +37,8 @@ interface ExamPaper {
   exam_title?: string;
   duration_minutes?: number;
   questions: ExamQuestion[];
+  proctoring_enabled?: boolean;
+  gaze_tracking_sensitivity?: number | null;
 }
 
 interface SavedAnswer {
@@ -54,12 +62,16 @@ export default function StudentExamPage() {
   const [message, setMessage] = useState("");
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [websocketStatus, setWebsocketStatus] = useState("disconnected");
 
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
+  const examIdKey = `examguard_exam_id_${sessionId}`;
 
   const getExamToken = useCallback(() => {
     return sessionStorage.getItem(examTokenKey);
@@ -79,6 +91,61 @@ export default function StudentExamPage() {
     };
   }, [getExamToken, router]);
 
+  const handleProctoringEvent = useCallback((event: {
+    event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error";
+    description: string;
+    gaze_data?: Record<string, unknown> | null;
+  }) => {
+    if (!Number.isInteger(Number(sessionId)) || Number(sessionId) <= 0) return;
+    void proctoringService.submitEvent(Number(sessionId), event).catch((requestError) => {
+      setError(requestError instanceof Error ? requestError.message : "Unable to record a proctoring event.");
+    });
+  }, [sessionId]);
+
+  const proctoring = useProctoring({
+    enabled: Boolean(paper?.proctoring_enabled),
+    onEvent: handleProctoringEvent,
+    maxTabWarnings: 3,
+    duplicateEventCooldownMs: 4000,
+  });
+
+  const handleCameraStream = useCallback((stream: MediaStream | null) => {
+    setCameraStream(stream);
+  }, []);
+
+  const handleCameraStatus = useCallback((status: "active" | "denied" | "unavailable" | "error") => {
+    if (status !== "active") {
+      proctoring.reportWebcamError(`Camera status: ${status}.`);
+    }
+  }, [proctoring.reportWebcamError]);
+
+  const handleImageUpload = useCallback(async (questionId: number, file: File) => {
+    const token = getExamToken();
+    if (!token) return;
+    const formData = new FormData();
+    formData.append("question_id", String(questionId));
+    formData.append("file", file);
+    setImageUploading(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`${API_URL}/answers/${sessionId}/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to upload answer image.");
+      setMessage(data.ocr_completed
+        ? "Image uploaded and text extracted for examiner review."
+        : "Image uploaded. OCR is unavailable; examiner review is required.");
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Unable to upload answer image.");
+    } finally {
+      setImageUploading(false);
+    }
+  }, [getExamToken, sessionId]);
+
   const loadPaper = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -87,8 +154,13 @@ export default function StudentExamPage() {
       const headers = getHeaders();
       if (!headers) return;
 
+      const examId = sessionStorage.getItem(examIdKey);
+      if (!examId || !/^\\d+$/.test(examId)) {
+        throw new Error("Exam details are missing for this session. Please return to the exam list and start again.");
+      }
+
       const response = await fetch(
-        `${API_URL}/exam-sessions/paper/${sessionId}`,
+        `${API_URL}/exam-sessions/paper/${examId}`,
         {
           method: "GET",
           headers,
@@ -128,7 +200,7 @@ export default function StudentExamPage() {
     } finally {
       setLoading(false);
     }
-  }, [getHeaders, sessionId]);
+  }, [examIdKey, getHeaders, sessionId]);
 
   const loadRemainingTime = useCallback(async () => {
     const headers = getHeaders();
@@ -136,7 +208,7 @@ export default function StudentExamPage() {
 
     try {
       const response = await fetch(
-        `${API_URL}/exam-sessions/${sessionId}/remaining-time`,
+        `${API_URL}/exam-sessions/time/${sessionId}`,
         {
           method: "GET",
           headers,
@@ -193,8 +265,15 @@ export default function StudentExamPage() {
         saveTimeoutRef.current = null;
       }
 
+      // Flush every locally edited answer before final submission.
+      await Promise.all(
+        Object.entries(answersRef.current).map(([questionId, answerText]) =>
+          saveAnswer(Number(questionId), answerText)
+        )
+      );
+
       const response = await fetch(
-        `${API_URL}/exam-sessions/${sessionId}/submit`,
+        `${API_URL}/exam-sessions/submit/${sessionId}`,
         {
           method: "POST",
           headers,
@@ -236,6 +315,7 @@ export default function StudentExamPage() {
     router,
     sessionId,
     submitting,
+    saveAnswer,
   ]);
 
   const saveAnswer = useCallback(async (
@@ -307,6 +387,28 @@ export default function StudentExamPage() {
     loadPaper();
     loadRemainingTime();
 
+    const token = sessionStorage.getItem(examTokenKey);
+    if (token) {
+      fetch(`${API_URL}/answers/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = await response.json();
+          const saved = Array.isArray(data.answers) ? data.answers : [];
+          const restored: Record<number, string> = {};
+          for (const answer of saved) {
+            if (answer && Number.isInteger(answer.question_id) && typeof answer.answer_text === "string") {
+              restored[answer.question_id] = answer.answer_text;
+            }
+          }
+          answersRef.current = restored;
+          setAnswers(restored);
+        })
+        .catch(() => setError("Some previously saved answers could not be restored."));
+    }
+
     const timeInterval = setInterval(() => {
       loadRemainingTime();
     }, 15000);
@@ -318,7 +420,7 @@ export default function StudentExamPage() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [loadPaper, loadRemainingTime, router, sessionId]);
+  }, [examTokenKey, loadPaper, loadRemainingTime, router, sessionId]);
 
   useEffect(() => {
     if (remainingSeconds === null || remainingSeconds <= 0) {
@@ -341,6 +443,25 @@ export default function StudentExamPage() {
       submitExam(true);
     }
   }, [remainingSeconds, submitExam]);
+
+  const heartbeatToken = typeof window !== "undefined"
+    ? sessionStorage.getItem(examTokenKey)
+    : null;
+  const heartbeatUrl = paper?.proctoring_enabled && heartbeatToken
+    ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
+    : null;
+
+  const heartbeat = useWebSocket({
+    url: heartbeatUrl,
+    enabled: Boolean(heartbeatUrl && paper?.proctoring_enabled),
+    heartbeatIntervalMs: 10000,
+    reconnectIntervalMs: 3000,
+    maxReconnectAttempts: 10,
+  });
+
+  useEffect(() => {
+    setWebsocketStatus(heartbeat.status);
+  }, [heartbeat.status]);
 
   function formatTime(seconds: number | null) {
     if (seconds === null) return "--:--";
@@ -387,9 +508,13 @@ export default function StudentExamPage() {
     }
 
     if (question.question_type === "multi_select") {
-      const selectedIds = currentAnswer
-        ? JSON.parse(currentAnswer) as number[]
-        : [];
+      let selectedIds: number[] = [];
+      try {
+        const parsed = currentAnswer ? JSON.parse(currentAnswer) : [];
+        selectedIds = Array.isArray(parsed) ? parsed.filter((id): id is number => Number.isInteger(id)) : [];
+      } catch {
+        selectedIds = [];
+      }
 
       return (
         <div className="mt-5 space-y-3">
@@ -443,11 +568,16 @@ export default function StudentExamPage() {
 
     if (question.question_type === "image_upload") {
       return (
-        <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm text-amber-300">
-            Image answer upload is not connected yet. A protected backend
-            upload endpoint and image storage integration are required.
-          </p>
+        <div className="mt-5 space-y-3">
+          <ImageUpload
+            onFileSelect={(file) => {
+              if (file) void handleImageUpload(question.id, file);
+            }}
+            disabled={imageUploading || submitting}
+          />
+          {imageUploading && (
+            <p role="status" className="text-sm text-blue-300">Uploading image and processing OCR...</p>
+          )}
         </div>
       );
     }
@@ -661,6 +791,33 @@ export default function StudentExamPage() {
               Not answered
             </p>
           </div>
+
+          {paper.proctoring_enabled && (
+            <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
+              <h3 className="font-semibold">Automated Proctoring</h3>
+              <WebcamPreview
+                enabled
+                onStreamReady={handleCameraStream}
+                onCameraStatusChange={handleCameraStatus}
+              />
+              <FaceProctoring
+                stream={cameraStream}
+                enabled
+                sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
+                onFaceMissing={proctoring.reportFaceNotDetected}
+                onMultipleFaces={proctoring.reportMultipleFaces}
+                onGazeAway={proctoring.reportGazeAway}
+                onDetectorError={proctoring.reportWebcamError}
+              />
+              <p className="text-xs text-slate-400">
+                Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
+                Heartbeat: {websocketStatus}
+              </p>
+              <p className="text-xs text-amber-300">
+                Proctoring checks are automated indicators for examiner review, not proof of misconduct.
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 border-t border-white/10 pt-5">
             <p className="text-sm text-slate-400">
