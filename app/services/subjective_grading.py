@@ -416,7 +416,10 @@ def auto_generate_ai_suggestions(
                 current_user=None,
             )
             generated += 1
-        except HTTPException:
+        except Exception:
+            # AI is an optional first-pass helper. A provider, parsing, or
+            # persistence failure must not prevent objective evaluation or
+            # leave the session's result workflow in a failed transaction.
             db.rollback()
             failed_answer_ids.append(answer.id)
 
