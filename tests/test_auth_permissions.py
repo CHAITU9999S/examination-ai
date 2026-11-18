@@ -27,7 +27,7 @@ def test_public_registration_cannot_create_examiner(client):
         }
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["role"] == "student"
 
 
@@ -60,8 +60,6 @@ def test_student_cannot_create_examiner(client, db_session):
 
     assert response.status_code == 403
 
-
-from app.auth import hash_password
 
 
 def test_valid_user_can_login(client, db_session):
