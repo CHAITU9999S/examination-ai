@@ -5,6 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.database import SessionLocal
 from app.models import ExamSession
+from app.services.evaluation_service import evaluate_exam_session
 
 
 scheduler = BackgroundScheduler(
@@ -41,6 +42,11 @@ def submit_expired_exam_sessions():
         if not expired_sessions:
             return
 
+        expired_session_ids = [
+            session.id
+            for session in expired_sessions
+        ]
+
         submitted_count = 0
 
         for session in expired_sessions:
@@ -61,6 +67,23 @@ def submit_expired_exam_sessions():
                 f"Automatically submitted "
                 f"{submitted_count} expired exam session(s)."
             )
+
+            # Objective answers are evaluated immediately after the
+            # server-side timer submits each session. Subjective answers
+            # remain pending for examiner review.
+            for session_id in expired_session_ids:
+                try:
+                    evaluate_exam_session(
+                        db,
+                        session_id,
+                    )
+                except Exception as error:
+                    db.rollback()
+                    print(
+                        f"Automatic evaluation failed for session "
+                        f"{session_id}:",
+                        str(error),
+                    )
 
     except Exception as error:
         db.rollback()
