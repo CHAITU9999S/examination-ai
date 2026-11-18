@@ -2,6 +2,7 @@
 import json
 import math
 import os
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from openai import OpenAI, OpenAIError
@@ -187,10 +188,11 @@ def generate_ai_grading_suggestion(
         answer_id,
     )
 
-    _require_examiner_access(
-        current_user,
-        exam,
-    )
+    if current_user is not None:
+        _require_examiner_access(
+            current_user,
+            exam,
+        )
 
     if session.status != "submitted":
         raise HTTPException(
@@ -342,6 +344,14 @@ Required JSON format:
             maximum_marks,
         )
 
+        answer.ai_suggested_marks = validated_result["suggested_marks"]
+        answer.ai_justification = validated_result["justification"]
+        answer.ai_matched_points = validated_result["matched_points"]
+        answer.ai_missed_points = validated_result["missed_points"]
+        answer.ai_model = model
+        answer.ai_suggestion_generated_at = datetime.utcnow()
+        db.commit()
+
         return {
             "answer_id": answer.id,
             "question_id": question.id,
@@ -362,6 +372,60 @@ Required JSON format:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The AI returned an invalid grading response.",
         )
+
+
+# ==========================================
+# AUTOMATIC AI FIRST-PASS GRADING
+# ==========================================
+
+def auto_generate_ai_suggestions(
+    db: Session,
+    session_id: int,
+):
+    """Generate first-pass suggestions for submitted short/long answers when enabled."""
+
+    enabled = os.getenv(
+        "AI_GRADING_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+    if not enabled or not os.getenv("OPENAI_API_KEY"):
+        return {
+            "generated": 0,
+            "skipped": True,
+            "reason": "AI grading is disabled or no API key is configured.",
+        }
+
+    answers = db.query(Answer).join(
+        QuestionBank,
+        QuestionBank.id == Answer.question_id,
+    ).filter(
+        Answer.session_id == session_id,
+        QuestionBank.question_type.in_(["short_answer", "long_answer"]),
+        Answer.answer_text.isnot(None),
+        Answer.ai_suggested_marks.is_(None),
+    ).order_by(Answer.id.asc()).all()
+
+    generated = 0
+    failed_answer_ids = []
+
+    for answer in answers:
+        try:
+            generate_ai_grading_suggestion(
+                db=db,
+                answer_id=answer.id,
+                current_user=None,
+            )
+            generated += 1
+        except HTTPException:
+            db.rollback()
+            failed_answer_ids.append(answer.id)
+
+    return {
+        "generated": generated,
+        "skipped": False,
+        "failed_answer_ids": failed_answer_ids,
+    }
 
 
 # ==========================================
