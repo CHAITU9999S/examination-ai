@@ -2,7 +2,6 @@
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import and_
 
 from app.database import SessionLocal
 from app.models import ExamSession
@@ -17,6 +16,9 @@ def submit_expired_exam_sessions():
     """
     Automatically submits all exam sessions
     whose server-side deadline has expired.
+
+    Database row locking helps prevent conflicts
+    with manual submission and answer-saving requests.
     """
 
     if SessionLocal is None:
@@ -30,25 +32,35 @@ def submit_expired_exam_sessions():
         expired_sessions = db.query(
             ExamSession
         ).filter(
-            and_(
-                ExamSession.status == "in_progress",
-                ExamSession.expires_at <= now
-            )
+            ExamSession.status == "in_progress",
+            ExamSession.expires_at <= now
+        ).with_for_update(
+            skip_locked=True
         ).all()
 
         if not expired_sessions:
             return
 
+        submitted_count = 0
+
         for session in expired_sessions:
-            session.status = "submitted"
-            session.submitted_at = now
 
-        db.commit()
+            # Recheck after acquiring the row lock.
+            if (
+                session.status == "in_progress"
+                and session.expires_at <= now
+            ):
+                session.status = "submitted"
+                session.submitted_at = now
+                submitted_count += 1
 
-        print(
-            f"Automatically submitted "
-            f"{len(expired_sessions)} expired exam session(s)."
-        )
+        if submitted_count:
+            db.commit()
+
+            print(
+                f"Automatically submitted "
+                f"{submitted_count} expired exam session(s)."
+            )
 
     except Exception as error:
         db.rollback()
@@ -94,4 +106,4 @@ def stop_exam_scheduler():
         scheduler.shutdown(wait=False)
 
         print("Exam submission scheduler stopped.")
-          
+                
