@@ -119,7 +119,7 @@ def test_password_change(client, student):
             "Authorization": f"Bearer {token}",
         },
         json={
-            "old_password": "StudentPass123!",
+            "current_password": "StudentPass123!",
             "new_password": "NewStudentPass456!",
         },
     )
@@ -160,7 +160,7 @@ def test_password_change_rejects_wrong_old_password(
             "Authorization": f"Bearer {token}",
         },
         json={
-            "old_password": "WrongPassword123!",
+            "current_password": "WrongPassword123!",
             "new_password": "NewStudentPass456!",
         },
     )
