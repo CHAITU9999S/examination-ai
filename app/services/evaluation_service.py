@@ -166,12 +166,30 @@ def evaluate_objective_answer(
     if answer is None:
         return 0.0
 
+    session = db.query(ExamSession).filter(
+        ExamSession.id == answer.session_id,
+    ).first()
+
+    exam = (
+        db.query(Exam).filter(
+            Exam.id == session.exam_id,
+        ).first()
+        if session is not None
+        else None
+    )
+
+    negative_marks = (
+        float(question.negative_marks or 0)
+        if exam is not None and exam.negative_marking
+        else 0.0
+    )
+
     selected_ids = _parse_selected_option_ids(
         answer.answer_text,
     )
 
     if selected_ids is None:
-        return -float(question.negative_marks or 0)
+        return -negative_marks
 
     options = db.query(Option).filter(
         Option.question_id == question.id,
@@ -215,7 +233,7 @@ def evaluate_objective_answer(
     if is_correct:
         return float(question.marks)
 
-    return -float(question.negative_marks or 0)
+    return -negative_marks
 
 
 # ==========================================
