@@ -11,7 +11,10 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Exam, ExamSession, QuestionBank, Option, User
 from app.auth import create_exam_access_token, verify_token
-from app.services.paper_generator import generate_paper
+from app.services.session_paper import (
+    generate_session_question_ids,
+    get_or_create_session_question_ids
+)
 
 
 exam_token_scheme = HTTPBearer()
@@ -168,6 +171,18 @@ def start_exam(
                 detail="Your previous exam session has expired or been submitted"
             )
 
+        try:
+            get_or_create_session_question_ids(
+                session,
+                exam,
+                db
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=400,
+                detail=str(error)
+            )
+
     else:
 
         expires_at = now + timedelta(
@@ -177,12 +192,25 @@ def start_exam(
         if exam.end_time and exam.end_time < expires_at:
             expires_at = exam.end_time
 
+        try:
+            selected_ids = generate_session_question_ids(
+                exam,
+                current_user.id,
+                db
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=400,
+                detail=str(error)
+            )
+
         session = ExamSession(
             exam_id=exam_id,
             student_id=current_user.id,
             started_at=now,
             expires_at=expires_at,
-            status="in_progress"
+            status="in_progress",
+            selected_question_ids=selected_ids
         )
 
         db.add(session)
@@ -216,6 +244,18 @@ def start_exam(
                     detail="Your exam session has expired or been submitted"
                 )
 
+            try:
+                get_or_create_session_question_ids(
+                    session,
+                    exam,
+                    db
+                )
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(error)
+                )
+
     exam_token = create_exam_access_token(
         exam_id=exam_id,
         student_id=current_user.id,
@@ -235,6 +275,7 @@ def start_exam(
             session,
             current_time
         ),
+        "total_questions": len(session.selected_question_ids or []),
         "access_token": exam_token,
         "token_type": "bearer"
     }
@@ -364,7 +405,6 @@ def get_exam_paper(
     )
 
     token_exam_id = int(payload["exam_id"])
-    student_id = int(payload["student_id"])
 
     if token_exam_id != exam_id:
         raise HTTPException(
@@ -396,63 +436,42 @@ def get_exam_paper(
             detail="Exam not found"
         )
 
-    query = db.query(QuestionBank).filter(
-        QuestionBank.subject == exam.subject
-    )
-
-    rules = exam.selection_rules or {}
-
-    if (
-        rules.get("difficulty")
-        and not rules.get("difficulty_counts")
-    ):
-        query = query.filter(
-            QuestionBank.difficulty == rules["difficulty"]
-        )
-
-    questions = query.order_by(
-        QuestionBank.id
-    ).all()
-
-    number = exam.total_questions or len(questions)
-
-    question_ids = [
-        question.id for question in questions
-    ]
-
-    question_details = {
-        question.id: {
-            "difficulty": question.difficulty,
-            "question_type": question.question_type
-        }
-        for question in questions
-    }
-
     try:
-        selected_ids = generate_paper(
-            question_ids,
-            student_id,
-            exam_id,
-            number,
-            question_details=question_details,
-            difficulty_counts=rules.get("difficulty_counts"),
-            question_type_counts=rules.get("question_type_counts"),
-            randomize=exam.randomize_questions
+        selected_ids = get_or_create_session_question_ids(
+            session,
+            exam,
+            db
         )
-
     except ValueError as error:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail=str(error)
         )
+
+    questions = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(selected_ids)
+    ).all()
 
     question_map = {
         question.id: question
         for question in questions
     }
 
+    missing_ids = [
+        question_id
+        for question_id in selected_ids
+        if question_id not in question_map
+    ]
+
+    if missing_ids:
+        raise HTTPException(
+            status_code=409,
+            detail="One or more questions in this exam paper are no longer available"
+        )
+
     paper = []
 
+    # Use the saved ID order, not the database query order.
     for question_id in selected_ids:
 
         question = question_map[question_id]
@@ -487,4 +506,5 @@ def get_exam_paper(
         ),
         "total_questions": len(paper),
         "questions": paper
-        }
+            }
+        
