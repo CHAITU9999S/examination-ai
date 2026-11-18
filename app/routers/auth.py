@@ -1,4 +1,6 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -14,6 +16,7 @@ from app.schemas import (
     StudentRegister,
     TokenResponse,
     UserResponse,
+    UserRole,
 )
 
 
@@ -37,8 +40,8 @@ def register_student(
     db: Session = Depends(get_db)
 ):
     """
-    Public registration is restricted to Students.
-    Admin and Examiner accounts cannot be created here.
+    Allow public registration for Students only.
+    Admin and Examiner accounts must be created by an Admin.
     """
 
     existing_user = db.query(User).filter(
@@ -54,14 +57,22 @@ def register_student(
     new_student = User(
         full_name=student_data.full_name,
         email=student_data.email,
-        hashed_password=hash_password(student_data.password),
-        role="student",
+        password_hash=hash_password(student_data.password),
+        role=UserRole.STUDENT.value,
         is_active=True
     )
 
-    db.add(new_student)
-    db.commit()
-    db.refresh(new_student)
+    try:
+        db.add(new_student)
+        db.commit()
+        db.refresh(new_student)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists."
+        )
 
     return new_student
 
@@ -79,7 +90,7 @@ def login(
     db: Session = Depends(get_db)
 ):
     """
-    Login is available to Students, Examiners and Admins.
+    Allow Students, Examiners and Admins to log in.
     """
 
     user = db.query(User).filter(
@@ -88,7 +99,7 @@ def login(
 
     if user is None or not verify_password(
         login_data.password,
-        user.hashed_password
+        user.password_hash
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -111,3 +122,4 @@ def login(
         token_type="bearer",
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
+    
