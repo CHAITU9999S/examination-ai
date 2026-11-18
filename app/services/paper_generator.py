@@ -13,6 +13,7 @@ def generate_paper(
     difficulty_counts=None,
     question_type_counts=None,
     randomize=True,
+    seed_salt=0,
 ):
     """Generate a deterministic question paper for a student and exam."""
 
@@ -38,7 +39,7 @@ def generate_paper(
     if not isinstance(randomize, bool):
         raise ValueError("Randomize must be a Boolean value")
 
-    seed = f"{exam_id}-{student_id}"
+    seed = f"{exam_id}-{student_id}-{seed_salt}"
     rng = random.Random(seed)
 
     # Preserve existing behavior when distributions are not configured.
