@@ -15,6 +15,7 @@ from app.services.session_paper import (
     generate_session_question_ids,
     get_or_create_session_question_ids
 )
+from app.services.exam_config import normalize_to_naive_utc
 
 
 exam_token_scheme = HTTPBearer()
@@ -139,13 +140,22 @@ def start_exam(
 
     now = datetime.utcnow()
 
-    if exam.start_time and now < exam.start_time:
+    # Normalize stored exam schedule timestamps to naive UTC.
+    exam_start = normalize_to_naive_utc(
+        exam.start_time
+    )
+
+    exam_end = normalize_to_naive_utc(
+        exam.end_time
+    )
+
+    if exam_start and now < exam_start:
         raise HTTPException(
             status_code=400,
             detail="Exam has not started yet"
         )
 
-    if exam.end_time and now >= exam.end_time:
+    if exam_end and now >= exam_end:
         raise HTTPException(
             status_code=400,
             detail="Exam schedule has ended"
@@ -189,8 +199,9 @@ def start_exam(
             minutes=exam.duration_minutes
         )
 
-        if exam.end_time and exam.end_time < expires_at:
-            expires_at = exam.end_time
+        # The exam cannot continue beyond its closing time.
+        if exam_end and exam_end < expires_at:
+            expires_at = exam_end
 
         try:
             selected_ids = generate_session_question_ids(
@@ -506,5 +517,5 @@ def get_exam_paper(
         ),
         "total_questions": len(paper),
         "questions": paper
-            }
-        
+}
+    
