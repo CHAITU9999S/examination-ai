@@ -1,0 +1,723 @@
+
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useParams, useRouter } from "next/navigation";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface ExamOption {
+  id: number;
+  option_text: string;
+}
+
+interface ExamQuestion {
+  id: number;
+  question_text: string;
+  question_type: string;
+  marks: number;
+  options?: ExamOption[];
+}
+
+interface ExamPaper {
+  session_id: number;
+  exam_id?: number;
+  exam_title?: string;
+  duration_minutes?: number;
+  questions: ExamQuestion[];
+}
+
+interface SavedAnswer {
+  answer_text: string;
+}
+
+export default function StudentExamPage() {
+  const params = useParams<{ sessionId: string }>();
+  const router = useRouter();
+
+  const sessionId = String(params.sessionId || "");
+
+  const [paper, setPaper] = useState<ExamPaper | null>(null);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [showSubmitConfirmation, setShowSubmitConfirmation] =
+    useState(false);
+
+  const answersRef = useRef<Record<number, string>>({});
+  const submittedRef = useRef(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const examTokenKey = `examguard_exam_token_${sessionId}`;
+
+  const getExamToken = useCallback(() => {
+    return sessionStorage.getItem(examTokenKey);
+  }, [examTokenKey]);
+
+  const getHeaders = useCallback(() => {
+    const token = getExamToken();
+
+    if (!token) {
+      router.replace("/student/exams");
+      return null;
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+  }, [getExamToken, router]);
+
+  const loadPaper = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+
+      const response = await fetch(
+        `${API_URL}/exam-sessions/paper/${sessionId}`,
+        {
+          method: "GET",
+          headers,
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load examination paper."
+        );
+      }
+
+      const questions = Array.isArray(data)
+        ? data
+        : data.questions;
+
+      if (!Array.isArray(questions)) {
+        throw new Error("Invalid examination paper received.");
+      }
+
+      const normalizedPaper: ExamPaper = {
+        ...data,
+        session_id: Number(data.session_id || sessionId),
+        questions,
+      };
+
+      setPaper(normalizedPaper);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load examination paper."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [getHeaders, sessionId]);
+
+  const loadRemainingTime = useCallback(async () => {
+    const headers = getHeaders();
+    if (!headers) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/exam-sessions/${sessionId}/remaining-time`,
+        {
+          method: "GET",
+          headers,
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to retrieve examination time."
+        );
+      }
+
+      const seconds = Number(
+        data.remaining_seconds ??
+        data.remaining_time_seconds ??
+        data.remaining_time
+      );
+
+      if (!Number.isFinite(seconds) || seconds < 0) {
+        throw new Error("Invalid remaining-time response.");
+      }
+
+      setRemainingSeconds(Math.floor(seconds));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to retrieve remaining time."
+      );
+    }
+  }, [getHeaders, sessionId]);
+
+  const submitExam = useCallback(async (automatic = false) => {
+    if (submittedRef.current || submitting) return;
+
+    submittedRef.current = true;
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const headers = getHeaders();
+
+      if (!headers) {
+        submittedRef.current = false;
+        return;
+      }
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+
+      const response = await fetch(
+        `${API_URL}/exam-sessions/${sessionId}/submit`,
+        {
+          method: "POST",
+          headers,
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to submit examination."
+        );
+      }
+
+      sessionStorage.removeItem(examTokenKey);
+      sessionStorage.removeItem("examguard_active_exam_session");
+
+      setMessage(
+        automatic
+          ? "Your examination time has ended. The examination was submitted."
+          : "Your examination was submitted successfully."
+      );
+
+      router.replace("/student/dashboard");
+    } catch (err) {
+      submittedRef.current = false;
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit examination."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    examTokenKey,
+    getHeaders,
+    router,
+    sessionId,
+    submitting,
+  ]);
+
+  const saveAnswer = useCallback(async (
+    questionId: number,
+    answerText: string
+  ) => {
+    const headers = getHeaders();
+    if (!headers) return;
+
+    setSaving(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/answers/${sessionId}`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            question_id: questionId,
+            answer_text: answerText,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to save answer.");
+      }
+
+      setMessage("Answer saved.");
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save answer."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [getHeaders, sessionId]);
+
+  function updateAnswer(questionId: number, answerText: string) {
+    const updated = {
+      ...answersRef.current,
+      [questionId]: answerText,
+    };
+
+    answersRef.current = updated;
+    setAnswers(updated);
+    setMessage("");
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveAnswer(questionId, answerText);
+    }, 700);
+  }
+
+  useEffect(() => {
+    if (!sessionId || !/^\d+$/.test(sessionId)) {
+      router.replace("/student/exams");
+      return;
+    }
+
+    loadPaper();
+    loadRemainingTime();
+
+    const timeInterval = setInterval(() => {
+      loadRemainingTime();
+    }, 15000);
+
+    return () => {
+      clearInterval(timeInterval);
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [loadPaper, loadRemainingTime, router, sessionId]);
+
+  useEffect(() => {
+    if (remainingSeconds === null || remainingSeconds <= 0) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setRemainingSeconds((previous) => {
+        if (previous === null) return null;
+
+        return Math.max(0, previous - 1);
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [remainingSeconds === null || remainingSeconds <= 0]);
+
+  useEffect(() => {
+    if (remainingSeconds === 0 && !submittedRef.current) {
+      submitExam(true);
+    }
+  }, [remainingSeconds, submitExam]);
+
+  function formatTime(seconds: number | null) {
+    if (seconds === null) return "--:--";
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remaining = seconds % 60;
+
+    if (hours > 0) {
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
+    }
+
+    return `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
+  }
+
+  function renderAnswerInput(question: ExamQuestion) {
+    const currentAnswer = answers[question.id] || "";
+
+    if (question.question_type === "MCQ") {
+      return (
+        <div className="mt-5 space-y-3">
+          {(question.options || []).map((option) => (
+            <label
+              key={option.id}
+              className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-slate-800 p-4 transition hover:border-blue-500"
+            >
+              <input
+                type="radio"
+                name={`question-${question.id}`}
+                checked={currentAnswer === String(option.id)}
+                onChange={() =>
+                  updateAnswer(question.id, String(option.id))
+                }
+                className="h-4 w-4"
+              />
+
+              <span className="text-sm text-slate-200">
+                {option.option_text}
+              </span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    if (question.question_type === "multi_select") {
+      const selectedIds = currentAnswer
+        ? JSON.parse(currentAnswer) as number[]
+        : [];
+
+      return (
+        <div className="mt-5 space-y-3">
+          {(question.options || []).map((option) => (
+            <label
+              key={option.id}
+              className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-slate-800 p-4 transition hover:border-blue-500"
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(option.id)}
+                onChange={(event) => {
+                  const updated = event.target.checked
+                    ? [...selectedIds, option.id]
+                    : selectedIds.filter((id) => id !== option.id);
+
+                  updateAnswer(
+                    question.id,
+                    JSON.stringify(updated)
+                  );
+                }}
+                className="h-4 w-4"
+              />
+
+              <span className="text-sm text-slate-200">
+                {option.option_text}
+              </span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    if (
+      question.question_type === "short_answer" ||
+      question.question_type === "long_answer"
+    ) {
+      return (
+        <textarea
+          value={currentAnswer}
+          onChange={(event) =>
+            updateAnswer(question.id, event.target.value)
+          }
+          rows={question.question_type === "short_answer" ? 4 : 9}
+          maxLength={50000}
+          placeholder="Type your answer here..."
+          className="mt-5 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
+        />
+      );
+    }
+
+    if (question.question_type === "image_upload") {
+      return (
+        <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm text-amber-300">
+            Image answer upload is not connected yet. A protected backend
+            upload endpoint and image storage integration are required.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <p className="mt-4 text-sm text-red-300">
+        Unsupported question type.
+      </p>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <p className="text-slate-400">Loading examination...</p>
+      </main>
+    );
+  }
+
+  if (!paper) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-6 py-16 text-white">
+        <div className="mx-auto max-w-xl rounded-xl border border-red-500/30 bg-slate-900 p-6">
+          <h1 className="text-xl font-bold">
+            Unable to open examination
+          </h1>
+
+          <p className="mt-3 text-sm text-red-300">
+            {error || "Examination paper could not be loaded."}
+          </p>
+
+          <button
+            type="button"
+            onClick={loadPaper}
+            className="mt-5 rounded-lg bg-blue-600 px-5 py-3 font-semibold"
+          >
+            Try Again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const currentQuestion = paper.questions[currentIndex];
+
+  const answeredCount = paper.questions.filter((question) => {
+    return Boolean(answers[question.id]?.trim());
+  }).length;
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <h1 className="text-lg font-bold">
+              {paper.exam_title || "Online Examination"}
+            </h1>
+
+            <p className="text-xs text-slate-400">
+              Session #{sessionId}
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-xs text-slate-400">
+              Time Remaining
+            </p>
+
+            <p
+              className={`text-xl font-bold tabular-nums ${
+                remainingSeconds !== null && remainingSeconds <= 300
+                  ? "text-red-400"
+                  : "text-green-400"
+              }`}
+            >
+              {formatTime(remainingSeconds)}
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
+        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+          {error && (
+            <div
+              role="alert"
+              className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+            >
+              {error}
+            </div>
+          )}
+
+          {message && (
+            <p
+              role="status"
+              className="mb-5 text-xs text-green-400"
+            >
+              {message}
+            </p>
+          )}
+
+          {currentQuestion ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-400">
+                  Question {currentIndex + 1} of {paper.questions.length}
+                </p>
+
+                <p className="text-sm text-slate-400">
+                  {currentQuestion.marks} marks
+                </p>
+              </div>
+
+              <div className="mt-6">
+                <h2 className="whitespace-pre-wrap text-lg font-semibold leading-8">
+                  {currentQuestion.question_text}
+                </h2>
+
+                {renderAnswerInput(currentQuestion)}
+              </div>
+
+              <div className="mt-8 flex flex-wrap justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentIndex((index) => Math.max(0, index - 1))
+                  }
+                  disabled={currentIndex === 0}
+                  className="rounded-lg border border-white/20 px-5 py-3 text-sm disabled:opacity-40"
+                >
+                  Previous
+                </button>
+
+                {currentIndex < paper.questions.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentIndex((index) =>
+                        Math.min(paper.questions.length - 1, index + 1)
+                      )
+                    }
+                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500"
+                  >
+                    Next Question
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitConfirmation(true)}
+                    disabled={submitting}
+                    className="rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+                  >
+                    Submit Examination
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="py-10 text-center text-slate-400">
+              No questions are available in this examination.
+            </p>
+          )}
+        </section>
+
+        <aside className="h-fit rounded-2xl border border-white/10 bg-slate-900 p-5">
+          <h2 className="font-bold">Question Navigation</h2>
+
+          <p className="mt-2 text-sm text-slate-400">
+            Answered: {answeredCount} / {paper.questions.length}
+          </p>
+
+          <div className="mt-5 grid grid-cols-5 gap-2">
+            {paper.questions.map((question, index) => {
+              const answered = Boolean(
+                answers[question.id]?.trim()
+              );
+
+              return (
+                <button
+                  key={question.id}
+                  type="button"
+                  onClick={() => setCurrentIndex(index)}
+                  aria-label={`Go to question ${index + 1}`}
+                  className={`rounded-lg py-3 text-sm font-semibold ${
+                    currentIndex === index
+                      ? "bg-blue-600 text-white"
+                      : answered
+                        ? "bg-green-500/20 text-green-300"
+                        : "bg-slate-800 text-slate-300"
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 space-y-2 text-xs text-slate-400">
+            <p>
+              <span className="mr-2 inline-block h-3 w-3 rounded bg-blue-600" />
+              Current question
+            </p>
+
+            <p>
+              <span className="mr-2 inline-block h-3 w-3 rounded bg-green-500/60" />
+              Answered
+            </p>
+
+            <p>
+              <span className="mr-2 inline-block h-3 w-3 rounded bg-slate-700" />
+              Not answered
+            </p>
+          </div>
+
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <p className="text-sm text-slate-400">
+              Answer saving
+            </p>
+
+            <p className="mt-1 text-sm">
+              {saving ? "Saving..." : "Automatic saving enabled"}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowSubmitConfirmation(true)}
+              disabled={submitting}
+              className="mt-5 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+            >
+              Submit Examination
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      {showSubmitConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <h2 className="text-xl font-bold">
+              Submit Examination?
+            </h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              You have answered {answeredCount} out of{" "}
+              {paper.questions.length} questions. Unanswered questions
+              will remain unanswered. You cannot continue after submission.
+            </p>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirmation(false)}
+                disabled={submitting}
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm"
+              >
+                Continue Exam
+              </button>
+
+              <button
+                type="button"
+                onClick={() => submitExam(false)}
+                disabled={submitting}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Confirm Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
