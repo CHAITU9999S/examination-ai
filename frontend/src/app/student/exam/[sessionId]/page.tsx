@@ -324,18 +324,22 @@ export default function StudentExamPage() {
         saveTimeoutRef.current = null;
       }
 
-      // Flush every locally edited answer before final submission.
-      const saveResults = await Promise.all(
-        Object.entries(answersRef.current)
-          .filter(([questionId]) =>
-            paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
-          )
-          .map(([questionId, answerText]) =>
-            saveAnswer(Number(questionId), answerText)
-          )
-      );
-      if (saveResults.some((result) => result === false)) {
-        throw new Error("One or more answers could not be saved. Please retry before submitting.");
+      // Flush edits for a manual submission while time remains. Once the
+      // server timer has expired, submit immediately; the backend scheduler
+      // is responsible for finalizing the expired session.
+      if (!automatic && remainingSeconds !== 0) {
+        const saveResults = await Promise.all(
+          Object.entries(answersRef.current)
+            .filter(([questionId]) =>
+              paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
+            )
+            .map(([questionId, answerText]) =>
+              saveAnswer(Number(questionId), answerText)
+            )
+        );
+        if (saveResults.some((result) => result === false)) {
+          throw new Error("One or more answers could not be saved. Please retry before submitting.");
+        }
       }
 
       const response = await fetch(
@@ -385,6 +389,7 @@ export default function StudentExamPage() {
     submitting,
     saveAnswer,
     paper,
+    remainingSeconds,
   ]);
 
   function updateAnswer(questionId: number, answerText: string) {
