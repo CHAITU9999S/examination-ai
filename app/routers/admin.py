@@ -1,16 +1,15 @@
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.dependencies import require_role
-from app.models import User, AdminActivity
-from app.admin_schemas import AdminAccountCreate, UserStatusUpdate
 from app.auth import hash_password
-from app.services.admin_service import (
-    record_admin_activity,
-    get_dashboard_statistics
+from app.database import get_db
+from app.dependencies import get_current_admin
+from app.models import User
+from app.schemas import (
+    AdminUserCreate,
+    MessageResponse,
+    UserResponse,
+    UserRole,
 )
 
 
@@ -20,326 +19,195 @@ router = APIRouter(
 )
 
 
-def create_managed_account(
-    db: Session,
-    account: AdminAccountCreate,
-    role: str,
-    admin: User
+# -----------------------------------------
+# CREATE ADMIN OR EXAMINER ACCOUNT
+# -----------------------------------------
+
+@router.post(
+    "/users",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_staff_account(
+    user_data: AdminUserCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
     """
-    Create an Examiner or another Admin account.
-    Only authenticated Admins can reach this helper.
+    Only an authenticated Admin can create
+    Admin and Examiner accounts.
     """
 
-    existing_user = (
-        db.query(User)
-        .filter(User.email == account.email)
-        .first()
-    )
+    if user_data.role not in (
+        UserRole.ADMIN,
+        UserRole.EXAMINER
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admins can create only Admin or Examiner accounts."
+        )
+
+    existing_user = db.query(User).filter(
+        User.email == user_data.email
+    ).first()
 
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists"
+            detail="An account with this email already exists."
         )
 
     new_user = User(
-        full_name=account.full_name,
-        email=account.email,
-        department=account.department,
-        password_hash=hash_password(account.password),
-        role=role,
+        full_name=user_data.full_name,
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        role=user_data.role,
         is_active=True
     )
 
     db.add(new_user)
-    db.flush()
-
-    record_admin_activity(
-        db=db,
-        actor_user_id=admin.id,
-        target_user_id=new_user.id,
-        action=f"created_{role}_account",
-        details={
-            "created_email": new_user.email,
-            "created_role": role
-        }
-    )
-
     db.commit()
     db.refresh(new_user)
 
-    return {
-        "message": f"{role.capitalize()} account created successfully",
-        "user": {
-            "id": new_user.id,
-            "full_name": new_user.full_name,
-            "email": new_user.email,
-            "department": new_user.department,
-            "role": new_user.role,
-            "is_active": new_user.is_active,
-            "created_at": new_user.created_at
-        }
-    }
+    return new_user
 
 
-@router.get("/dashboard")
-def admin_dashboard(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
-):
-    """View dashboard statistics."""
+# -----------------------------------------
+# LIST ALL USERS
+# -----------------------------------------
 
-    return {
-        "message": "Admin dashboard statistics",
-        "admin": {
-            "id": admin.id,
-            "full_name": admin.full_name,
-            "email": admin.email
-        },
-        "statistics": get_dashboard_statistics(db)
-    }
-
-
-@router.get("/users")
+@router.get(
+    "/users",
+    response_model=list[UserResponse]
+)
 def list_users(
-    role: str = None,
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
-    """List user accounts, optionally filtered by role."""
+    """
+    Only Admins can view the user account list.
+    """
 
-    query = db.query(User)
-
-    if role is not None:
-        allowed_roles = ["student", "examiner", "admin"]
-
-        if role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid role filter"
-            )
-
-        query = query.filter(User.role == role)
-
-    total = query.count()
-
-    users = (
-        query
-        .order_by(User.id.asc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "users": [
-            {
-                "id": user.id,
-                "full_name": user.full_name,
-                "email": user.email,
-                "department": user.department,
-                "role": user.role,
-                "is_active": user.is_active,
-                "created_at": user.created_at
-            }
-            for user in users
-        ]
-    }
+    return db.query(User).order_by(User.id).all()
 
 
-@router.post(
-    "/examiners",
-    status_code=status.HTTP_201_CREATED
+# -----------------------------------------
+# DELETE ADMIN, EXAMINER OR STUDENT
+# -----------------------------------------
+
+@router.delete(
+    "/users/{user_id}",
+    response_model=MessageResponse
 )
-def create_examiner(
-    account: AdminAccountCreate,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
-):
-    """Create an Examiner account."""
-
-    return create_managed_account(
-        db=db,
-        account=account,
-        role="examiner",
-        admin=admin
-    )
-
-
-@router.post(
-    "/admins",
-    status_code=status.HTTP_201_CREATED
-)
-def create_additional_admin(
-    account: AdminAccountCreate,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
-):
-    """Create an additional Admin account."""
-
-    return create_managed_account(
-        db=db,
-        account=account,
-        role="admin",
-        admin=admin
-    )
-
-
-@router.patch("/users/{user_id}/status")
-def update_user_status(
+def delete_user(
     user_id: int,
-    update: UserStatusUpdate,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
     """
-    Activate or deactivate a user account.
+    Only an Admin can delete user accounts.
 
-    Serialize account-status changes using a PostgreSQL
-    transaction-level advisory lock.
+    An Admin cannot delete their own account.
+    The last active Admin account cannot be deleted.
     """
 
-    # Prevent concurrent account-status changes from
-    # performing their checks at the same time.
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(
-            text("SELECT pg_advisory_xact_lock(741923611)")
-        )
-
-    target_user = (
-        db.query(User)
-        .filter(User.id == user_id)
-        .with_for_update()
-        .first()
-    )
+    target_user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if target_user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User account not found"
+            detail="User account not found."
         )
 
-    # An Admin cannot deactivate their own account.
-    if target_user.id == admin.id and not update.is_active:
+    if target_user.id == current_admin.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot deactivate your own Admin account"
+            detail="You cannot delete your own account."
         )
 
-    # Prevent deactivation of the last active Admin.
-    if (
-        target_user.role == "admin"
-        and target_user.is_active
-        and not update.is_active
-    ):
-        active_admin_count = (
-            db.query(User)
-            .filter(
-                User.role == "admin",
-                User.is_active.is_(True)
-            )
-            .count()
-        )
+    if target_user.role == UserRole.ADMIN:
+        active_admin_count = db.query(User).filter(
+            User.role == UserRole.ADMIN,
+            User.is_active.is_(True)
+        ).count()
 
-        if active_admin_count <= 1:
+        if target_user.is_active and active_admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="The last active Admin account cannot be deactivated"
+                detail="The last active Admin account cannot be deleted."
             )
 
-    old_status = target_user.is_active
+    db.delete(target_user)
 
-    # Avoid recording unnecessary status changes.
-    if old_status == update.is_active:
-        return {
-            "message": "User account status is already set to the requested value",
-            "user": {
-                "id": target_user.id,
-                "full_name": target_user.full_name,
-                "email": target_user.email,
-                "role": target_user.role,
-                "is_active": target_user.is_active
-            }
-        }
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
 
-    target_user.is_active = update.is_active
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This account is linked to existing examination records "
+                "and cannot currently be deleted."
+            )
+        )
 
-    record_admin_activity(
-        db=db,
-        actor_user_id=admin.id,
-        target_user_id=target_user.id,
-        action=(
-            "activated_user"
-            if update.is_active
-            else "deactivated_user"
-        ),
-        details={
-            "previous_status": old_status,
-            "new_status": update.is_active,
-            "target_role": target_user.role
-        }
+    return MessageResponse(
+        message="User account deleted successfully."
     )
+
+
+# -----------------------------------------
+# ACTIVATE OR DEACTIVATE USER ACCOUNT
+# -----------------------------------------
+
+@router.patch(
+    "/users/{user_id}/status",
+    response_model=UserResponse
+)
+def update_user_status(
+    user_id: int,
+    is_active: bool,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Only Admins can activate or deactivate accounts.
+    """
+
+    target_user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found."
+        )
+
+    if target_user.id == current_admin.id and not is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own account."
+        )
+
+    if target_user.role == UserRole.ADMIN and not is_active:
+        active_admin_count = db.query(User).filter(
+            User.role == UserRole.ADMIN,
+            User.is_active.is_(True)
+        ).count()
+
+        if target_user.is_active and active_admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The last active Admin cannot be deactivated."
+            )
+
+    target_user.is_active = is_active
 
     db.commit()
     db.refresh(target_user)
 
-    return {
-        "message": (
-            "User account activated successfully"
-            if target_user.is_active
-            else "User account deactivated successfully"
-        ),
-        "user": {
-            "id": target_user.id,
-            "full_name": target_user.full_name,
-            "email": target_user.email,
-            "role": target_user.role,
-            "is_active": target_user.is_active
-        }
-    }
-
-
-@router.get("/activity-logs")
-def get_admin_activity_logs(
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_role("admin"))
-):
-    """View recorded Admin activities."""
-
-    query = db.query(AdminActivity)
-
-    total = query.count()
-
-    logs = (
-        query
-        .order_by(AdminActivity.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "activities": [
-            {
-                "id": log.id,
-                "actor_user_id": log.actor_user_id,
-                "target_user_id": log.target_user_id,
-                "action": log.action,
-                "details": log.details,
-                "created_at": log.created_at
-            }
-            for log in logs
-        ]
-    }
-    
+    return target_user
