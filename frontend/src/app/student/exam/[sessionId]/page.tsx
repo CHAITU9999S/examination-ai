@@ -335,7 +335,11 @@ export default function StudentExamPage() {
         );
 
       const saveResults = await Promise.allSettled(pendingSaves);
-      const saveFailed = saveResults.some((result) => result.status === "rejected");
+      const saveFailed = saveResults.some(
+        (result) =>
+          result.status === "rejected" ||
+          (result.status === "fulfilled" && result.value === false)
+      );
       if (saveFailed && !automatic) {
         throw new Error("One or more answers could not be saved. Please retry before submitting.");
       }
