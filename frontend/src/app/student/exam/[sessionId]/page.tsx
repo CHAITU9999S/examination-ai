@@ -592,17 +592,27 @@ export default function StudentExamPage() {
       question.question_type === "short_answer" ||
       question.question_type === "long_answer"
     ) {
+      const wordCount = currentAnswer.trim()
+        ? currentAnswer.trim().split(/\\s+/).length
+        : 0;
+      const wordLimit = question.question_type === "short_answer" ? 1000 : 10000;
+
       return (
-        <textarea
-          value={currentAnswer}
-          onChange={(event) =>
-            updateAnswer(question.id, event.target.value)
-          }
-          rows={question.question_type === "short_answer" ? 4 : 9}
-          maxLength={50000}
-          placeholder="Type your answer here..."
-          className="mt-5 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
-        />
+        <div className="mt-5">
+          <textarea
+            value={currentAnswer}
+            onChange={(event) =>
+              updateAnswer(question.id, event.target.value)
+            }
+            rows={question.question_type === "short_answer" ? 4 : 9}
+            maxLength={50000}
+            placeholder="Type your answer here..."
+            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
+          />
+          <p className={`mt-2 text-right text-xs ${wordCount > wordLimit ? "text-red-400" : "text-slate-400"}`} aria-live="polite">
+            {wordCount} / {wordLimit} words
+          </p>
+        </div>
       );
     }
 
@@ -690,7 +700,14 @@ export default function StudentExamPage() {
   }).length;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main
+      className="min-h-screen bg-slate-950 text-white"
+      onContextMenu={(event) => event.preventDefault()}
+      onCopy={(event) => event.preventDefault()}
+      onCut={(event) => event.preventDefault()}
+      onPaste={(event) => event.preventDefault()}
+      onSelectStart={(event) => event.preventDefault()}
+    >
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div>
@@ -710,9 +727,11 @@ export default function StudentExamPage() {
 
             <p
               className={`text-xl font-bold tabular-nums ${
-                remainingSeconds !== null && remainingSeconds <= 300
+                remainingSeconds !== null && remainingSeconds <= 60
                   ? "text-red-400"
-                  : "text-green-400"
+                  : remainingSeconds !== null && remainingSeconds <= 300
+                    ? "text-amber-400"
+                    : "text-green-400"
               }`}
             >
               {formatTime(remainingSeconds)}
