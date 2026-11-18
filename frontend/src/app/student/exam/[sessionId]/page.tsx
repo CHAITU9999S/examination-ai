@@ -499,6 +499,15 @@ export default function StudentExamPage() {
     url: heartbeatUrl,
     enabled: Boolean(heartbeatUrl && paper?.proctoring_enabled),
     heartbeatIntervalMs: 10000,
+    heartbeatPayload: () => ({
+      event_counts: proctoring.events.reduce<Record<string, number>>((counts, event) => {
+        counts[event.event_type] = (counts[event.event_type] || 0) + 1;
+        return counts;
+      }, {}),
+      total_event_count: proctoring.events.length,
+      tab_switch_count: proctoring.tabSwitchCount,
+      auto_flagged: proctoring.isAutoFlagged,
+    }),
     reconnectIntervalMs: 3000,
     maxReconnectAttempts: 10,
     onMessage: (message) => {
