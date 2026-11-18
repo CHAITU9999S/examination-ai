@@ -597,6 +597,9 @@ def get_exam_paper(
             get_current_utc_time(),
         ),
         "total_questions": len(paper),
+        "proctoring_enabled": bool(exam.proctoring_enabled),
+        "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
+        "max_tab_switch_warnings": exam.max_tab_switch_warnings,
         "questions": paper,
 }
     
