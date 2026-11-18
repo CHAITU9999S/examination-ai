@@ -1,7 +1,7 @@
 import pytest
 
 from app.auth import create_access_token
-from app.models import User
+from app.models import User, QuestionBank, Option
 
 
 def create_user(db, role, email):
@@ -10,7 +10,7 @@ def create_user(db, role, email):
         email=email,
         password_hash="test-password-hash",
         role=role,
-        is_active=True
+        is_active=True,
     )
 
     db.add(user)
@@ -30,6 +30,46 @@ def get_auth_headers(user):
     }
 
 
+def create_question(db, user):
+    question = QuestionBank(
+        question_text="What is the capital of India?",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="easy",
+        marks=2,
+        negative_marks=0.5,
+        created_by=user.id,
+    )
+
+    db.add(question)
+    db.commit()
+    db.refresh(question)
+
+    option = Option(
+        question_id=question.id,
+        option_text="New Delhi",
+        is_correct=True,
+    )
+
+    db.add(option)
+    db.commit()
+
+    return question
+
+
+def valid_question_data():
+    return {
+        "question_text": "What is the capital of India?",
+        "question_type": "MCQ",
+        "subject": "General Knowledge",
+        "difficulty": "easy",
+        "marks": 2,
+        "negative_marks": 0.5,
+        "options": ["New Delhi", "Mumbai"],
+        "correct_option_index": 0,
+    }
+
+
 def test_student_cannot_list_questions(client, db_session):
     student = create_user(
         db_session, "student", "student_questions@test.com"
@@ -37,7 +77,7 @@ def test_student_cannot_list_questions(client, db_session):
 
     response = client.get(
         "/questions/",
-        headers=get_auth_headers(student)
+        headers=get_auth_headers(student),
     )
 
     assert response.status_code == 403
@@ -48,21 +88,10 @@ def test_student_cannot_create_questions(client, db_session):
         db_session, "student", "student_create@test.com"
     )
 
-    question_data = {
-        "question_text": "What is the capital of India?",
-        "question_type": "MCQ",
-        "subject": "General Knowledge",
-        "difficulty": "Easy",
-        "marks": 2,
-        "negative_marks": 0.5,
-        "options": ["New Delhi", "Mumbai"],
-        "correct_option_index": 0
-    }
-
     response = client.post(
         "/questions/",
-        json=question_data,
-        headers=get_auth_headers(student)
+        json=valid_question_data(),
+        headers=get_auth_headers(student),
     )
 
     assert response.status_code == 403
@@ -75,7 +104,7 @@ def test_student_cannot_delete_questions(client, db_session):
 
     response = client.delete(
         "/questions/999",
-        headers=get_auth_headers(student)
+        headers=get_auth_headers(student),
     )
 
     assert response.status_code == 403
@@ -88,14 +117,61 @@ def test_examiner_and_admin_can_list_questions(
     user = create_user(
         db_session,
         role,
-        f"{role}_questions@test.com"
+        f"{role}_questions@test.com",
     )
 
     response = client.get(
         "/questions/",
-        headers=get_auth_headers(user)
+        headers=get_auth_headers(user),
     )
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
-  
+
+
+@pytest.mark.parametrize("role", ["examiner", "admin"])
+def test_examiner_and_admin_can_create_questions(
+    client, db_session, role
+):
+    user = create_user(
+        db_session,
+        role,
+        f"{role}_create@test.com",
+    )
+
+    response = client.post(
+        "/questions/",
+        json=valid_question_data(),
+        headers=get_auth_headers(user),
+    )
+
+    assert response.status_code == 201
+
+
+@pytest.mark.parametrize("role", ["examiner", "admin"])
+def test_examiner_and_admin_can_delete_questions(
+    client, db_session, role
+):
+    user = create_user(
+        db_session,
+        role,
+        f"{role}_delete@test.com",
+    )
+
+    question = create_question(db_session, user)
+
+    response = client.delete(
+        f"/questions/{question.id}",
+        headers=get_auth_headers(user),
+    )
+
+    assert response.status_code == 200
+
+    remaining_question = (
+        db_session.query(QuestionBank)
+        .filter(QuestionBank.id == question.id)
+        .first()
+    )
+
+    assert remaining_question is None
+    
