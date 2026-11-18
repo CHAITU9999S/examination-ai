@@ -472,7 +472,7 @@ def test_event_history_is_available_to_examiner_or_admin(
     assert response.status_code == 200
 
 
-def test_student_cannot_access_staff_proctoring_summary(
+def test_student_can_access_own_proctoring_history(
     client,
     proctoring_data,
 ):
@@ -483,4 +483,5 @@ def test_student_cannot_access_staff_proctoring_summary(
         headers=proctoring_headers(data["token"]),
     )
 
-    assert response.status_code in (401, 403)
+    assert response.status_code == 200
+    assert response.json()["session_id"] == data["session"].id
