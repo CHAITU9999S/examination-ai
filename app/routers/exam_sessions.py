@@ -569,6 +569,7 @@ def get_exam_paper(
         ).all()
 
         paper.append({
+            "id": question.id,
             "question_id": question.id,
             "question_text": question.question_text,
             "question_type": getattr(
@@ -589,6 +590,8 @@ def get_exam_paper(
 
     return {
         "exam_id": exam_id,
+        "exam_title": exam.title,
+        "duration_minutes": exam.duration_minutes,
         "session_id": session.id,
         "started_at": session.started_at,
         "expires_at": session.expires_at,
