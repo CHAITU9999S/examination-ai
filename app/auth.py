@@ -1,113 +1,92 @@
-
-from datetime import datetime, timedelta, timezone
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from jose import jwt
 from passlib.context import CryptContext
 
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+# -----------------------------------------
+# AUTHENTICATION CONFIGURATION
+# -----------------------------------------
 
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY environment variable is required"
-    )
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    "development-only-secret-change-before-deployment"
+)
 
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-EXAM_TOKEN_GRACE_MINUTES = 5
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
-pwd_context = CryptContext(
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+)
+
+
+# -----------------------------------------
+# PASSWORD HASHING
+# -----------------------------------------
+
+password_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto"
 )
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """
+    Hash a password before storing it in the database.
+    """
+
+    return password_context.hash(password)
 
 
 def verify_password(
     plain_password: str,
     hashed_password: str
 ) -> bool:
-    return pwd_context.verify(
+    """
+    Verify a submitted password against its stored hash.
+    """
+
+    return password_context.verify(
         plain_password,
         hashed_password
     )
 
 
+# -----------------------------------------
+# JWT ACCESS TOKEN CREATION
+# -----------------------------------------
+
 def create_access_token(
-    data: dict,
-    expires_delta=None
+    subject: str,
+    expires_delta: Optional[timedelta] = None
 ) -> str:
-    to_encode = data.copy()
+    """
+    Create a signed JWT access token.
 
-    # Normal login tokens are access tokens.
-    # Exam tokens retain their separate exam type.
-    to_encode.setdefault("token_type", "access")
-
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-
-    to_encode.update({"exp": expire})
-
-    return jwt.encode(
-        to_encode,
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
-
-
-def verify_token(token: str):
-    try:
-        return jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
-    except Exception:
-        return None
-
-
-def create_exam_access_token(
-    exam_id: int,
-    student_id: int,
-    session_id: int,
-    expires_at: datetime
-) -> str:
-    # Database DateTime values may be timezone-naive.
-    if expires_at.tzinfo is None:
-        session_deadline = expires_at.replace(
-            tzinfo=timezone.utc
-        )
-    else:
-        session_deadline = expires_at.astimezone(
-            timezone.utc
-        )
+    The subject identifies the authenticated user.
+    """
 
     now = datetime.now(timezone.utc)
 
-    # The token expires shortly after the session deadline.
-    # The database session deadline remains authoritative.
-    expires_delta = (
-        session_deadline
-        - now
-        + timedelta(minutes=EXAM_TOKEN_GRACE_MINUTES)
-    )
+    if expires_delta is None:
+        expires_delta = timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
-    token_data = {
-        "sub": str(student_id),
-        "exam_id": exam_id,
-        "student_id": student_id,
-        "session_id": session_id,
-        "token_type": "exam"
+    expire = now + expires_delta
+
+    payload = {
+        "sub": str(subject),
+        "iat": now,
+        "exp": expire,
     }
 
-    return create_access_token(
-        token_data,
-        expires_delta=expires_delta
+    encoded_token = jwt.encode(
+        payload,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM
     )
-    
+
+    return encoded_token
