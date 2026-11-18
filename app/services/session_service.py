@@ -177,17 +177,59 @@ def generate_session_question_ids(
     difficulty_counts = rules.get("difficulty_counts")
     question_type_counts = rules.get("question_type_counts")
 
-    # Generate the paper using the existing paper generator.
-    selected_ids = generate_paper(
-        question_ids=question_ids,
-        student_id=student_id,
-        exam_id=exam.id,
-        number_of_questions=question_count,
-        question_details=question_details,
-        difficulty_counts=difficulty_counts,
-        question_type_counts=question_type_counts,
-        randomize=bool(exam.randomize_questions),
-    )
+    # Preserve the configured fixed paper when randomization is disabled.
+    if not exam.randomize_questions:
+        selected_ids = generate_paper(
+            question_ids=question_ids,
+            student_id=student_id,
+            exam_id=exam.id,
+            number_of_questions=question_count,
+            question_details=question_details,
+            difficulty_counts=difficulty_counts,
+            question_type_counts=question_type_counts,
+            randomize=False,
+        )
+    else:
+        # Avoid assigning the same question set to two different students
+        # whenever another valid combination exists.
+        previous_selections = db.query(
+            ExamSession.selected_question_ids,
+        ).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.selected_question_ids.isnot(None),
+        ).all()
+
+        used_papers = {
+            frozenset(selection[0])
+            for selection in previous_selections
+            if isinstance(selection[0], list)
+            and len(selection[0]) == question_count
+        }
+
+        selected_ids = None
+        for seed_salt in range(1000):
+            candidate = generate_paper(
+                question_ids=question_ids,
+                student_id=student_id,
+                exam_id=exam.id,
+                number_of_questions=question_count,
+                question_details=question_details,
+                difficulty_counts=difficulty_counts,
+                question_type_counts=question_type_counts,
+                randomize=True,
+                seed_salt=seed_salt,
+            )
+
+            if frozenset(candidate) not in used_papers:
+                selected_ids = candidate
+                break
+
+        if selected_ids is None:
+            raise ValueError(
+                "A unique question paper is not available for this student. "
+                "Increase the number of assigned questions or reduce the "
+                "number of questions per paper."
+            )
 
     if len(selected_ids) != question_count:
         raise ValueError(
