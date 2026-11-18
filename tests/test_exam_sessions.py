@@ -306,6 +306,8 @@ def test_valid_student_can_access_assigned_exam_paper(
     data = response.json()
 
     assert data["exam_id"] == exam.id
+    assert data["exam_title"] == exam.title
+    assert data["duration_minutes"] == exam.duration_minutes
     assert data["session_id"] == session.id
     assert data["total_questions"] == 1
 
@@ -313,6 +315,7 @@ def test_valid_student_can_access_assigned_exam_paper(
 
     returned_question = data["questions"][0]
 
+    assert returned_question["id"] == question.id
     assert returned_question["question_id"] == question.id
 
     assert (
