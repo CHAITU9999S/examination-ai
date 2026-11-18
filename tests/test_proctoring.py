@@ -122,6 +122,8 @@ def test_student_can_submit_tab_switch_event(
 
     assert event is not None
     assert event.description == "Student switched browser tab."
+    assert event.suspicion_points == pytest.approx(10)
+    assert event.cumulative_suspicion_score == pytest.approx(10)
 
 
 def test_tab_switch_increases_suspicion_score(
@@ -268,6 +270,15 @@ def test_multiple_events_accumulate_suspicion_score(
     db_session.refresh(data["session"])
 
     assert data["session"].suspicion_score == pytest.approx(30)
+
+    events = db_session.query(ProctorEvent).filter_by(
+        session_id=data["session"].id,
+    ).order_by(ProctorEvent.id.asc()).all()
+
+    assert [event.cumulative_suspicion_score for event in events] == [
+        pytest.approx(10),
+        pytest.approx(30),
+    ]
 
 
 def test_suspicion_score_does_not_exceed_100(
@@ -498,3 +509,23 @@ def test_student_can_access_own_proctoring_history(
     assert response.json()["last_heartbeat_at"] is not None
     assert response.json()["last_heartbeat_signals"]["total_event_count"] == 3
     assert response.json()["last_heartbeat_signals"]["event_counts"]["tab_switch"] == 2
+
+
+
+def test_webcam_snapshot_upload_is_rejected(
+    client,
+    proctoring_data,
+):
+    data = proctoring_data
+
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/events",
+        headers=proctoring_headers(data["token"]),
+        json={
+            "event_type": "face_not_detected",
+            "snapshot_data": "base64-webcam-frame",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "client-side" in response.json()["detail"]
