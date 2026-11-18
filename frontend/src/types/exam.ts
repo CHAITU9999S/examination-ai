@@ -76,11 +76,13 @@ export interface ExamStartRequest {
 export interface ExamStartResponse {
   session_id: number;
   exam_id: number;
-  exam_token: string;
+  access_token: string;
+  token_type: string;
   started_at: string;
   expires_at: string;
   remaining_seconds: number;
-  status: string;
+  total_questions?: number;
+  status?: string;
 }
 
 export interface ExamQuestionOption {
