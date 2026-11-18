@@ -400,6 +400,19 @@ def get_proctoring_history_for_staff(
         if event.event_type == "tab_switch"
     )
 
+    # A configured threshold of zero disables automatic tab-switch
+    # flagging. It must not flag every session before any switch occurs.
+    auto_flag_threshold = (
+        int(exam.max_tab_switch_warnings)
+        if exam.max_tab_switch_warnings is not None
+        else None
+    )
+    auto_flagged = (
+        auto_flag_threshold is not None
+        and auto_flag_threshold > 0
+        and tab_switch_count >= auto_flag_threshold
+    )
+
     return {
         "session_id": session_id,
         "exam_id": session.exam_id,
@@ -409,11 +422,8 @@ def get_proctoring_history_for_staff(
         "last_heartbeat_at": session.last_heartbeat_at,
         "last_heartbeat_signals": session.last_heartbeat_signals,
         "tab_switch_count": tab_switch_count,
-        "auto_flagged": (
-            tab_switch_count >= max(0, int(exam.max_tab_switch_warnings or 0))
-            if exam.max_tab_switch_warnings is not None
-            else False
-        ),
+        "auto_flag_threshold": auto_flag_threshold,
+        "auto_flagged": auto_flagged,
         "total_events": len(events),
         "events": events,
     }
