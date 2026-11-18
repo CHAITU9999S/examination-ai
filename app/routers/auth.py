@@ -1,5 +1,7 @@
+import hmac
+import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,18 +14,90 @@ from app.auth import (
 from app.database import get_db
 from app.models import User
 from app.schemas import (
+    InitialAdminBootstrapRequest,
     LoginRequest,
     StudentRegister,
     TokenResponse,
     UserResponse,
     UserRole,
 )
+from scripts.create_initial_admin import create_initial_admin
 
 
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+
+# -----------------------------------------
+# ONE-TIME INITIAL ADMIN BOOTSTRAP
+# -----------------------------------------
+
+@router.post(
+    "/bootstrap-admin",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def bootstrap_initial_admin(
+    admin_data: InitialAdminBootstrapRequest,
+    setup_token: str | None = Header(
+        default=None,
+        alias="X-Admin-Bootstrap-Token"
+    ),
+    db: Session = Depends(get_db)
+):
+    """
+    Create the first Admin using a temporary server-side setup token.
+
+    The endpoint is disabled unless INITIAL_ADMIN_SETUP_TOKEN is set.
+    It can create an Admin only while no Admin account exists.
+    """
+
+    configured_token = os.getenv("INITIAL_ADMIN_SETUP_TOKEN")
+
+    # Return 404 when disabled so the bootstrap route is not advertised
+    # as an available setup mechanism after the temporary token is removed.
+    if not configured_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found."
+        )
+
+    if len(configured_token) < 32:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Initial Admin setup is not securely configured."
+        )
+
+    if not setup_token or not hmac.compare_digest(
+        setup_token,
+        configured_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Admin setup token."
+        )
+
+    try:
+        admin = create_initial_admin(
+            db=db,
+            full_name=admin_data.full_name,
+            email=str(admin_data.email),
+            password=admin_data.password,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc)
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc)
+        ) from exc
+
+    return admin
 
 
 # -----------------------------------------
@@ -122,4 +196,3 @@ def login(
         token_type="bearer",
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
-    
