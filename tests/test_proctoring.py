@@ -474,9 +474,13 @@ def test_event_history_is_available_to_examiner_or_admin(
 
 def test_student_can_access_own_proctoring_history(
     client,
+    db_session,
     proctoring_data,
 ):
     data = proctoring_data
+    heartbeat_time = datetime.now(timezone.utc).replace(tzinfo=None)
+    data["session"].last_heartbeat_at = heartbeat_time
+    db_session.commit()
 
     response = client.get(
         f"/exam-sessions/{data['session'].id}/proctoring/summary",
@@ -485,3 +489,4 @@ def test_student_can_access_own_proctoring_history(
 
     assert response.status_code == 200
     assert response.json()["session_id"] == data["session"].id
+    assert response.json()["last_heartbeat_at"] is not None
