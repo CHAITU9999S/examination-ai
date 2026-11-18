@@ -130,7 +130,7 @@ export default function FaceProctoring({
 
         setStatus("ready");
 
-        const threshold = Math.min(0.4, Math.max(0.2, 0.35 - sensitivity * 0.1));
+        const threshold = Math.min(0.4, Math.max(0.2, 0.25 + sensitivity * 0.1));
 
         const detect = (now: number) => {
           if (cancelled || !landmarker || !video || video.readyState < 2) {
