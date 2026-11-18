@@ -10,6 +10,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     UploadFile,
     status,
@@ -341,6 +342,7 @@ def get_saved_answers(
         "total_saved_answers": len(answers),
         "answers": [
             {
+                "id": answer.id,
                 "answer_id": answer.id,
                 "question_id": answer.question_id,
                 "answer_text": answer.answer_text,
@@ -354,6 +356,87 @@ def get_saved_answers(
 # ==========================================
 # SAVE OR UPDATE EXAM ANSWER
 # ==========================================
+
+@legacy_router.get("/{session_id}/{question_id}")
+def get_saved_answer(
+    session_id: int,
+    question_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Return one saved answer from the authenticated active exam session."""
+
+    session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db,
+    )
+
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Answers cannot be retrieved through an inactive exam session.",
+        )
+
+    if (
+        session.expires_at is None
+        or datetime.utcnow() >= session.expires_at
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Exam time has expired.",
+        )
+
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question does not belong to your examination paper.",
+        )
+
+    answer = db.query(Answer).filter(
+        Answer.session_id == session.id,
+        Answer.question_id == question_id,
+    ).first()
+
+    if answer is None:
+        return None
+
+    return {
+        "id": answer.id,
+        "session_id": answer.session_id,
+        "question_id": answer.question_id,
+        "answer_text": answer.answer_text,
+        "image_path": answer.image_path,
+        "awarded_marks": answer.awarded_marks,
+    }
+
+
+
+@legacy_router.post(
+    "/{session_id}/upload",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_image_answer_legacy(
+    session_id: int,
+    question_id: int = Form(...),
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme,
+    ),
+    db: Session = Depends(get_db),
+):
+    """Compatibility endpoint used by the existing answer service."""
+
+    return await upload_image_answer(
+        session_id=session_id,
+        question_id=question_id,
+        file=file,
+        credentials=credentials,
+        db=db,
+    )
+
 
 @legacy_router.post(
     "/{session_id}/{question_id}",
@@ -422,12 +505,24 @@ def save_exam_answer(
     if question_type == "MCQ":
 
         try:
-            option_id = int(answer_text)
+            parsed_answer = json.loads(answer_text)
 
-        except ValueError:
+            if isinstance(parsed_answer, list):
+                if (
+                    len(parsed_answer) != 1
+                    or isinstance(parsed_answer[0], bool)
+                    or not isinstance(parsed_answer[0], int)
+                ):
+                    raise ValueError("MCQ requires one option ID.")
+
+                option_id = parsed_answer[0]
+            else:
+                option_id = int(answer_text)
+
+        except (TypeError, ValueError, json.JSONDecodeError):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="For MCQ, submit the selected option ID.",
+                detail="For MCQ, submit exactly one selected option ID.",
             )
 
         option = db.query(Option).filter(
@@ -441,7 +536,7 @@ def save_exam_answer(
                 detail="Selected option does not belong to this question.",
             )
 
-        answer_text = str(option_id)
+        answer_text = json.dumps([option_id])
 
     # --------------------------------------
     # MULTI-SELECT VALIDATION
