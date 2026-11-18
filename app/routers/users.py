@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -29,9 +30,7 @@ router = APIRouter(
 def get_my_profile(
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Return the profile of the authenticated user.
-    """
+    """Return the authenticated user's profile."""
 
     return current_user
 
@@ -49,31 +48,37 @@ def change_my_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Allow an authenticated user to change their password.
-    """
+    """Allow an authenticated user to change their password."""
 
     if not verify_password(
         password_data.current_password,
-        current_user.hashed_password
+        current_user.password_hash
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect."
         )
 
-    if password_data.current_password == password_data.new_password:
+    if (
+        password_data.current_password
+        == password_data.new_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from the current password."
+            detail=(
+                "New password must be different "
+                "from the current password."
+            )
         )
 
-    current_user.hashed_password = hash_password(
+    current_user.password_hash = hash_password(
         password_data.new_password
     )
 
     db.commit()
+    db.refresh(current_user)
 
     return MessageResponse(
         message="Password changed successfully."
 )
+    
