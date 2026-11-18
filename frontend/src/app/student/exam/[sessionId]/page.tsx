@@ -244,6 +244,48 @@ export default function StudentExamPage() {
     }
   }, [getHeaders, sessionId]);
 
+  const saveAnswer = useCallback(async (
+    questionId: number,
+    answerText: string
+  ) => {
+    const headers = getHeaders();
+    if (!headers) return;
+
+    setSaving(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/answers/${sessionId}`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            question_id: questionId,
+            answer_text: answerText,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to save answer.");
+      }
+
+      setMessage("Answer saved.");
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save answer."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [getHeaders, sessionId]);
+
+
   const submitExam = useCallback(async (automatic = false) => {
     if (submittedRef.current || submitting) return;
 
@@ -289,6 +331,7 @@ export default function StudentExamPage() {
       }
 
       sessionStorage.removeItem(examTokenKey);
+      sessionStorage.removeItem(examIdKey);
       sessionStorage.removeItem("examguard_active_exam_session");
 
       setMessage(
@@ -311,53 +354,13 @@ export default function StudentExamPage() {
     }
   }, [
     examTokenKey,
+    examIdKey,
     getHeaders,
     router,
     sessionId,
     submitting,
     saveAnswer,
   ]);
-
-  const saveAnswer = useCallback(async (
-    questionId: number,
-    answerText: string
-  ) => {
-    const headers = getHeaders();
-    if (!headers) return;
-
-    setSaving(true);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/answers/${sessionId}`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            question_id: questionId,
-            answer_text: answerText,
-          }),
-        }
-      );
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Unable to save answer.");
-      }
-
-      setMessage("Answer saved.");
-      setError("");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to save answer."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [getHeaders, sessionId]);
 
   function updateAnswer(questionId: number, answerText: string) {
     const updated = {
