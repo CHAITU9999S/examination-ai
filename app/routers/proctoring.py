@@ -433,12 +433,16 @@ async def proctoring_heartbeat(
                 )
                 break
 
+            heartbeat_time = get_current_utc_time()
+            session.last_heartbeat_at = heartbeat_time
+            db.commit()
+
             remaining_seconds = max(
                 0,
                 int(
                     (
                         session.expires_at
-                        - get_current_utc_time()
+                        - heartbeat_time
                     ).total_seconds()
                 ),
             )
@@ -446,7 +450,8 @@ async def proctoring_heartbeat(
             await websocket.send_json({
                 "type": "heartbeat_ack",
                 "session_id": session_id,
-                "server_time": get_current_utc_time().isoformat(),
+                "server_time": heartbeat_time.isoformat(),
+                "last_heartbeat_at": heartbeat_time.isoformat(),
                 "remaining_seconds": remaining_seconds,
                 "status": session.status,
             })
