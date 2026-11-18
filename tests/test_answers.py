@@ -632,3 +632,53 @@ def test_image_answer_upload_stores_image_and_ocr_text(
     assert saved_answer.answer_text == "A handwritten database answer."
     assert saved_answer.image_path.startswith("answers/")
     assert (tmp_path / saved_answer.image_path).is_file()
+
+def test_student_can_clear_saved_answer(
+    client,
+    db_session,
+    answer_test_data,
+):
+    data = answer_test_data
+    answer = Answer(
+        session_id=data["session"].id,
+        question_id=data["short_answer"].id,
+        answer_text="An earlier response",
+    )
+    db_session.add(answer)
+    db_session.commit()
+
+    response = client.delete(
+        f"/answers/{data['session'].id}/{data['short_answer'].id}",
+        headers=exam_headers(data["token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+    assert db_session.query(Answer).filter(
+        Answer.session_id == data["session"].id,
+        Answer.question_id == data["short_answer"].id,
+    ).first() is None
+
+
+def test_student_cannot_clear_unassigned_answer(
+    client,
+    db_session,
+    answer_test_data,
+):
+    data = answer_test_data
+    unassigned = QuestionBank(
+        question_text="Not assigned",
+        question_type="short_answer",
+        marks=1,
+    )
+    db_session.add(unassigned)
+    db_session.commit()
+    db_session.refresh(unassigned)
+
+    response = client.delete(
+        f"/answers/{data['session'].id}/{unassigned.id}",
+        headers=exam_headers(data["token"]),
+    )
+
+    assert response.status_code == 403
+
