@@ -1,0 +1,561 @@
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface PendingAnswer {
+  answer_id: number;
+  session_id: number;
+  question_id: number;
+  student_id: number;
+  student_name?: string;
+  exam_id: number;
+  exam_title?: string;
+  question_text: string;
+  question_type: string;
+  answer_text?: string | null;
+  image_path?: string | null;
+  marks: number;
+  awarded_marks?: number | null;
+}
+
+interface GradingSuggestion {
+  suggested_marks: number;
+  justification: string;
+  matched_points: string[];
+  missed_points: string[];
+}
+
+export default function ExaminerGradingPage() {
+  const router = useRouter();
+
+  const [answers, setAnswers] = useState<PendingAnswer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const [selectedAnswer, setSelectedAnswer] =
+    useState<PendingAnswer | null>(null);
+
+  const [suggestion, setSuggestion] =
+    useState<GradingSuggestion | null>(null);
+
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [awardedMarks, setAwardedMarks] = useState("");
+
+  const getHeaders = useCallback(() => {
+    const token = localStorage.getItem("examguard_access_token");
+
+    if (!token) {
+      router.replace("/login");
+      return null;
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+  }, [router]);
+
+  const loadPendingAnswers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+
+      const response = await fetch(
+        `${API_URL}/grading/pending`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (response.status === 401 || response.status === 403) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Unable to load answers awaiting grading.");
+      }
+
+      const data = await response.json();
+
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data.answers)
+          ? data.answers
+          : null;
+
+      if (!list) {
+        throw new Error("Unexpected grading data returned by the server.");
+      }
+
+      setAnswers(list);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load answers."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [getHeaders, router]);
+
+  useEffect(() => {
+    loadPendingAnswers();
+  }, [loadPendingAnswers]);
+
+  function openAnswer(answer: PendingAnswer) {
+    setSelectedAnswer(answer);
+    setSuggestion(null);
+    setAwardedMarks(
+      answer.awarded_marks === null ||
+        answer.awarded_marks === undefined
+        ? ""
+        : String(answer.awarded_marks)
+    );
+    setError("");
+    setMessage("");
+  }
+
+  async function requestAISuggestion() {
+    if (!selectedAnswer) return;
+
+    setError("");
+    setMessage("");
+    setSuggestion(null);
+    setSuggestionLoading(true);
+
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+
+      const response = await fetch(
+        `${API_URL}/grading/answers/${selectedAnswer.answer_id}/ai-suggestion`,
+        {
+          method: "POST",
+          headers,
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to generate AI grading suggestion."
+        );
+      }
+
+      setSuggestion(data);
+      setAwardedMarks(String(data.suggested_marks));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "AI grading suggestion failed."
+      );
+    } finally {
+      setSuggestionLoading(false);
+    }
+  }
+
+  async function saveFinalMarks() {
+    if (!selectedAnswer) return;
+
+    const marks = Number(awardedMarks);
+
+    if (
+      awardedMarks.trim() === "" ||
+      !Number.isFinite(marks) ||
+      marks < 0 ||
+      marks > selectedAnswer.marks
+    ) {
+      setError(
+        `Enter marks between 0 and ${selectedAnswer.marks}.`
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+
+      const response = await fetch(
+        `${API_URL}/grading/answers/${selectedAnswer.answer_id}`,
+        {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            awarded_marks: marks,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to save final marks."
+        );
+      }
+
+      setMessage("Final marks saved successfully.");
+      setSelectedAnswer(null);
+      setSuggestion(null);
+      setAwardedMarks("");
+
+      await loadPendingAnswers();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save final marks."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <header className="border-b border-white/10 bg-slate-900">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div>
+            <Link
+              href="/examiner/dashboard"
+              className="text-2xl font-bold"
+            >
+              ExamGuard <span className="text-blue-400">AI</span>
+            </Link>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Examiner / Answer Grading
+            </p>
+          </div>
+
+          <Link
+            href="/examiner/dashboard"
+            className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
+          >
+            ← Dashboard
+          </Link>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-6 py-10">
+        <h1 className="text-3xl font-bold">
+          Answer Grading
+        </h1>
+
+        <p className="mt-2 text-slate-400">
+          Review subjective answers and approve their final marks.
+          AI suggestions are optional and must be reviewed by an examiner.
+        </p>
+
+        {error && (
+          <div
+            role="alert"
+            className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300"
+          >
+            {error}
+          </div>
+        )}
+
+        {message && (
+          <div
+            role="status"
+            className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300"
+          >
+            {message}
+          </div>
+        )}
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold">
+                Answers Awaiting Grading
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                {answers.length} answer(s) pending
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadPendingAnswers}
+              disabled={loading}
+              className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="py-10 text-center text-slate-400">
+              Loading answers...
+            </p>
+          ) : answers.length === 0 ? (
+            <p className="py-10 text-center text-slate-400">
+              No answers are currently awaiting grading.
+            </p>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {answers.map((answer) => (
+                <article
+                  key={answer.answer_id}
+                  className="rounded-xl border border-white/10 bg-slate-800/60 p-5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold">
+                        {answer.exam_title || `Examination #${answer.exam_id}`}
+                      </h3>
+
+                      <p className="mt-1 text-sm text-slate-400">
+                        Student:{" "}
+                        {answer.student_name ||
+                          `Student #${answer.student_id}`}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-400">
+                        Question #{answer.question_id} ·{" "}
+                        {answer.question_type} ·{" "}
+                        {answer.marks} marks
+                      </p>
+
+                      <p className="mt-3 line-clamp-3 text-sm text-slate-300">
+                        {answer.question_text}
+                      </p>
+
+                      <p className="mt-2 text-xs text-slate-500">
+                        {answer.awarded_marks === null ||
+                        answer.awarded_marks === undefined
+                          ? "Not graded"
+                          : `Current marks: ${answer.awarded_marks}`}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openAnswer(answer)}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold transition hover:bg-blue-500"
+                    >
+                      Review Answer
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {selectedAnswer && (
+          <section className="mt-8 rounded-2xl border border-blue-500/30 bg-slate-900 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-xl font-bold">
+                Review Student Answer
+              </h2>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAnswer(null);
+                  setSuggestion(null);
+                  setAwardedMarks("");
+                }}
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-5">
+              <div>
+                <p className="text-sm font-semibold text-slate-400">
+                  Examination
+                </p>
+                <p className="mt-1">
+                  {selectedAnswer.exam_title ||
+                    `Examination #${selectedAnswer.exam_id}`}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-slate-400">
+                  Question
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  {selectedAnswer.question_text}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-slate-400">
+                  Student Answer
+                </p>
+
+                {selectedAnswer.answer_text ? (
+                  <div className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-800 p-4 text-slate-200">
+                    {selectedAnswer.answer_text}
+                  </div>
+                ) : selectedAnswer.image_path ? (
+                  <p className="mt-2 rounded-lg bg-slate-800 p-4 text-sm text-slate-300">
+                    An image answer was uploaded. Image preview requires
+                    a protected backend image endpoint.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-slate-400">
+                    No text answer was submitted.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <p className="text-sm text-slate-400">
+                  Maximum marks
+                </p>
+
+                <p className="mt-1 text-2xl font-bold">
+                  {selectedAnswer.marks}
+                </p>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={requestAISuggestion}
+                  disabled={suggestionLoading}
+                  className="rounded-lg border border-purple-400/40 bg-purple-500/10 px-5 py-3 font-semibold text-purple-300 transition hover:bg-purple-500/20 disabled:opacity-50"
+                >
+                  {suggestionLoading
+                    ? "Generating AI Suggestion..."
+                    : "Get AI Grading Suggestion"}
+                </button>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  AI suggestions are advisory. The examiner must decide
+                  and save the final marks.
+                </p>
+              </div>
+
+              {suggestion && (
+                <div className="space-y-4 rounded-xl border border-purple-400/30 bg-purple-500/5 p-5">
+                  <h3 className="font-semibold text-purple-300">
+                    AI Grading Suggestion
+                  </h3>
+
+                  <div>
+                    <p className="text-sm text-slate-400">
+                      Suggested marks
+                    </p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {suggestion.suggested_marks} / {selectedAnswer.marks}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-slate-300">
+                      Justification
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">
+                      {suggestion.justification}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="font-semibold text-green-300">
+                      Matched points
+                    </p>
+
+                    {suggestion.matched_points.length ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                        {suggestion.matched_points.map((point, index) => (
+                          <li key={index}>{point}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-400">
+                        No matched points identified.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="font-semibold text-amber-300">
+                      Missed points
+                    </p>
+
+                    {suggestion.missed_points.length ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                        {suggestion.missed_points.map((point, index) => (
+                          <li key={index}>{point}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-400">
+                        No missed points identified.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="awardedMarks"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Final marks awarded by examiner
+                </label>
+
+                <input
+                  id="awardedMarks"
+                  type="number"
+                  min="0"
+                  max={selectedAnswer.marks}
+                  step="0.01"
+                  value={awardedMarks}
+                  onChange={(event) =>
+                    setAwardedMarks(event.target.value)
+                  }
+                  placeholder="Enter final marks"
+                  className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+                />
+
+                <p className="mt-2 text-xs text-slate-500">
+                  You can accept, modify, or ignore the AI suggestion.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={saveFinalMarks}
+                disabled={saving}
+                className="rounded-lg bg-green-600 px-6 py-3 font-semibold transition hover:bg-green-500 disabled:opacity-50"
+              >
+                {saving ? "Saving Marks..." : "Save Final Marks"}
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
