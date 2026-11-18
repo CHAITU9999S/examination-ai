@@ -63,6 +63,7 @@ export default function StudentExamPage() {
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
   const [imageUploading, setImageUploading] = useState(false);
   const [websocketStatus, setWebsocketStatus] = useState("disconnected");
 
@@ -136,6 +137,9 @@ export default function StudentExamPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "Unable to upload answer image.");
+      setUploadedImageQuestionIds((current) =>
+        current.includes(questionId) ? current : [...current, questionId]
+      );
       setMessage(data.ocr_completed
         ? "Image uploaded and text extracted for examiner review."
         : "Image uploaded. OCR is unavailable; examiner review is required.");
@@ -309,9 +313,13 @@ export default function StudentExamPage() {
 
       // Flush every locally edited answer before final submission.
       await Promise.all(
-        Object.entries(answersRef.current).map(([questionId, answerText]) =>
-          saveAnswer(Number(questionId), answerText)
-        )
+        Object.entries(answersRef.current)
+          .filter(([questionId]) =>
+            paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
+          )
+          .map(([questionId, answerText]) =>
+            saveAnswer(Number(questionId), answerText)
+          )
       );
 
       const response = await fetch(
@@ -360,6 +368,7 @@ export default function StudentExamPage() {
     sessionId,
     submitting,
     saveAnswer,
+    paper,
   ]);
 
   function updateAnswer(questionId: number, answerText: string) {
@@ -401,11 +410,17 @@ export default function StudentExamPage() {
           const data = await response.json();
           const saved = Array.isArray(data.answers) ? data.answers : [];
           const restored: Record<number, string> = {};
+          const restoredImages: number[] = [];
           for (const answer of saved) {
-            if (answer && Number.isInteger(answer.question_id) && typeof answer.answer_text === "string") {
+            if (!answer || !Number.isInteger(answer.question_id)) continue;
+            if (typeof answer.answer_text === "string" && answer.answer_text.length > 0) {
               restored[answer.question_id] = answer.answer_text;
             }
+            if (typeof answer.image_path === "string" && answer.image_path.length > 0) {
+              restoredImages.push(answer.question_id);
+            }
           }
+          setUploadedImageQuestionIds(restoredImages);
           answersRef.current = restored;
           setAnswers(restored);
         })
@@ -627,7 +642,8 @@ export default function StudentExamPage() {
   const currentQuestion = paper.questions[currentIndex];
 
   const answeredCount = paper.questions.filter((question) => {
-    return Boolean(answers[question.id]?.trim());
+    return Boolean(answers[question.id]?.trim()) ||
+      uploadedImageQuestionIds.includes(question.id);
   }).length;
 
   return (
@@ -756,7 +772,7 @@ export default function StudentExamPage() {
             {paper.questions.map((question, index) => {
               const answered = Boolean(
                 answers[question.id]?.trim()
-              );
+              ) || uploadedImageQuestionIds.includes(question.id);
 
               return (
                 <button
