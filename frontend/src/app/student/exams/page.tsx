@@ -161,13 +161,11 @@ export default function StudentExamsPage() {
       if (!headers) return;
 
       const response = await fetch(
-        `${API_URL}/exam-sessions/start`,
+        `${API_URL}/exam-sessions/start/${exam.id}`,
         {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            exam_id: exam.id,
-          }),
+          body: undefined,
         }
       );
 
@@ -187,9 +185,9 @@ export default function StudentExamsPage() {
       const sessionId = data.session_id ?? data.id;
 
       const examToken =
+        data.access_token ??
         data.exam_token ??
         data.exam_access_token ??
-        data.access_token ??
         data.token;
 
       if (!sessionId || !examToken) {
@@ -207,6 +205,10 @@ export default function StudentExamsPage() {
       sessionStorage.setItem(
         "examguard_active_exam_session",
         String(sessionId)
+      );
+      sessionStorage.setItem(
+        `examguard_exam_id_${sessionId}`,
+        String(data.exam_id ?? exam.id)
       );
 
       router.push(`/student/exam/${sessionId}`);
