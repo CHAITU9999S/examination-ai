@@ -65,6 +65,16 @@ class StudentRegister(BaseModel):
 
 
 # ==========================================
+# ONE-TIME INITIAL ADMIN BOOTSTRAP
+# ==========================================
+
+class InitialAdminBootstrapRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=150)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+# ==========================================
 # LOGIN
 # ==========================================
 
@@ -231,4 +241,3 @@ class ExamCreate(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
-    
