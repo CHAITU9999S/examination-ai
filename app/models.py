@@ -2,8 +2,19 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Enum,
-    ForeignKey, Text, Float, JSON, UniqueConstraint
+    Column,
+    Integer,
+    String,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Text,
+    Float,
+    JSON,
+    UniqueConstraint,
+    Index,
+    text
 )
 
 from app.database import Base
@@ -27,6 +38,7 @@ class QuestionBank(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     question_text = Column(Text, nullable=False)
+
     question_type = Column(
         Enum(
             "MCQ",
@@ -38,6 +50,7 @@ class QuestionBank(Base):
         ),
         nullable=False
     )
+
     subject = Column(String(100))
     difficulty = Column(String(20))
     expected_answer = Column(Text)
@@ -52,10 +65,13 @@ class Option(Base):
     __tablename__ = "options"
 
     id = Column(Integer, primary_key=True, index=True)
+
     question_id = Column(
-        Integer, ForeignKey("question_bank.id", ondelete="CASCADE"),
+        Integer,
+        ForeignKey("question_bank.id", ondelete="CASCADE"),
         nullable=False
     )
+
     option_text = Column(Text, nullable=False)
     is_correct = Column(Boolean, default=False)
 
@@ -81,27 +97,53 @@ class Exam(Base):
 
 class ExamQuestion(Base):
     __tablename__ = "exam_questions"
+
     __table_args__ = (
         UniqueConstraint("exam_id", "question_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
+
     question_id = Column(
-        Integer, ForeignKey("question_bank.id"), nullable=False
+        Integer,
+        ForeignKey("question_bank.id"),
+        nullable=False
     )
+
     question_order = Column(Integer)
 
 
 class ExamSession(Base):
     __tablename__ = "exam_sessions"
 
+    __table_args__ = (
+        Index(
+            "uq_exam_sessions_active_student_exam",
+            "exam_id",
+            "student_id",
+            unique=True,
+            postgresql_where=text("status = 'in_progress'")
+        ),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Existing session start timestamp
     started_at = Column(DateTime, default=datetime.utcnow)
+
+    # NEW: Server-calculated examination deadline
+    expires_at = Column(DateTime, nullable=False)
+
+    # Existing submission timestamp
     submitted_at = Column(DateTime)
+
+    # Existing session status
     status = Column(String(20), default="in_progress")
+
+    # Existing proctoring suspicion score
     suspicion_score = Column(Float, default=0)
 
 
@@ -109,12 +151,19 @@ class Answer(Base):
     __tablename__ = "answers"
 
     id = Column(Integer, primary_key=True, index=True)
+
     session_id = Column(
-        Integer, ForeignKey("exam_sessions.id"), nullable=False
+        Integer,
+        ForeignKey("exam_sessions.id"),
+        nullable=False
     )
+
     question_id = Column(
-        Integer, ForeignKey("question_bank.id"), nullable=False
+        Integer,
+        ForeignKey("question_bank.id"),
+        nullable=False
     )
+
     answer_text = Column(Text)
     image_path = Column(String(500))
     awarded_marks = Column(Float)
@@ -124,10 +173,14 @@ class Result(Base):
     __tablename__ = "results"
 
     id = Column(Integer, primary_key=True, index=True)
+
     session_id = Column(
-        Integer, ForeignKey("exam_sessions.id"), unique=True,
+        Integer,
+        ForeignKey("exam_sessions.id"),
+        unique=True,
         nullable=False
     )
+
     total_marks = Column(Float, default=0)
     obtained_marks = Column(Float, default=0)
     percentage = Column(Float, default=0)
@@ -138,9 +191,13 @@ class ProctorEvent(Base):
     __tablename__ = "proctor_events"
 
     id = Column(Integer, primary_key=True, index=True)
+
     session_id = Column(
-        Integer, ForeignKey("exam_sessions.id"), nullable=False
+        Integer,
+        ForeignKey("exam_sessions.id"),
+        nullable=False
     )
+
     event_type = Column(String(100), nullable=False)
     description = Column(Text)
     snapshot_data = Column(Text, nullable=True)
@@ -168,7 +225,6 @@ class AdminActivity(Base):
     )
 
     action = Column(String(100), nullable=False)
-
     details = Column(JSON, nullable=True)
 
     created_at = Column(
