@@ -131,20 +131,14 @@ class ExamSession(Base):
     exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    # Existing session start timestamp
     started_at = Column(DateTime, default=datetime.utcnow)
-
-    # NEW: Server-calculated examination deadline
     expires_at = Column(DateTime, nullable=False)
-
-    # Existing submission timestamp
     submitted_at = Column(DateTime)
-
-    # Existing session status
     status = Column(String(20), default="in_progress")
-
-    # Existing proctoring suspicion score
     suspicion_score = Column(Float, default=0)
+
+    # Stores the permanent question IDs selected for this session.
+    selected_question_ids = Column(JSON, nullable=True)
 
 
 class Answer(Base):
