@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from app.auth import create_access_token
-from app.models import User
+from app.models import User, Exam
 
 
 def create_user(db, role, email):
@@ -12,7 +10,7 @@ def create_user(db, role, email):
         email=email,
         password_hash="test-password-hash",
         role=role,
-        is_active=True
+        is_active=True,
     )
 
     db.add(user)
@@ -44,22 +42,22 @@ def valid_exam_data():
         "randomize_questions": True,
         "selection_rules": {
             "difficulty_counts": {
-                "Easy": 2,
-                "Medium": 1,
-                "Hard": 1
+                "easy": 2,
+                "medium": 1,
+                "hard": 1,
             },
             "question_type_counts": {
                 "MCQ": 2,
                 "short_answer": 1,
-                "long_answer": 1
-            }
+                "long_answer": 1,
+            },
         },
         "start_time": start.isoformat(),
         "end_time": end.isoformat(),
         "negative_marking": True,
         "proctoring_enabled": True,
         "gaze_tracking_sensitivity": 0.65,
-        "max_tab_switch_warnings": 3
+        "max_tab_switch_warnings": 3,
     }
 
 
@@ -67,16 +65,16 @@ def test_examiner_can_create_exam(client, db_session):
     examiner = create_user(
         db_session,
         "examiner",
-        "examiner_create@test.com"
+        "examiner_create@test.com",
     )
 
     response = client.post(
         "/exams/",
         json=valid_exam_data(),
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["message"] == "Exam created successfully"
     assert "exam_id" in response.json()
 
@@ -85,39 +83,39 @@ def test_admin_can_create_exam(client, db_session):
     admin = create_user(
         db_session,
         "admin",
-        "admin_create_exam@test.com"
+        "admin_create_exam@test.com",
     )
 
     response = client.post(
         "/exams/",
         json=valid_exam_data(),
-        headers=get_auth_headers(admin)
+        headers=get_auth_headers(admin),
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
 
 
 def test_exam_configuration_is_saved_and_returned(
     client,
-    db_session
+    db_session,
 ):
     examiner = create_user(
         db_session,
         "examiner",
-        "examiner_list@test.com"
+        "examiner_list@test.com",
     )
 
     create_response = client.post(
         "/exams/",
         json=valid_exam_data(),
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
-    assert create_response.status_code == 200
+    assert create_response.status_code == 201
 
     response = client.get(
         "/exams/",
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
     assert response.status_code == 200
@@ -125,7 +123,8 @@ def test_exam_configuration_is_saved_and_returned(
     exam_id = create_response.json()["exam_id"]
 
     exam = next(
-        item for item in response.json()
+        item
+        for item in response.json()
         if item["id"] == exam_id
     )
 
@@ -139,32 +138,39 @@ def test_exam_configuration_is_saved_and_returned(
     assert exam["gaze_tracking_sensitivity"] == 0.65
     assert exam["max_tab_switch_warnings"] == 3
 
-    assert exam["selection_rules"]["difficulty_counts"]["Easy"] == 2
-    assert exam["selection_rules"]["question_type_counts"]["MCQ"] == 2
+    assert (
+        exam["selection_rules"]["difficulty_counts"]["easy"]
+        == 2
+    )
+
+    assert (
+        exam["selection_rules"]["question_type_counts"]["MCQ"]
+        == 2
+    )
 
 
 def test_rejects_incomplete_distribution_rules(
     client,
-    db_session
+    db_session,
 ):
     examiner = create_user(
         db_session,
         "examiner",
-        "examiner_invalid_rules@test.com"
+        "examiner_invalid_rules@test.com",
     )
 
     data = valid_exam_data()
 
     data["selection_rules"] = {
         "difficulty_counts": {
-            "Easy": 4
+            "easy": 4,
         }
     }
 
     response = client.post(
         "/exams/",
         json=data,
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
     assert response.status_code == 400
@@ -172,12 +178,12 @@ def test_rejects_incomplete_distribution_rules(
 
 def test_rejects_invalid_gaze_sensitivity(
     client,
-    db_session
+    db_session,
 ):
     examiner = create_user(
         db_session,
         "examiner",
-        "examiner_gaze@test.com"
+        "examiner_gaze@test.com",
     )
 
     data = valid_exam_data()
@@ -186,20 +192,20 @@ def test_rejects_invalid_gaze_sensitivity(
     response = client.post(
         "/exams/",
         json=data,
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_rejects_negative_tab_switch_warnings(
     client,
-    db_session
+    db_session,
 ):
     examiner = create_user(
         db_session,
         "examiner",
-        "examiner_warnings@test.com"
+        "examiner_warnings@test.com",
     )
 
     data = valid_exam_data()
@@ -208,7 +214,7 @@ def test_rejects_negative_tab_switch_warnings(
     response = client.post(
         "/exams/",
         json=data,
-        headers=get_auth_headers(examiner)
+        headers=get_auth_headers(examiner),
     )
 
     assert response.status_code == 422
@@ -218,13 +224,13 @@ def test_student_cannot_create_exam(client, db_session):
     student = create_user(
         db_session,
         "student",
-        "student_create_exam@test.com"
+        "student_create_exam@test.com",
     )
 
     response = client.post(
         "/exams/",
         json=valid_exam_data(),
-        headers=get_auth_headers(student)
+        headers=get_auth_headers(student),
     )
 
     assert response.status_code == 403
@@ -234,13 +240,99 @@ def test_student_cannot_list_exams(client, db_session):
     student = create_user(
         db_session,
         "student",
-        "student_list_exams@test.com"
+        "student_list_exams@test.com",
     )
 
     response = client.get(
         "/exams/",
-        headers=get_auth_headers(student)
+        headers=get_auth_headers(student),
     )
 
     assert response.status_code == 403
-                                
+
+
+def test_examiner_cannot_list_another_examiners_exams(
+    client,
+    db_session,
+):
+    first_examiner = create_user(
+        db_session,
+        "examiner",
+        "first_examiner@test.com",
+    )
+
+    second_examiner = create_user(
+        db_session,
+        "examiner",
+        "second_examiner@test.com",
+    )
+
+    exam = Exam(
+        title="Private Examiner Exam",
+        subject="Mathematics",
+        duration_minutes=60,
+        total_questions=4,
+        created_by=first_examiner.id,
+    )
+
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    response = client.get(
+        "/exams/",
+        headers=get_auth_headers(second_examiner),
+    )
+
+    assert response.status_code == 200
+
+    returned_ids = [
+        item["id"]
+        for item in response.json()
+    ]
+
+    assert exam.id not in returned_ids
+
+
+def test_admin_can_list_exams_created_by_examiners(
+    client,
+    db_session,
+):
+    examiner = create_user(
+        db_session,
+        "examiner",
+        "examiner_admin_visibility@test.com",
+    )
+
+    admin = create_user(
+        db_session,
+        "admin",
+        "admin_exam_visibility@test.com",
+    )
+
+    exam = Exam(
+        title="Examiner Created Exam",
+        subject="Science",
+        duration_minutes=45,
+        total_questions=3,
+        created_by=examiner.id,
+    )
+
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    response = client.get(
+        "/exams/",
+        headers=get_auth_headers(admin),
+    )
+
+    assert response.status_code == 200
+
+    returned_ids = [
+        item["id"]
+        for item in response.json()
+    ]
+
+    assert exam.id in returned_ids
+    
