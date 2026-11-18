@@ -8,6 +8,7 @@ from app.routers import (
     questions,
     exams,
     exam_sessions,
+    answers,
     admin
 )
 
@@ -47,6 +48,9 @@ app.include_router(exams.router)
 
 # Exam Sessions
 app.include_router(exam_sessions.router)
+
+# Student Answers
+app.include_router(answers.router)
 
 # Admin Management
 app.include_router(admin.router)
