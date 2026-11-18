@@ -283,6 +283,72 @@ def get_exam_remaining_time(
     }
 
 
+@router.post("/submit/{session_id}")
+def submit_exam(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme
+    ),
+    db: Session = Depends(get_db)
+):
+
+    payload, session = validate_exam_token(
+        credentials,
+        db
+    )
+
+    if session.id != session_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Token does not belong to this exam session"
+        )
+
+    if session.status == "submitted":
+        return {
+            "message": "Exam has already been submitted",
+            "session_id": session.id,
+            "status": session.status,
+            "submitted_at": session.submitted_at
+        }
+
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail="This exam session cannot be submitted"
+        )
+
+    now = datetime.utcnow()
+
+    if now >= session.expires_at:
+        expire_session_if_needed(
+            session,
+            db,
+            now
+        )
+
+        return {
+            "message": "Exam time expired. Exam submitted automatically",
+            "session_id": session.id,
+            "status": session.status,
+            "submitted_at": session.submitted_at
+        }
+
+    session.status = "submitted"
+    session.submitted_at = now
+
+    db.commit()
+    db.refresh(session)
+
+    return {
+        "message": "Exam submitted successfully",
+        "session_id": session.id,
+        "exam_id": session.exam_id,
+        "status": session.status,
+        "submitted_at": session.submitted_at,
+        "remaining_seconds": 0
+    }
+
+
 @router.get("/paper/{exam_id}")
 def get_exam_paper(
     exam_id: int,
@@ -421,5 +487,4 @@ def get_exam_paper(
         ),
         "total_questions": len(paper),
         "questions": paper
-            }
-        
+        }
