@@ -78,12 +78,14 @@ The platform provides separate access and functionality for Students, Examiners,
 
 ### Automated Proctoring
 - Browser tab visibility and window-focus event monitoring.
-- Webcam permission and preview component.
-- Authenticated proctoring event submission.
+- Webcam permission and live preview.
+- Browser-side MediaPipe Face Landmarker for face-presence and multiple-face detection.
+- Approximate horizontal iris-position gaze estimation.
+- Authenticated reporting of browser and computer-vision events.
 - Server-side event validation and suspicion-score calculation.
 - WebSocket heartbeat and server-side session-expiry checks.
 
-**Implementation status:** Face detection, FaceMesh gaze estimation, and multiple-person detection are not yet implemented or connected to the examination flow. The current webcam component only obtains and previews the camera stream; it does not analyse frames. These computer-vision capabilities remain outstanding within Milestone 2 and must not be treated as completed.
+Face and gaze inference runs locally in the candidate's browser. Camera frames are not uploaded by the detector. Gaze estimation is a coarse attention indicator and can be affected by lighting, glasses, camera placement, and device differences; it is not proof of misconduct or a replacement for examiner review. The MediaPipe WASM runtime and model are loaded from public CDNs, so the browser needs network access as well as camera permission over HTTPS.
 
 ---
 
@@ -254,10 +256,10 @@ The current implementation is limited to Milestones 1 and 2 and the agreed UI an
 ## Milestone 2 Runtime Requirements and Known Integration Work
 
 - AI-assisted grading is disabled by default. It requires an explicitly enabled setting and a valid server-side OpenAI API key. The examiner must review and approve marks; AI suggestions do not directly finalize grades.
-- OCR requires the Tesseract executable to be installed on the backend host. Installing the Python package alone is not sufficient.
-- Uploaded answer images are stored under the configured upload directory. Production deployments must mount persistent storage or configure durable object storage; ephemeral container storage can lose uploaded files after redeployment.
-- Face detection, gaze estimation, and multiple-person detection still need a real computer-vision implementation and integration with the exam session. Browser focus events and webcam preview alone are not AI face proctoring.
-- The existing frontend exam page still needs its API calls and proctoring components aligned with the backend contracts before the complete student examination flow can be considered integrated.
+- The supplied Dockerfile installs the Tesseract executable and English language pack. Non-Docker deployments must install Tesseract separately and set TESSERACT_CMD.
+- The supplied docker-compose.yml mounts a named Docker volume at the configured answer upload directory. Cloud deployments must configure an equivalent persistent disk/volume; container-local ephemeral storage is not durable.
+- The student exam flow now uses the backend's exam-start, paper, remaining-time, answer-save, image-upload, and submit routes. Students can list available exams; exam paper responses include the IDs and metadata expected by the frontend.
+- AI grading remains disabled by default. It requires an administrator-configured server-side API key and explicit enablement; the examiner must review and approve marks.
 
 ## 8. Security
 
