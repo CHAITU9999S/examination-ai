@@ -1,24 +1,38 @@
-
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, users, admin
+from app.routers import (
+    auth,
+    users,
+    admin,
+    questions,
+    exams,
+    exam_sessions,
+    answers,
+    proctoring,
+    grading,
+)
 
 
-# -----------------------------------------
+# ==========================================
 # APPLICATION CONFIGURATION
-# -----------------------------------------
+# ==========================================
 
 APP_NAME = os.getenv("APP_NAME", "ExamGuard AI")
-APP_ENV = os.getenv("APP_ENV", "development")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEBUG = APP_ENV == "development"
 
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    "development-only-secret-change-before-deployment"
+)
 
-# -----------------------------------------
+
+# ==========================================
 # CREATE FASTAPI APPLICATION
-# -----------------------------------------
+# ==========================================
 
 app = FastAPI(
     title=APP_NAME,
@@ -28,13 +42,13 @@ app = FastAPI(
         "Performance Analysis."
     ),
     version="1.0.0",
-    debug=DEBUG
+    debug=DEBUG,
 )
 
 
-# -----------------------------------------
+# ==========================================
 # CORS CONFIGURATION
-# -----------------------------------------
+# ==========================================
 
 allowed_origins = [
     origin.strip()
@@ -55,27 +69,51 @@ app.add_middleware(
         "PUT",
         "PATCH",
         "DELETE",
-        "OPTIONS"
+        "OPTIONS",
     ],
     allow_headers=[
         "Authorization",
-        "Content-Type"
+        "Content-Type",
     ],
 )
 
 
-# -----------------------------------------
+# ==========================================
 # REGISTER API ROUTERS
-# -----------------------------------------
+# ==========================================
 
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(admin.router)
+app.include_router(questions.router)
+app.include_router(exams.router)
+app.include_router(exam_sessions.router)
+app.include_router(answers.router)
+app.include_router(proctoring.router)
+app.include_router(grading.router)
 
 
-# -----------------------------------------
+# ==========================================
+# APPLICATION STARTUP CHECK
+# ==========================================
+
+@app.on_event("startup")
+def validate_production_configuration():
+    if APP_ENV == "production":
+        if (
+            JWT_SECRET_KEY
+            == "development-only-secret-change-before-deployment"
+            or len(JWT_SECRET_KEY) < 32
+        ):
+            raise RuntimeError(
+                "Production requires a strong JWT_SECRET_KEY "
+                "of at least 32 characters."
+            )
+
+
+# ==========================================
 # ROOT ENDPOINT
-# -----------------------------------------
+# ==========================================
 
 @app.get("/", tags=["General"])
 def root():
@@ -83,18 +121,17 @@ def root():
         "message": "Welcome to ExamGuard AI",
         "application": APP_NAME,
         "environment": APP_ENV,
-        "status": "running"
+        "status": "running",
     }
 
 
-# -----------------------------------------
+# ==========================================
 # HEALTH CHECK ENDPOINT
-# -----------------------------------------
+# ==========================================
 
 @app.get("/health", tags=["General"])
 def health_check():
     return {
         "status": "healthy",
-        "application": APP_NAME
-    }
-    
+        "application": APP_NAME,
+}
