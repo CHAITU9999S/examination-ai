@@ -462,6 +462,7 @@ def get_proctoring_summary(
         "last_heartbeat_at": history["last_heartbeat_at"],
         "last_heartbeat_signals": history["last_heartbeat_signals"],
         "tab_switch_count": history["tab_switch_count"],
+        "auto_flag_threshold": history["auto_flag_threshold"],
         "auto_flagged": history["auto_flagged"],
         "total_events": history["total_events"],
         "event_counts": event_counts,
