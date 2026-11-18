@@ -1,4 +1,5 @@
-from datetime import datetime
+
+from datetime import datetime, timedelta
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,10 +27,6 @@ def expire_session_if_needed(
     db: Session,
     now: datetime
 ) -> bool:
-    """
-    Marks an exam session as submitted when its deadline passes.
-    Returns True if the session has expired.
-    """
 
     if session.status != "in_progress":
         return True
@@ -48,11 +45,70 @@ def get_remaining_seconds(
     session: ExamSession,
     now: datetime
 ) -> int:
+
     remaining = (
         session.expires_at - now
     ).total_seconds()
 
     return max(0, ceil(remaining))
+
+
+def validate_exam_token(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session
+):
+    payload = verify_token(credentials.credentials)
+
+    if not payload or payload.get("token_type") != "exam":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid exam token"
+        )
+
+    try:
+        exam_id = int(payload.get("exam_id"))
+        student_id = int(payload.get("student_id"))
+        token_user_id = int(payload.get("sub"))
+        session_id = int(payload.get("session_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid exam token identity"
+        )
+
+    if student_id != token_user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Exam token identity mismatch"
+        )
+
+    student = db.query(User).filter(
+        User.id == student_id
+    ).first()
+
+    if (
+        not student
+        or not student.is_active
+        or student.role != "student"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Student account is invalid or inactive"
+        )
+
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student_id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=403,
+            detail="Exam session not found"
+        )
+
+    return payload, session
 
 
 @router.post("/start/{exam_id}")
@@ -61,6 +117,7 @@ def start_exam(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+
     if current_user.role != "student":
         raise HTTPException(
             status_code=403,
@@ -97,7 +154,6 @@ def start_exam(
             detail="Exam duration is not configured correctly"
         )
 
-    # Find an existing active session.
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == current_user.id,
@@ -105,7 +161,7 @@ def start_exam(
     ).first()
 
     if session:
-        # An expired session cannot be restarted automatically.
+
         if expire_session_if_needed(session, db, now):
             raise HTTPException(
                 status_code=400,
@@ -113,19 +169,11 @@ def start_exam(
             )
 
     else:
-        # Calculate the server-side deadline.
-        expires_at = (
-            now.replace(microsecond=0)
-        )
 
-        from datetime import timedelta
-
-        expires_at = expires_at + timedelta(
+        expires_at = now + timedelta(
             minutes=exam.duration_minutes
         )
 
-        # Do not allow the session to continue beyond the
-        # scheduled exam end time.
         if exam.end_time and exam.end_time < expires_at:
             expires_at = exam.end_time
 
@@ -144,8 +192,6 @@ def start_exam(
             db.refresh(session)
 
         except IntegrityError:
-            # The database unique index prevents concurrent
-            # creation of multiple active sessions.
             db.rollback()
 
             session = db.query(ExamSession).filter(
@@ -160,13 +206,16 @@ def start_exam(
                     detail="Could not create an exam session. Please try again"
                 )
 
-            if expire_session_if_needed(session, db, datetime.utcnow()):
+            if expire_session_if_needed(
+                session,
+                db,
+                datetime.utcnow()
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail="Your exam session has expired or been submitted"
                 )
 
-    # Generate a token tied to this exact session.
     exam_token = create_exam_access_token(
         exam_id=exam_id,
         student_id=current_user.id,
@@ -191,6 +240,49 @@ def start_exam(
     }
 
 
+@router.get("/time/{session_id}")
+def get_exam_remaining_time(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(
+        exam_token_scheme
+    ),
+    db: Session = Depends(get_db)
+):
+
+    payload, session = validate_exam_token(
+        credentials,
+        db
+    )
+
+    if session.id != session_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Token does not belong to this exam session"
+        )
+
+    now = datetime.utcnow()
+
+    if expire_session_if_needed(session, db, now):
+        return {
+            "session_id": session.id,
+            "status": "submitted",
+            "remaining_seconds": 0,
+            "message": "Exam time has expired or the exam has been submitted"
+        }
+
+    return {
+        "session_id": session.id,
+        "exam_id": session.exam_id,
+        "status": session.status,
+        "started_at": session.started_at,
+        "expires_at": session.expires_at,
+        "remaining_seconds": get_remaining_seconds(
+            session,
+            now
+        )
+    }
+
+
 @router.get("/paper/{exam_id}")
 def get_exam_paper(
     exam_id: int,
@@ -199,58 +291,19 @@ def get_exam_paper(
     ),
     db: Session = Depends(get_db)
 ):
-    payload = verify_token(credentials.credentials)
 
-    if not payload or payload.get("token_type") != "exam":
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid exam token"
-        )
+    payload, session = validate_exam_token(
+        credentials,
+        db
+    )
 
-    try:
-        token_exam_id = int(payload.get("exam_id"))
-        student_id = int(payload.get("student_id"))
-        token_user_id = int(payload.get("sub"))
-        session_id = int(payload.get("session_id"))
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid exam token identity"
-        )
+    token_exam_id = int(payload["exam_id"])
+    student_id = int(payload["student_id"])
 
     if token_exam_id != exam_id:
         raise HTTPException(
             status_code=403,
             detail="Token does not belong to this exam"
-        )
-
-    if student_id != token_user_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Exam token identity mismatch"
-        )
-
-    student = db.query(User).filter(
-        User.id == student_id
-    ).first()
-
-    if not student or not student.is_active or student.role != "student":
-        raise HTTPException(
-            status_code=403,
-            detail="Student account is invalid or inactive"
-        )
-
-    # Validate the exact session included in the token.
-    session = db.query(ExamSession).filter(
-        ExamSession.id == session_id,
-        ExamSession.exam_id == exam_id,
-        ExamSession.student_id == student_id
-    ).first()
-
-    if not session:
-        raise HTTPException(
-            status_code=403,
-            detail="Exam session not found"
         )
 
     now = datetime.utcnow()
@@ -335,6 +388,7 @@ def get_exam_paper(
     paper = []
 
     for question_id in selected_ids:
+
         question = question_map[question_id]
 
         options = db.query(Option).filter(
@@ -367,5 +421,5 @@ def get_exam_paper(
         ),
         "total_questions": len(paper),
         "questions": paper
-    }
-    
+            }
+        
