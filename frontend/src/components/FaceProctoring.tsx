@@ -15,13 +15,9 @@ interface FaceProctoringProps {
 
 type DetectorStatus = "idle" | "loading" | "ready" | "unavailable";
 
-const WASM_ROOT =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-
-function point(landmarks: Array<{ x: number; y: number }>, index: number) {
-  return landmarks[index];
+interface NormalizedPoint {
+  x: number;
+  y: number;
 }
 
 interface GazeEstimate {
@@ -30,22 +26,34 @@ interface GazeEstimate {
   confidence: number;
 }
 
+interface DetectedFace {
+  keypoints: Array<{ x: number; y: number }>;
+}
+
+interface FaceLandmarksDetector {
+  estimateFaces(
+    input: HTMLVideoElement,
+    estimationConfig?: { flipHorizontal?: boolean }
+  ): Promise<DetectedFace[]>;
+  dispose(): void;
+}
+
 function estimateGaze(
-  landmarks: Array<{ x: number; y: number }>
+  landmarks: NormalizedPoint[]
 ): GazeEstimate | null {
-  // Compare both iris positions relative to each eye's own corners and lids.
-  // Large left/right or up/down disagreement is treated as unreliable.
-  // This remains an approximate screen-attention heuristic.
-  const leftIris = point(landmarks, 468);
-  const leftOuter = point(landmarks, 33);
-  const leftInner = point(landmarks, 133);
-  const leftTop = point(landmarks, 159);
-  const leftBottom = point(landmarks, 145);
-  const rightIris = point(landmarks, 473);
-  const rightInner = point(landmarks, 362);
-  const rightOuter = point(landmarks, 263);
-  const rightTop = point(landmarks, 386);
-  const rightBottom = point(landmarks, 374);
+  // Iris positions are compared against each eye's own corners and eyelids.
+  // Large disagreement between the two eyes is treated as unreliable.
+  // This is an approximate attention heuristic, not calibrated eye tracking.
+  const leftIris = landmarks[468];
+  const leftOuter = landmarks[33];
+  const leftInner = landmarks[133];
+  const leftTop = landmarks[159];
+  const leftBottom = landmarks[145];
+  const rightIris = landmarks[473];
+  const rightInner = landmarks[362];
+  const rightOuter = landmarks[263];
+  const rightTop = landmarks[386];
+  const rightBottom = landmarks[374];
 
   if (
     !leftIris || !leftOuter || !leftInner || !leftTop || !leftBottom ||
@@ -97,10 +105,7 @@ function estimateGaze(
     leftVertical - rightVertical
   );
 
-  if (
-    horizontalDisagreement > 0.25 ||
-    verticalDisagreement > 0.35
-  ) {
+  if (horizontalDisagreement > 0.25 || verticalDisagreement > 0.35) {
     return null;
   }
 
@@ -145,8 +150,8 @@ export default function FaceProctoring({
     }
 
     let cancelled = false;
-    let landmarker: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => { faceLandmarks?: Array<Array<{ x: number; y: number }>> }; close: () => void } | null = null;
-    let video = videoRef.current;
+    let detector: FaceLandmarksDetector | null = null;
+    const video = videoRef.current;
 
     const reportWithCooldown = (
       key: string,
@@ -159,6 +164,170 @@ export default function FaceProctoring({
       callback();
     };
 
+    const scheduleNextFrame = () => {
+      if (!cancelled) {
+        animationRef.current = requestAnimationFrame(detect);
+      }
+    };
+
+    const processFaces = (
+      faces: DetectedFace[],
+      now: number,
+      videoElement: HTMLVideoElement
+    ) => {
+      if (faces.length === 0) {
+        facePresentSinceRef.current = null;
+        if (missingSinceRef.current === null) {
+          missingSinceRef.current = now;
+        }
+        if (now - missingSinceRef.current >= 1500) {
+          reportWithCooldown("missing", onFaceMissing);
+        }
+        gazeAwaySinceRef.current = null;
+        gazeSamplesRef.current = [];
+        return;
+      }
+
+      missingSinceRef.current = null;
+
+      if (faces.length > 1) {
+        facePresentSinceRef.current = null;
+        reportWithCooldown("multiple", onMultipleFaces, 7000);
+        gazeAwaySinceRef.current = null;
+        gazeSamplesRef.current = [];
+        return;
+      }
+
+      // Require one continuously detected face for at least one second
+      // before marking the exam-entry face-presence check complete.
+      if (facePresentSinceRef.current === null) {
+        facePresentSinceRef.current = now;
+      }
+
+      if (
+        !faceVerifiedRef.current &&
+        now - facePresentSinceRef.current >= 1000
+      ) {
+        faceVerifiedRef.current = true;
+        onFaceVerified();
+      }
+
+      const width = videoElement.videoWidth;
+      const height = videoElement.videoHeight;
+      if (!width || !height || faces[0].keypoints.length < 478) {
+        gazeSamplesRef.current = [];
+        gazeAwaySinceRef.current = null;
+        return;
+      }
+
+      // TensorFlow.js returns pixel coordinates. Convert to normalized
+      // coordinates so the gaze ratios are independent of camera resolution.
+      const normalizedLandmarks = faces[0].keypoints.map((keypoint) => ({
+        x: keypoint.x / width,
+        y: keypoint.y / height,
+      }));
+
+      const estimate = estimateGaze(normalizedLandmarks);
+      if (!estimate) {
+        gazeSamplesRef.current = [];
+        gazeAwaySinceRef.current = null;
+        return;
+      }
+
+      gazeSamplesRef.current = [
+        ...gazeSamplesRef.current.slice(-6),
+        estimate,
+      ];
+
+      // Smooth short-lived landmark jitter before classifying gaze.
+      const samples = gazeSamplesRef.current;
+      const smoothedHorizontal = samples.reduce(
+        (total, sample) => total + sample.horizontalPosition,
+        0
+      ) / samples.length;
+      const smoothedVertical = samples.reduce(
+        (total, sample) => total + sample.verticalPosition,
+        0
+      ) / samples.length;
+      const averageConfidence = samples.reduce(
+        (total, sample) => total + sample.confidence,
+        0
+      ) / samples.length;
+
+      const threshold = Math.min(
+        0.4,
+        Math.max(0.2, 0.25 + sensitivity * 0.1)
+      );
+      const horizontalAway =
+        smoothedHorizontal < threshold ||
+        smoothedHorizontal > 1 - threshold;
+      const verticalAway =
+        smoothedVertical < threshold ||
+        smoothedVertical > 1 - threshold;
+      const lookingAway = horizontalAway || verticalAway;
+
+      if (lookingAway && samples.length >= 4) {
+        if (gazeAwaySinceRef.current === null) {
+          gazeAwaySinceRef.current = now;
+        }
+
+        if (now - gazeAwaySinceRef.current >= 1200) {
+          reportWithCooldown("gaze", () => onGazeAway({
+            direction: horizontalAway
+              ? (smoothedHorizontal < threshold ? "left" : "right")
+              : (smoothedVertical < threshold ? "up" : "down"),
+            normalized_horizontal_position: Number(
+              smoothedHorizontal.toFixed(3)
+            ),
+            normalized_vertical_position: Number(
+              smoothedVertical.toFixed(3)
+            ),
+            confidence: Number(averageConfidence.toFixed(2)),
+            consistent_samples: samples.length,
+            detector: "mediapipe_face_mesh_tensorflow_js",
+            runtime: "tensorflowjs_webgl_or_cpu",
+            estimation: "bilateral_iris_ratio_2d_smoothed",
+          }));
+        }
+      } else {
+        gazeAwaySinceRef.current = null;
+      }
+    };
+
+    function detect(now: number) {
+      if (cancelled || !detector || !video || video.readyState < 2) {
+        scheduleNextFrame();
+        return;
+      }
+
+      if (now - lastDetectionRef.current < 150) {
+        scheduleNextFrame();
+        return;
+      }
+
+      lastDetectionRef.current = now;
+
+      // Do not overlap asynchronous model inference calls.
+      void detector.estimateFaces(video, { flipHorizontal: false })
+        .then((faces) => {
+          if (!cancelled) {
+            processFaces(faces, now, video);
+          }
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          const message = error instanceof Error
+            ? error.message
+            : "Face detector failed.";
+          reportWithCooldown(
+            "detector-error",
+            () => onDetectorError(message),
+            15000
+          );
+        })
+        .finally(scheduleNextFrame);
+    }
+
     async function start() {
       setStatus("loading");
       gazeSamplesRef.current = [];
@@ -166,162 +335,69 @@ export default function FaceProctoring({
       missingSinceRef.current = null;
       facePresentSinceRef.current = null;
       faceVerifiedRef.current = false;
+      lastDetectionRef.current = 0;
 
       try {
-        if (!video) throw new Error("Video element is unavailable.");
+        if (!video) {
+          throw new Error("Video element is unavailable.");
+        }
+
         video.srcObject = stream;
         video.muted = true;
         video.playsInline = true;
         await video.play();
 
-        const vision = await import("@mediapipe/tasks-vision");
-        const fileset = await vision.FilesetResolver.forVisionTasks(WASM_ROOT);
+        // Load TensorFlow.js and register its browser inference backends.
+        const tf = await import("@tensorflow/tfjs-core");
+        await import("@tensorflow/tfjs-converter");
+        await import("@tensorflow/tfjs-backend-webgl");
+        await import("@tensorflow/tfjs-backend-cpu");
+        await import("@mediapipe/face_mesh");
 
+        let backendReady = false;
         try {
-          landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-            runningMode: "VIDEO",
-            numFaces: 3,
-            outputFaceBlendshapes: false,
-          });
+          backendReady = await tf.setBackend("webgl");
         } catch {
-          landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
-            runningMode: "VIDEO",
-            numFaces: 3,
-            outputFaceBlendshapes: false,
-          });
+          backendReady = false;
         }
 
+        if (!backendReady) {
+          backendReady = await tf.setBackend("cpu");
+        }
+
+        if (!backendReady) {
+          throw new Error("TensorFlow.js could not initialize WebGL or CPU.");
+        }
+
+        await tf.ready();
+
+        const faceLandmarksDetection = await import(
+          "@tensorflow-models/face-landmarks-detection"
+        );
+
+        detector = await faceLandmarksDetection.createDetector(
+          faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+          {
+            runtime: "tfjs",
+            maxFaces: 3,
+            refineLandmarks: true,
+          }
+        );
+
         if (cancelled) {
-          landmarker.close();
-          landmarker = null;
+          detector.dispose();
+          detector = null;
           return;
         }
 
         setStatus("ready");
-
-        const threshold = Math.min(0.4, Math.max(0.2, 0.25 + sensitivity * 0.1));
-
-        const detect = (now: number) => {
-          if (cancelled || !landmarker || !video || video.readyState < 2) {
-            animationRef.current = requestAnimationFrame(detect);
-            return;
-          }
-
-          if (now - lastDetectionRef.current >= 150) {
-            lastDetectionRef.current = now;
-
-            try {
-              const result = landmarker.detectForVideo(video, now);
-              const faces = result.faceLandmarks || [];
-
-              if (faces.length === 0) {
-                facePresentSinceRef.current = null;
-                if (missingSinceRef.current === null) missingSinceRef.current = now;
-                if (now - missingSinceRef.current >= 1500) {
-                  reportWithCooldown("missing", onFaceMissing);
-                }
-                gazeAwaySinceRef.current = null;
-              } else {
-                missingSinceRef.current = null;
-              }
-
-              if (faces.length > 1) {
-                facePresentSinceRef.current = null;
-                reportWithCooldown("multiple", onMultipleFaces, 7000);
-              }
-
-              if (faces.length === 1) {
-                // Require one continuously detected face for at least one
-                // second before marking the exam-entry face check complete.
-                if (facePresentSinceRef.current === null) {
-                  facePresentSinceRef.current = now;
-                }
-                if (
-                  !faceVerifiedRef.current &&
-                  now - facePresentSinceRef.current >= 1000
-                ) {
-                  faceVerifiedRef.current = true;
-                  onFaceVerified();
-                }
-
-                const estimate = estimateGaze(faces[0]);
-
-                if (estimate) {
-                  gazeSamplesRef.current = [
-                    ...gazeSamplesRef.current.slice(-6),
-                    estimate,
-                  ];
-
-                  // Smooth short-lived landmark jitter before classifying gaze.
-                  const samples = gazeSamplesRef.current;
-                  const smoothedHorizontal = samples.reduce(
-                    (total, sample) => total + sample.horizontalPosition,
-                    0
-                  ) / samples.length;
-                  const smoothedVertical = samples.reduce(
-                    (total, sample) => total + sample.verticalPosition,
-                    0
-                  ) / samples.length;
-                  const averageConfidence = samples.reduce(
-                    (total, sample) => total + sample.confidence,
-                    0
-                  ) / samples.length;
-
-                  const horizontalAway =
-                    smoothedHorizontal < threshold ||
-                    smoothedHorizontal > 1 - threshold;
-                  const verticalAway =
-                    smoothedVertical < threshold ||
-                    smoothedVertical > 1 - threshold;
-                  const lookingAway = horizontalAway || verticalAway;
-
-                  if (lookingAway && samples.length >= 4) {
-                    if (gazeAwaySinceRef.current === null) {
-                      gazeAwaySinceRef.current = now;
-                    }
-
-                    if (now - gazeAwaySinceRef.current >= 1200) {
-                      reportWithCooldown("gaze", () => onGazeAway({
-                        direction: horizontalAway
-                          ? (smoothedHorizontal < threshold ? "left" : "right")
-                          : (smoothedVertical < threshold ? "up" : "down"),
-                        normalized_horizontal_position: Number(smoothedHorizontal.toFixed(3)),
-                        normalized_vertical_position: Number(smoothedVertical.toFixed(3)),
-                        confidence: Number(averageConfidence.toFixed(2)),
-                        consistent_samples: samples.length,
-                        detector: "mediapipe_face_landmarker",
-                        estimation: "bilateral_iris_ratio_2d_smoothed",
-                      }));
-                    }
-                  } else {
-                    gazeAwaySinceRef.current = null;
-                  }
-                } else {
-                  gazeSamplesRef.current = [];
-                  gazeAwaySinceRef.current = null;
-                }
-              } else {
-                gazeSamplesRef.current = [];
-                gazeAwaySinceRef.current = null;
-              }
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "Face detector failed.";
-              reportWithCooldown("detector-error", () => onDetectorError(message), 15000);
-            }
-          }
-
-          animationRef.current = requestAnimationFrame(detect);
-        };
-
         animationRef.current = requestAnimationFrame(detect);
       } catch (error) {
         if (cancelled) return;
         setStatus("unavailable");
         const message = error instanceof Error
           ? error.message
-          : "Unable to initialize the face detector.";
+          : "Unable to initialize the TensorFlow.js face detector.";
         onDetectorError(message);
       }
     }
@@ -330,10 +406,15 @@ export default function FaceProctoring({
 
     return () => {
       cancelled = true;
-      if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+      }
       animationRef.current = null;
-      if (landmarker) landmarker.close();
-      if (video) video.srcObject = null;
+      detector?.dispose();
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+      }
     };
   }, [
     stream,
@@ -355,17 +436,18 @@ export default function FaceProctoring({
         Face and gaze analysis:{" "}
         <span className={status === "ready" ? "font-semibold text-green-400" : "font-semibold text-amber-300"}>
           {status === "ready"
-            ? "Active (on this device)"
+            ? "Active (TensorFlow.js on this device)"
             : status === "loading"
-              ? "Loading detector..."
+              ? "Loading TensorFlow.js detector..."
               : status === "unavailable"
                 ? "Unavailable"
                 : "Waiting for camera"}
         </span>
       </p>
       <p className="mt-1 text-[11px] text-slate-400">
-        Camera frames are analysed locally in this browser and are not uploaded by this detector.
-        Gaze checks are approximate and may be affected by lighting, glasses, and camera position.
+        MediaPipe FaceMesh runs through the TensorFlow.js runtime in this browser.
+        Camera frames are analysed locally and are not uploaded. Gaze checks are
+        approximate and may be affected by lighting, glasses, and camera position.
       </p>
     </div>
   );
