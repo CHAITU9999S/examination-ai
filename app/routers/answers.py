@@ -15,6 +15,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
@@ -941,3 +942,63 @@ async def upload_image_answer(
             else "OCR is unavailable. The examiner must review the image manually."
         ),
     }
+
+
+# ==========================================
+# GET QUESTION PROMPT IMAGE FOR ACTIVE EXAM
+# ==========================================
+
+@legacy_router.get("/{session_id}/questions/{question_id}/image")
+def get_exam_question_image(
+    session_id: int,
+    question_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    """Serve a prompt image only to a student assigned that question."""
+
+    session = validate_student_exam_token(
+        credentials,
+        session_id,
+        db,
+    )
+
+    if (
+        session.status != "in_progress"
+        or session.expires_at is None
+        or datetime.utcnow() >= session.expires_at
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The examination session is no longer active.",
+        )
+
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question is not part of your examination paper.",
+        )
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id,
+    ).first()
+
+    if question is None or not question.question_image_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question image not found.",
+        )
+
+    upload_root = Path(
+        os.getenv("QUESTION_UPLOAD_DIR")
+        or os.getenv("UPLOAD_DIRECTORY", "uploads")
+    ).resolve()
+    image_path = (upload_root / question.question_image_path).resolve()
+
+    if not image_path.is_relative_to(upload_root) or not image_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question image file is unavailable.",
+        )
+
+    return FileResponse(image_path)
