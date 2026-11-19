@@ -31,12 +31,23 @@ interface QuestionResult {
   }> | null;
 }
 
+interface CohortDistribution {
+  cohort_size: number;
+  current_student_percentage: number | null;
+  score_bands: Array<{
+    label: string;
+    count: number;
+    share_percentage: number;
+  }>;
+}
+
 interface ResultDetails {
   exam_title: string;
   total_marks: number;
   obtained_marks: number;
   percentage: number;
   percentile: number;
+  cohort_distribution?: CohortDistribution;
   published_at?: string | null;
   question_results: QuestionResult[];
 }
@@ -138,6 +149,54 @@ export default function StudentResultDetailPage() {
                 <p className="mt-2 text-xs text-slate-500">Compared with published results for this exam.</p>
               </article>
             </section>
+
+            {result.cohort_distribution && (
+              <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold">Cohort score distribution</h2>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Anonymized published scores for this examination
+                    </p>
+                  </div>
+                  <p className="text-sm text-slate-400">
+                    {result.cohort_distribution.cohort_size} published results
+                  </p>
+                </div>
+                <div
+                  className="mt-6 grid grid-cols-5 items-end gap-2 sm:grid-cols-10"
+                  role="img"
+                  aria-label="Distribution of published student scores grouped into ten-percent bands"
+                >
+                  {result.cohort_distribution.score_bands.map((band) => {
+                    const maxShare = Math.max(
+                      1,
+                      ...result.cohort_distribution!.score_bands.map((item) => item.share_percentage)
+                    );
+                    const isCurrentBand =
+                      result.cohort_distribution!.current_student_percentage !== null &&
+                      result.cohort_distribution!.current_student_percentage >= Number(band.label.split("-")[0]) &&
+                      result.cohort_distribution!.current_student_percentage <= Number(band.label.split("-")[1].replace("%", ""));
+                    return (
+                      <div key={band.label} className="flex min-w-0 flex-col items-center gap-2">
+                        <span className="text-[10px] tabular-nums text-slate-400">{band.count}</span>
+                        <div className="flex h-32 w-full items-end rounded-t bg-slate-800">
+                          <div
+                            className={`w-full rounded-t ${isCurrentBand ? "bg-purple-400" : "bg-blue-500"}`}
+                            style={{ height: `${Math.max(3, (band.share_percentage / maxShare) * 100)}%` }}
+                            title={`${band.label}: ${band.count} students`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-slate-400 sm:text-[10px]">{band.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-4 text-xs text-slate-500">
+                  Purple marks the score band containing your result. Individual student scores are not disclosed.
+                </p>
+              </section>
+            )}
 
             <section className="mt-10 space-y-4">
               <h2 className="text-xl font-bold">Question-wise evaluation</h2>
