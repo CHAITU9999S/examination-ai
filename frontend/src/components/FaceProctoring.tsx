@@ -7,6 +7,7 @@ interface FaceProctoringProps {
   enabled: boolean;
   sensitivity?: number;
   onFaceMissing: () => void;
+  onFaceVerified: () => void;
   onMultipleFaces: () => void;
   onGazeAway: (data: Record<string, unknown>) => void;
   onDetectorError: (message: string) => void;
@@ -83,6 +84,7 @@ export default function FaceProctoring({
   enabled,
   sensitivity = 0.5,
   onFaceMissing,
+  onFaceVerified,
   onMultipleFaces,
   onGazeAway,
   onDetectorError,
@@ -91,6 +93,8 @@ export default function FaceProctoring({
   const animationRef = useRef<number | null>(null);
   const lastDetectionRef = useRef(0);
   const missingSinceRef = useRef<number | null>(null);
+  const facePresentSinceRef = useRef<number | null>(null);
+  const faceVerifiedRef = useRef(false);
   const gazeAwaySinceRef = useRef<number | null>(null);
   const gazeSamplesRef = useRef<HorizontalGazeEstimate[]>([]);
   const lastReportedRef = useRef<Record<string, number>>({});
@@ -122,6 +126,8 @@ export default function FaceProctoring({
       gazeSamplesRef.current = [];
       gazeAwaySinceRef.current = null;
       missingSinceRef.current = null;
+      facePresentSinceRef.current = null;
+      faceVerifiedRef.current = false;
 
       try {
         if (!video) throw new Error("Video element is unavailable.");
@@ -173,6 +179,7 @@ export default function FaceProctoring({
               const faces = result.faceLandmarks || [];
 
               if (faces.length === 0) {
+                facePresentSinceRef.current = null;
                 if (missingSinceRef.current === null) missingSinceRef.current = now;
                 if (now - missingSinceRef.current >= 1500) {
                   reportWithCooldown("missing", onFaceMissing);
@@ -183,10 +190,24 @@ export default function FaceProctoring({
               }
 
               if (faces.length > 1) {
+                facePresentSinceRef.current = null;
                 reportWithCooldown("multiple", onMultipleFaces, 7000);
               }
 
               if (faces.length === 1) {
+                // Require one continuously detected face for at least one
+                // second before marking the exam-entry face check complete.
+                if (facePresentSinceRef.current === null) {
+                  facePresentSinceRef.current = now;
+                }
+                if (
+                  !faceVerifiedRef.current &&
+                  now - facePresentSinceRef.current >= 1000
+                ) {
+                  faceVerifiedRef.current = true;
+                  onFaceVerified();
+                }
+
                 const estimate = estimateHorizontalGaze(faces[0]);
 
                 if (estimate) {
@@ -270,6 +291,7 @@ export default function FaceProctoring({
     enabled,
     sensitivity,
     onFaceMissing,
+    onFaceVerified,
     onMultipleFaces,
     onGazeAway,
     onDetectorError,
