@@ -15,6 +15,12 @@ interface QuestionResult {
   awarded_marks: number;
   outcome: "correct" | "incorrect" | "partial" | "unanswered";
   examiner_feedback?: string | null;
+  rubric_scores?: Array<{
+    criterion: string;
+    description?: string | null;
+    max_marks: number;
+    awarded_marks: number;
+  }> | null;
   image_annotations?: Array<{
     annotation_type: string;
     x: number;
@@ -149,6 +155,22 @@ export default function StudentResultDetailPage() {
                   <p className="mt-4 text-sm text-slate-300">
                     Marks: {item.awarded_marks} / {item.maximum_marks}
                   </p>
+                  {item.rubric_scores && item.rubric_scores.length > 0 && (
+                    <div className="mt-4 rounded-lg border border-white/10 bg-slate-800 p-4">
+                      <p className="text-sm font-semibold text-slate-200">Rubric breakdown</p>
+                      <div className="mt-3 space-y-2">
+                        {item.rubric_scores.map((rubric, index) => (
+                          <div key={index} className="flex flex-wrap justify-between gap-3 text-sm">
+                            <div>
+                              <p className="font-medium">{rubric.criterion}</p>
+                              {rubric.description && <p className="text-xs text-slate-400">{rubric.description}</p>}
+                            </div>
+                            <p className="tabular-nums">{rubric.awarded_marks} / {rubric.max_marks}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {item.examiner_feedback && (
                     <div className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-4">
                       <p className="text-sm font-semibold text-blue-300">Examiner feedback</p>
