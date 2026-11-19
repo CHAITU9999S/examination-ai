@@ -15,7 +15,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
@@ -842,40 +842,43 @@ async def upload_image_answer(
             detail="Unsupported image format.",
         )
 
-    upload_root = Path(
-        os.getenv("ANSWER_UPLOAD_DIR") or os.getenv("UPLOAD_DIRECTORY", "uploads")
-    ).resolve()
-    answer_directory = upload_root / "answers"
-    answer_directory.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    mime_types = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "WEBP": "image/webp",
+        "TIFF": "image/tiff",
+        "BMP": "image/bmp",
+    }
+    media_type = mime_types.get(image_format)
+    if media_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported image format.",
+        )
 
-    stored_name = f"{uuid.uuid4().hex}{extension}"
-    stored_file = answer_directory / stored_name
-    relative_path = f"answers/{stored_name}"
-    thumbnail_directory = answer_directory / "thumbnails"
-    thumbnail_directory.mkdir(parents=True, exist_ok=True)
-    thumbnail_name = f"{Path(stored_name).stem}.webp"
-    thumbnail_file = thumbnail_directory / thumbnail_name
+    # Generate a compact thumbnail in memory; both files are stored in Neon.
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as source_image:
+            thumbnail = ImageOps.exif_transpose(source_image).convert("RGB")
+            thumbnail.thumbnail((480, 480), Image.Resampling.LANCZOS)
+            thumbnail_buffer = io.BytesIO()
+            thumbnail.save(
+                thumbnail_buffer,
+                format="WEBP",
+                quality=82,
+                method=6,
+            )
+            thumbnail_bytes = thumbnail_buffer.getvalue()
+    except (OSError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to process the uploaded image.",
+        )
 
     ocr_result = None
     ocr_available = True
 
     try:
-        stored_file.write_bytes(image_bytes)
-
-        # Generate a separate, bounded thumbnail for examiner review.
-        with Image.open(io.BytesIO(image_bytes)) as source_image:
-            thumbnail = ImageOps.exif_transpose(source_image).convert("RGB")
-            thumbnail.thumbnail((480, 480), Image.Resampling.LANCZOS)
-            thumbnail.save(
-                thumbnail_file,
-                format="WEBP",
-                quality=82,
-                method=6,
-            )
-
         try:
             ocr_result = extract_text_from_image(image_bytes)
         except HTTPException as error:
@@ -899,7 +902,10 @@ async def upload_image_answer(
             )
             db.add(answer)
 
-        answer.image_path = relative_path
+        answer.image_data = image_bytes
+        answer.thumbnail_data = thumbnail_bytes
+        answer.image_mime_type = media_type
+        answer.image_path = f"neon:{media_type}"
 
         if ocr_result and ocr_result.get("extracted_text"):
             answer.answer_text = ocr_result["extracted_text"]
@@ -911,26 +917,23 @@ async def upload_image_answer(
 
     except HTTPException:
         db.rollback()
-        stored_file.unlink(missing_ok=True)
-        thumbnail_file.unlink(missing_ok=True)
         raise
 
-    except (OSError, SQLAlchemyError):
+    except SQLAlchemyError:
         db.rollback()
-        stored_file.unlink(missing_ok=True)
-        thumbnail_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to save the uploaded answer image.",
+            detail="Unable to save the uploaded answer image in Neon.",
         )
 
     return {
-        "message": "Answer image uploaded successfully.",
+        "message": "Answer image uploaded and stored in Neon successfully.",
         "answer_id": answer.id,
         "session_id": session.id,
         "question_id": question_id,
         "image_uploaded": True,
-        "thumbnail_generated": thumbnail_file.is_file(),
+        "thumbnail_generated": bool(answer.thumbnail_data),
+        "storage": "neon_postgresql",
         "ocr_available": ocr_available,
         "ocr_completed": bool(
             ocr_result and ocr_result.get("extracted_text")
@@ -942,6 +945,7 @@ async def upload_image_answer(
             else "OCR is unavailable. The examiner must review the image manually."
         ),
     }
+
 
 
 # ==========================================
@@ -987,6 +991,19 @@ def get_exam_question_image(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question image not found.",
+        )
+
+    if question.question_image_data:
+        return Response(
+            content=question.question_image_data,
+            media_type=question.question_image_mime_type or "application/octet-stream",
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    if question.question_image_path.startswith("neon:"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored question image data is unavailable.",
         )
 
     upload_root = Path(
