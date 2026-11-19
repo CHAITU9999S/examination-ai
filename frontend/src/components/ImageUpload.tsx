@@ -1,10 +1,10 @@
-
 "use client";
 
 import {
   useEffect,
   useState,
   type ChangeEvent,
+  type DragEvent,
 } from "react";
 
 interface ImageUploadProps {
@@ -31,6 +31,7 @@ export default function ImageUpload({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -41,39 +42,26 @@ export default function ImageUpload({
     const objectUrl = URL.createObjectURL(selectedFile);
     setPreviewUrl(objectUrl);
 
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
+    return () => URL.revokeObjectURL(objectUrl);
   }, [selectedFile]);
 
-  function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
+  function acceptFile(file: File | undefined | null) {
+    if (!file) return;
+
     setError("");
 
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
     if (!acceptedTypes.includes(file.type)) {
-      setError(
-        "Unsupported image format. Please select a supported image."
-      );
-      event.target.value = "";
+      setError("Unsupported image format. Please select a supported image.");
       return;
     }
 
     if (file.size === 0) {
       setError("The selected file is empty.");
-      event.target.value = "";
       return;
     }
 
     if (file.size > maxSizeMB * 1024 * 1024) {
       setError(`Image size must not exceed ${maxSizeMB} MB.`);
-      event.target.value = "";
       return;
     }
 
@@ -81,18 +69,37 @@ export default function ImageUpload({
     onFileSelect(file);
   }
 
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    acceptFile(event.target.files?.[0]);
+    event.target.value = "";
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!disabled) setIsDragging(true);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+    if (disabled) return;
+    acceptFile(event.dataTransfer.files?.[0]);
+  }
+
   function removeFile() {
     setSelectedFile(null);
     setError("");
     onFileSelect(null);
 
-    const input = document.getElementById(
+    const fileInput = document.getElementById(
       "exam-image-upload"
     ) as HTMLInputElement | null;
+    const cameraInput = document.getElementById(
+      "exam-camera-capture"
+    ) as HTMLInputElement | null;
 
-    if (input) {
-      input.value = "";
-    }
+    if (fileInput) fileInput.value = "";
+    if (cameraInput) cameraInput.value = "";
   }
 
   return (
@@ -101,17 +108,16 @@ export default function ImageUpload({
         <h3 className="text-lg font-semibold text-slate-900">
           Upload Answer Image
         </h3>
-
         <p className="mt-1 text-sm text-slate-500">
           Upload a clear photograph or scan of your handwritten answer.
         </p>
       </div>
 
-      <label
-        htmlFor="exam-image-upload"
-        className={`flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 text-center transition hover:border-blue-500 hover:bg-blue-50 ${
-          disabled ? "cursor-not-allowed opacity-50" : ""
-        }`}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        className={`flex min-h-36 flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition ${isDragging ? "border-blue-600 bg-blue-50" : "border-slate-300 bg-slate-50"} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
       >
         <span className="text-3xl" aria-hidden="true">
           <svg
@@ -132,12 +138,26 @@ export default function ImageUpload({
         </span>
 
         <span className="mt-2 text-sm font-semibold text-slate-700">
-          Choose an image
+          Drag and drop an image here
         </span>
-
         <span className="mt-1 text-xs text-slate-500">
           JPEG, PNG, WEBP, TIFF or BMP · Maximum {maxSizeMB} MB
         </span>
+
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <label
+            htmlFor="exam-image-upload"
+            className={`cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 ${disabled ? "pointer-events-none opacity-50" : ""}`}
+          >
+            Choose from device
+          </label>
+          <label
+            htmlFor="exam-camera-capture"
+            className={`cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 ${disabled ? "pointer-events-none opacity-50" : ""}`}
+          >
+            Take photo
+          </label>
+        </div>
 
         <input
           id="exam-image-upload"
@@ -147,13 +167,19 @@ export default function ImageUpload({
           disabled={disabled}
           className="sr-only"
         />
-      </label>
+        <input
+          id="exam-camera-capture"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+          disabled={disabled}
+          className="sr-only"
+        />
+      </div>
 
       {error && (
-        <p
-          role="alert"
-          className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
-        >
+        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -165,12 +191,10 @@ export default function ImageUpload({
               <p className="break-all text-sm font-semibold text-slate-800">
                 {selectedFile.name}
               </p>
-
               <p className="mt-1 text-xs text-slate-500">
                 {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
               </p>
             </div>
-
             <button
               type="button"
               onClick={removeFile}
@@ -181,19 +205,20 @@ export default function ImageUpload({
             </button>
           </div>
 
-          {previewUrl && selectedFile.type !== "image/tiff" && selectedFile.type !== "image/bmp" && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-slate-600">
-                Image Preview
-              </p>
-
-              <img
-                src={previewUrl}
-                alt="Selected examination answer preview"
-                className="max-h-72 w-full rounded-lg border border-slate-200 bg-white object-contain"
-              />
-            </div>
-          )}
+          {previewUrl &&
+            selectedFile.type !== "image/tiff" &&
+            selectedFile.type !== "image/bmp" && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-slate-600">
+                  Image Preview
+                </p>
+                <img
+                  src={previewUrl}
+                  alt="Selected examination answer preview"
+                  className="max-h-72 w-full rounded-lg border border-slate-200 bg-white object-contain"
+                />
+              </div>
+            )}
 
           <p className="text-xs font-medium text-green-700">
             Image selected. Use the upload button in the examination form to send it for OCR and examiner review.
