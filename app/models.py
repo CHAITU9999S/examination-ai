@@ -472,6 +472,10 @@ class Answer(Base):
 
     ai_suggestion_generated_at = Column(DateTime(), nullable=True)
 
+    examiner_feedback = Column(Text, nullable=True)
+
+    image_annotations = Column(JSON, nullable=True)
+
     # Compatibility with existing evaluation code.
     marks_awarded = synonym("awarded_marks")
 
@@ -523,6 +527,15 @@ class Result(Base):
     percentage = Column(Float, nullable=True)
 
     evaluated_at = Column(DateTime(), nullable=True)
+
+    is_published = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+
+    published_at = Column(DateTime(), nullable=True)
 
     session = relationship(
         "ExamSession",
