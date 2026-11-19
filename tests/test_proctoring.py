@@ -602,3 +602,54 @@ def test_positive_tab_switch_threshold_flags_session(
     assert response.status_code == 200
     assert response.json()["auto_flag_threshold"] == 1
     assert response.json()["auto_flagged"] is True
+
+def test_heartbeat_uses_server_persisted_events_not_client_counters(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["exam"].max_tab_switch_warnings = 1
+    db_session.commit()
+
+    event_response = submit_event(client, data, "tab_switch")
+    assert event_response.status_code in (200, 201)
+
+    websocket_url = (
+        f"/exam-sessions/{data['session'].id}/proctoring/heartbeat"
+        f"?token={data['token']}"
+    )
+
+    with client.websocket_connect(websocket_url) as websocket:
+        websocket.send_json({
+            "type": "heartbeat",
+            "signals": {
+                "event_counts": {
+                    "tab_switch": 999,
+                    "multiple_faces": 999,
+                },
+                "total_event_count": 1998,
+                "tab_switch_count": 999,
+                "auto_flagged": True,
+            },
+        })
+
+        acknowledgement = websocket.receive_json()
+
+    assert acknowledgement["type"] == "heartbeat_ack"
+    assert acknowledgement["server_event_counts"] == {
+        "tab_switch": 1,
+    }
+    assert acknowledgement["server_suspicion_score"] == pytest.approx(10)
+    assert acknowledgement["server_auto_flagged"] is True
+    assert acknowledgement["signals_received"]["tab_switch_count"] == 1
+    assert (
+        acknowledgement["signals_received"]["client_reported_signals"]
+        ["tab_switch_count"]
+        == 999
+    )
+
+    db_session.refresh(data["session"])
+    assert data["session"].last_heartbeat_signals["tab_switch_count"] == 1
+    assert data["session"].last_heartbeat_signals["auto_flagged"] is True
+
