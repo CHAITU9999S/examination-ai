@@ -476,6 +476,8 @@ class Answer(Base):
 
     image_annotations = Column(JSON, nullable=True)
 
+    rubric_scores = Column(JSON, nullable=True)
+
     # Compatibility with existing evaluation code.
     marks_awarded = synonym("awarded_marks")
 
