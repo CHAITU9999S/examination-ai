@@ -1,4 +1,3 @@
-
 import os
 from contextlib import asynccontextmanager
 
@@ -85,14 +84,25 @@ app = FastAPI(
 # CORS CONFIGURATION
 # ==========================================
 
-allowed_origins = [
-    origin.strip()
+# Keep the deployed Vercel frontend explicitly allowed.
+# Additional origins can be supplied through Render's CORS_ORIGINS
+# environment variable as a comma-separated list.
+configured_origins = [
+    origin.strip().rstrip("/")
     for origin in os.getenv(
         "CORS_ORIGINS",
         "http://localhost:3000"
     ).split(",")
     if origin.strip()
 ]
+
+VERCEL_FRONTEND_ORIGIN = "https://examination-ai.vercel.app"
+
+allowed_origins = list(
+    dict.fromkeys(
+        configured_origins + [VERCEL_FRONTEND_ORIGIN]
+    )
+)
 
 app.add_middleware(
     CORSMiddleware,
