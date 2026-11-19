@@ -27,6 +27,17 @@ interface PendingAnswer {
   ai_matched_points?: string[] | null;
   ai_missed_points?: string[] | null;
   ai_model?: string | null;
+  examiner_feedback?: string | null;
+  image_annotations?: ImageAnnotation[] | null;
+}
+
+interface ImageAnnotation {
+  annotation_type: "highlight" | "comment";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
 }
 
 interface GradingSuggestion {
@@ -54,6 +65,14 @@ export default function ExaminerGradingPage() {
   const [saving, setSaving] = useState(false);
   const [awardedMarks, setAwardedMarks] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [examinerFeedback, setExaminerFeedback] = useState("");
+  const [imageAnnotations, setImageAnnotations] = useState<ImageAnnotation[]>([]);
+  const [annotationType, setAnnotationType] = useState<"highlight" | "comment">("comment");
+  const [annotationX, setAnnotationX] = useState("50");
+  const [annotationY, setAnnotationY] = useState("50");
+  const [annotationWidth, setAnnotationWidth] = useState("15");
+  const [annotationHeight, setAnnotationHeight] = useState("10");
+  const [annotationText, setAnnotationText] = useState("");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -187,6 +206,9 @@ export default function ExaminerGradingPage() {
           ? String(answer.ai_suggested_marks)
           : ""
     );
+    setExaminerFeedback(answer.examiner_feedback || "");
+    setImageAnnotations(answer.image_annotations || []);
+    setAnnotationText("");
     setError("");
     setMessage("");
   }
@@ -264,6 +286,8 @@ export default function ExaminerGradingPage() {
           headers,
           body: JSON.stringify({
             awarded_marks: marks,
+            examiner_feedback: examinerFeedback.trim() || null,
+            image_annotations: imageAnnotations,
           }),
         }
       );
@@ -623,6 +647,130 @@ export default function ExaminerGradingPage() {
                   You can accept, modify, or ignore the AI suggestion.
                 </p>
               </div>
+
+              <div>
+                <label
+                  htmlFor="examinerFeedback"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Examiner feedback for the student
+                </label>
+                <textarea
+                  id="examinerFeedback"
+                  rows={4}
+                  maxLength={5000}
+                  value={examinerFeedback}
+                  onChange={(event) => setExaminerFeedback(event.target.value)}
+                  placeholder="Write feedback explaining the awarded marks..."
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {selectedAnswer.question_type === "image_upload" && (
+                <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                  <h3 className="font-semibold">Image answer annotations</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Add a comment or highlight marker using percentage coordinates on the submitted answer image.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm">
+                      Annotation type
+                      <select
+                        value={annotationType}
+                        onChange={(event) => setAnnotationType(event.target.value as "highlight" | "comment")}
+                        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                      >
+                        <option value="comment">Text comment</option>
+                        <option value="highlight">Highlight area</option>
+                      </select>
+                    </label>
+                    <label className="text-sm">
+                      X position (%)
+                      <input type="number" min="0" max="100" value={annotationX} onChange={(event) => setAnnotationX(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="text-sm">
+                      Y position (%)
+                      <input type="number" min="0" max="100" value={annotationY} onChange={(event) => setAnnotationY(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    {annotationType === "highlight" && (
+                      <>
+                        <label className="text-sm">
+                          Width (%)
+                          <input type="number" min="0" max="100" value={annotationWidth} onChange={(event) => setAnnotationWidth(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                        </label>
+                        <label className="text-sm">
+                          Height (%)
+                          <input type="number" min="0" max="100" value={annotationHeight} onChange={(event) => setAnnotationHeight(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <label className="mt-3 block text-sm">
+                    Annotation text
+                    <input
+                      type="text"
+                      maxLength={500}
+                      value={annotationText}
+                      onChange={(event) => setAnnotationText(event.target.value)}
+                      placeholder="Explain this highlight or comment"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const x = Number(annotationX);
+                      const y = Number(annotationY);
+                      const width = annotationType === "highlight" ? Number(annotationWidth) : 0;
+                      const height = annotationType === "highlight" ? Number(annotationHeight) : 0;
+                      if (
+                        !annotationText.trim() ||
+                        !Number.isFinite(x) || !Number.isFinite(y) ||
+                        x < 0 || x > 100 || y < 0 || y > 100 ||
+                        width < 0 || width > 100 || height < 0 || height > 100
+                      ) {
+                        setError("Enter valid annotation text and coordinates from 0 to 100.");
+                        return;
+                      }
+                      setImageAnnotations((current) => [
+                        ...current,
+                        {
+                          annotation_type: annotationType,
+                          x,
+                          y,
+                          width,
+                          height,
+                          text: annotationText.trim(),
+                        },
+                      ]);
+                      setAnnotationText("");
+                      setError("");
+                    }}
+                    className="mt-4 rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10"
+                  >
+                    Add annotation
+                  </button>
+                  {imageAnnotations.length > 0 && (
+                    <ul className="mt-4 space-y-2">
+                      {imageAnnotations.map((annotation, index) => (
+                        <li key={index} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-900 p-3 text-sm">
+                          <span className="text-slate-300">
+                            <strong className="capitalize">{annotation.annotation_type}</strong>
+                            {" · "}({annotation.x}%, {annotation.y}%): {annotation.text}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setImageAnnotations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                            className="text-xs text-red-300 hover:text-red-200"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <button
                 type="button"
