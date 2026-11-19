@@ -64,6 +64,7 @@ export default function StudentExamPage() {
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [faceVerified, setFaceVerified] = useState(false);
   const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
   const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
   const [imageUploading, setImageUploading] = useState(false);
@@ -114,6 +115,11 @@ export default function StudentExamPage() {
 
   const handleCameraStream = useCallback((stream: MediaStream | null) => {
     setCameraStream(stream);
+    if (!stream) setFaceVerified(false);
+  }, []);
+
+  const handleFaceVerified = useCallback(() => {
+    setFaceVerified(true);
   }, []);
 
   const handleCameraStatus = useCallback((status: "active" | "denied" | "unavailable" | "error") => {
@@ -764,7 +770,31 @@ export default function StudentExamPage() {
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
-        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+        <section className="relative rounded-2xl border border-white/10 bg-slate-900 p-6">
+          {paper.proctoring_enabled && !faceVerified && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-slate-950/95 p-6 text-center"
+            >
+              <div className="max-w-md">
+                <p className="text-lg font-bold text-white">
+                  Complete face verification to begin
+                </p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  Keep your face clearly visible in the webcam. The examination
+                  questions remain locked until one face is detected continuously
+                  for a short verification period.
+                </p>
+                <p className="mt-4 text-sm text-amber-300">
+                  {cameraStream
+                    ? "Face verification is in progress..."
+                    : "Allow camera access and keep the webcam connected."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div
               role="alert"
@@ -909,12 +939,13 @@ export default function StudentExamPage() {
                 enabled
                 sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
                 onFaceMissing={proctoring.reportFaceNotDetected}
+                onFaceVerified={handleFaceVerified}
                 onMultipleFaces={proctoring.reportMultipleFaces}
                 onGazeAway={proctoring.reportGazeAway}
                 onDetectorError={proctoring.reportWebcamError}
               />
               <p className="text-xs text-slate-400">
-                Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
+                Entry face check: {faceVerified ? "Verified" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
                 Heartbeat: {websocketStatus}
               </p>
               {proctoring.isAutoFlagged && (
@@ -944,7 +975,7 @@ export default function StudentExamPage() {
             <button
               type="button"
               onClick={() => setShowSubmitConfirmation(true)}
-              disabled={submitting}
+              disabled={submitting || (paper.proctoring_enabled && !faceVerified)}
               className="mt-5 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Submit Examination
