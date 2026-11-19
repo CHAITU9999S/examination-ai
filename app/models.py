@@ -171,6 +171,9 @@ class Question(Base):
 
     model_answer_text = Column(Text, nullable=True)
 
+    # Relative path of an optional image attached to the question prompt.
+    question_image_path = Column(String(500), nullable=True)
+
     # Compatibility with existing code using model_answer.
     model_answer = synonym("model_answer_text")
 
