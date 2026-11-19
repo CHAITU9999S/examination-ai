@@ -123,7 +123,13 @@ export default function StudentResultDetailPage() {
               <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
                 <p className="text-sm text-slate-400">Cohort percentile</p>
                 <p className="mt-3 text-3xl font-bold tabular-nums">{Number(result.percentile).toFixed(1)}</p>
-                <p className="mt-1 text-xs text-slate-500">Compared with published results for this exam.</p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-700" aria-label="Cohort percentile">
+                  <div
+                    className="h-full rounded-full bg-purple-500"
+                    style={{ width: `${Math.max(0, Math.min(100, Number(result.percentile || 0)))}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Compared with published results for this exam.</p>
               </article>
             </section>
 
