@@ -64,6 +64,7 @@ export default function StudentExamPage() {
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [examAccessToken, setExamAccessToken] = useState<string | null>(null);
   const [faceVerified, setFaceVerified] = useState(false);
   const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
   const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
@@ -73,8 +74,10 @@ export default function StudentExamPage() {
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
   const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const refreshInFlightRef = useRef(false);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
+  const examRefreshTokenKey = `examguard_exam_refresh_${sessionId}`;
   const examIdKey = `examguard_exam_id_${sessionId}`;
 
   const getExamToken = useCallback(() => {
@@ -94,6 +97,49 @@ export default function StudentExamPage() {
       "Content-Type": "application/json",
     };
   }, [getExamToken, router]);
+
+  const refreshExamAccessToken = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+
+    const refreshToken = sessionStorage.getItem(examRefreshTokenKey);
+    if (!refreshToken) return;
+
+    refreshInFlightRef.current = true;
+    try {
+      const response = await fetch(
+        `${API_URL}/exam-sessions/refresh/${sessionId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          cache: "no-store",
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to renew the examination session token.");
+      }
+      if (
+        typeof data.access_token !== "string" ||
+        typeof data.refresh_token !== "string"
+      ) {
+        throw new Error("The server returned an invalid token refresh response.");
+      }
+
+      sessionStorage.setItem(examTokenKey, data.access_token);
+      sessionStorage.setItem(examRefreshTokenKey, data.refresh_token);
+      setExamAccessToken(data.access_token);
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Unable to renew the examination session token."
+      );
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }, [examRefreshTokenKey, examTokenKey, sessionId]);
 
   const handleProctoringEvent = useCallback((event: {
     event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error";
@@ -367,6 +413,7 @@ export default function StudentExamPage() {
       }
 
       sessionStorage.removeItem(examTokenKey);
+      sessionStorage.removeItem(examRefreshTokenKey);
       sessionStorage.removeItem(examIdKey);
       sessionStorage.removeItem("examguard_active_exam_session");
 
@@ -390,6 +437,7 @@ export default function StudentExamPage() {
     }
   }, [
     examTokenKey,
+    examRefreshTokenKey,
     examIdKey,
     getHeaders,
     router,
@@ -431,6 +479,8 @@ export default function StudentExamPage() {
 
     loadPaper();
     loadRemainingTime();
+    setExamAccessToken(sessionStorage.getItem(examTokenKey));
+    void refreshExamAccessToken();
 
     const token = sessionStorage.getItem(examTokenKey);
     if (token) {
@@ -463,14 +513,25 @@ export default function StudentExamPage() {
     const timeInterval = setInterval(() => {
       loadRemainingTime();
     }, 15000);
+    const tokenRefreshInterval = setInterval(() => {
+      void refreshExamAccessToken();
+    }, 4 * 60 * 1000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshExamAccessToken();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       clearInterval(timeInterval);
+      clearInterval(tokenRefreshInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
       saveTimeoutsRef.current = {};
     };
-  }, [examTokenKey, loadPaper, loadRemainingTime, router, sessionId]);
+  }, [examTokenKey, loadPaper, loadRemainingTime, refreshExamAccessToken, router, sessionId]);
 
   useEffect(() => {
     if (remainingSeconds === null || remainingSeconds <= 0) {
@@ -494,9 +555,7 @@ export default function StudentExamPage() {
     }
   }, [remainingSeconds, submitExam]);
 
-  const heartbeatToken = typeof window !== "undefined"
-    ? sessionStorage.getItem(examTokenKey)
-    : null;
+  const heartbeatToken = examAccessToken;
   const heartbeatUrl = paper?.proctoring_enabled && heartbeatToken
     ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
     : null;
