@@ -655,3 +655,54 @@ def test_heartbeat_uses_server_persisted_events_not_client_counters(
     assert stored_session.last_heartbeat_signals["tab_switch_count"] == 1
     assert stored_session.last_heartbeat_signals["auto_flagged"] is True
 
+
+
+def test_admin_can_list_flagged_sessions_without_webcam_snapshots(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["exam"].max_tab_switch_warnings = 1
+    db_session.commit()
+    event_response = submit_event(client, data, "tab_switch")
+    assert event_response.status_code in (200, 201)
+
+    admin = User(
+        full_name="Flagged Review Admin",
+        email="flagged-review-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    from app.auth import create_access_token
+    token = create_access_token({"sub": str(admin.id)})
+    response = client.get(
+        "/exam-sessions/proctoring/flagged",
+        headers=proctoring_headers(token),
+    )
+
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+    assert len(sessions) == 1
+    flagged = sessions[0]
+    assert flagged["session_id"] == data["session"].id
+    assert flagged["auto_flagged"] is True
+    assert flagged["webcam_snapshots_available"] is False
+    assert "snapshot_data" not in flagged["events"][0]
+
+
+def test_student_cannot_list_flagged_sessions(
+    client,
+    proctoring_data,
+):
+    data = proctoring_data
+    response = client.get(
+        "/exam-sessions/proctoring/flagged",
+        headers=proctoring_headers(data["token"]),
+    )
+    assert response.status_code == 403
