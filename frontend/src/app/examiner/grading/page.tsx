@@ -393,6 +393,8 @@ export default function ExaminerGradingPage() {
       setSelectedAnswer(null);
       setSuggestion(null);
       setAwardedMarks("");
+      setExaminerFeedback("");
+      setImageAnnotations([]);
 
       await loadPendingAnswers();
     } catch (err) {
@@ -405,6 +407,16 @@ export default function ExaminerGradingPage() {
       setSaving(false);
     }
   }
+
+  const questionGroups = answers.reduce<Record<string, PendingAnswer[]>>(
+    (groups, answer) => {
+      const key = `${answer.exam_id}-${answer.question_id}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(answer);
+      return groups;
+    },
+    {}
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -502,7 +514,13 @@ export default function ExaminerGradingPage() {
             </p>
           ) : (
             <div className="mt-6 space-y-4">
-              {answers.map((answer) => (
+              {Object.entries(questionGroups).map(([groupKey, group]) => (
+                <div key={groupKey} className="rounded-xl border border-white/10 bg-slate-900/50 p-4">
+                  <h3 className="mb-3 font-semibold text-blue-300">
+                    {group[0].question_text}
+                  </h3>
+                  <div className="space-y-4">
+                  {group.map((answer) => (
                 <article
                   key={answer.answer_id}
                   className="rounded-xl border border-white/10 bg-slate-800/60 p-5"
@@ -572,6 +590,9 @@ export default function ExaminerGradingPage() {
                     </button>
                   </div>
                 </article>
+                  ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -590,6 +611,8 @@ export default function ExaminerGradingPage() {
                   setSelectedAnswer(null);
                   setSuggestion(null);
                   setAwardedMarks("");
+                  setExaminerFeedback("");
+                  setImageAnnotations([]);
                 }}
                 className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
               >
@@ -630,11 +653,30 @@ export default function ExaminerGradingPage() {
                 {selectedAnswer.image_path && (
                   <div className="mt-3 rounded-lg bg-slate-800 p-4">
                     {imagePreviewUrl ? (
-                      <img
-                        src={imagePreviewUrl}
-                        alt="Uploaded handwritten examination answer"
-                        className="max-h-[32rem] w-full rounded-lg object-contain"
-                      />
+                      <div className="relative inline-block max-w-full">
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Uploaded handwritten examination answer"
+                          className="max-h-[32rem] w-full rounded-lg object-contain"
+                        />
+                        {imageAnnotations.map((annotation, index) => (
+                          <div
+                            key={index}
+                            title={annotation.text}
+                            className={annotation.annotation_type === "highlight"
+                              ? "pointer-events-none absolute border-2 border-amber-400 bg-amber-300/10"
+                              : "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-400 bg-red-500/30 px-2 py-1 text-[10px] text-white"}
+                            style={{
+                              left: `${annotation.x}%`,
+                              top: `${annotation.y}%`,
+                              width: annotation.annotation_type === "highlight" ? `${annotation.width}%` : "auto",
+                              height: annotation.annotation_type === "highlight" ? `${annotation.height}%` : "auto",
+                            }}
+                          >
+                            {annotation.annotation_type === "comment" ? index + 1 : null}
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-sm text-slate-400">Loading uploaded answer image...</p>
                     )}
