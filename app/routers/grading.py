@@ -595,6 +595,61 @@ def grade_subjective_answer(
     }
 
 
+@router.get("/sessions")
+def list_submitted_sessions_for_review(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List submitted sessions the current examiner or Admin can review."""
+    require_examiner_or_admin(current_user)
+
+    query = db.query(
+        ExamSession,
+        Exam,
+        User,
+        Result,
+    ).join(
+        Exam,
+        ExamSession.exam_id == Exam.id,
+    ).join(
+        User,
+        ExamSession.student_id == User.id,
+    ).outerjoin(
+        Result,
+        Result.session_id == ExamSession.id,
+    ).filter(
+        ExamSession.status == "submitted",
+    )
+
+    role = getattr(current_user.role, "value", current_user.role)
+    if role == "examiner":
+        query = query.filter(Exam.created_by == current_user.id)
+
+    rows = query.order_by(
+        ExamSession.submitted_at.desc(),
+        ExamSession.id.desc(),
+    ).all()
+
+    return {
+        "sessions": [
+            {
+                "session_id": session.id,
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "submitted_at": session.submitted_at,
+                "result_ready": result is not None,
+                "is_published": bool(result.is_published) if result else False,
+                "obtained_marks": result.obtained_marks if result else None,
+                "total_marks": result.total_marks if result else None,
+                "percentage": result.percentage if result else None,
+            }
+            for session, exam, student, result in rows
+        ]
+    }
+
+
 @router.post("/sessions/{session_id}/bulk-grade")
 def bulk_grade_session_answers(
     session_id: int,
