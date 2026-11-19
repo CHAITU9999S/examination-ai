@@ -182,6 +182,9 @@ def get_my_result_details(
             "image_annotations": (
                 answer.image_annotations if answer else None
             ),
+            "rubric_scores": (
+                answer.rubric_scores if answer else None
+            ),
         })
 
     percentile = _get_percentile(
