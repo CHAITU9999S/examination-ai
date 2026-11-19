@@ -139,9 +139,25 @@ export const authService = {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
 
-    // Exam tokens are separate from normal login tokens.
+    // Exam access and refresh tokens are separate from normal login tokens.
+    // Clear every session-specific token so logout cannot leave a live exam
+    // credential available in this browser tab.
+    for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = sessionStorage.key(index);
+      if (
+        key &&
+        (
+          key.startsWith("examguard_exam_token_") ||
+          key.startsWith("examguard_exam_refresh_") ||
+          key.startsWith("examguard_exam_id_")
+        )
+      ) {
+        sessionStorage.removeItem(key);
+      }
+    }
     sessionStorage.removeItem("examguard_exam_token");
     sessionStorage.removeItem("examguard_access_token");
+    sessionStorage.removeItem("examguard_active_exam_session");
   },
 
   getToken(): string | null {

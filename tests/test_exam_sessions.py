@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from app.auth import (
     create_access_token,
     create_exam_access_token,
+    verify_token,
 )
 from app.services.session_service import get_or_create_session_question_ids
 from app.models import (
@@ -454,4 +455,131 @@ def test_student_starts_exam_using_exam_id_path(
     assert data["access_token"]
     assert data["token_type"] == "bearer"
     assert data["total_questions"] == 1
+
+def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
+    client,
+    db_session,
+):
+    student = create_student(
+        db_session,
+        email="rotating-token-student@test.com",
+    )
+    exam = create_exam(
+        db_session,
+        title="Rotating Token Exam",
+    )
+    question = QuestionBank(
+        question_text="A token refresh question",
+        question_type="MCQ",
+        subject="General",
+        difficulty="easy",
+        marks=1,
+        negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add(
+        ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=1,
+        )
+    )
+    db_session.commit()
+
+    login_token = create_access_token({"sub": str(student.id)})
+    start_response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {login_token}"},
+    )
+
+    assert start_response.status_code == 200
+    started = start_response.json()
+    assert started["refresh_token"]
+
+    session = db_session.query(ExamSession).filter_by(
+        id=started["session_id"],
+    ).one()
+    assert session.exam_token_refresh_hash
+    assert session.exam_token_refresh_hash != started["refresh_token"]
+
+    first_claims = verify_token(
+        started["access_token"],
+        expected_token_type="exam",
+    )
+    assert first_claims is not None
+    assert first_claims["exp"] <= first_claims["iat"] + 600
+
+    refresh_url = f"/exam-sessions/refresh/{started['session_id']}"
+    refresh_response = client.post(
+        refresh_url,
+        json={"refresh_token": started["refresh_token"]},
+    )
+
+    assert refresh_response.status_code == 200
+    refreshed = refresh_response.json()
+    assert refreshed["access_token"] != started["access_token"]
+    assert refreshed["refresh_token"] != started["refresh_token"]
+
+    replay_response = client.post(
+        refresh_url,
+        json={"refresh_token": started["refresh_token"]},
+    )
+    assert replay_response.status_code == 401
+
+    second_refresh_response = client.post(
+        refresh_url,
+        json={"refresh_token": refreshed["refresh_token"]},
+    )
+    assert second_refresh_response.status_code == 200
+
+def test_exam_refresh_rejects_inactive_student(
+    client,
+    db_session,
+):
+    student = create_student(
+        db_session,
+        email="inactive-refresh-student@test.com",
+    )
+    exam = create_exam(
+        db_session,
+        title="Inactive Refresh Exam",
+    )
+    question = QuestionBank(
+        question_text="A refresh authorization question",
+        question_type="MCQ",
+        subject="General",
+        difficulty="easy",
+        marks=1,
+        negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add(
+        ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=1,
+        )
+    )
+    db_session.commit()
+
+    login_token = create_access_token({"sub": str(student.id)})
+    start_response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {login_token}"},
+    )
+    assert start_response.status_code == 200
+    started = start_response.json()
+
+    student.is_active = False
+    db_session.commit()
+
+    refresh_response = client.post(
+        f"/exam-sessions/refresh/{started['session_id']}",
+        json={"refresh_token": started["refresh_token"]},
+    )
+    assert refresh_response.status_code == 403
 

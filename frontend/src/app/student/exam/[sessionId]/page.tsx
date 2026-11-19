@@ -64,6 +64,8 @@ export default function StudentExamPage() {
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [examAccessToken, setExamAccessToken] = useState<string | null>(null);
+  const [faceVerified, setFaceVerified] = useState(false);
   const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
   const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
   const [imageUploading, setImageUploading] = useState(false);
@@ -72,8 +74,10 @@ export default function StudentExamPage() {
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
   const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const refreshInFlightRef = useRef(false);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
+  const examRefreshTokenKey = `examguard_exam_refresh_${sessionId}`;
   const examIdKey = `examguard_exam_id_${sessionId}`;
 
   const getExamToken = useCallback(() => {
@@ -93,6 +97,49 @@ export default function StudentExamPage() {
       "Content-Type": "application/json",
     };
   }, [getExamToken, router]);
+
+  const refreshExamAccessToken = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+
+    const refreshToken = sessionStorage.getItem(examRefreshTokenKey);
+    if (!refreshToken) return;
+
+    refreshInFlightRef.current = true;
+    try {
+      const response = await fetch(
+        `${API_URL}/exam-sessions/refresh/${sessionId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          cache: "no-store",
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to renew the examination session token.");
+      }
+      if (
+        typeof data.access_token !== "string" ||
+        typeof data.refresh_token !== "string"
+      ) {
+        throw new Error("The server returned an invalid token refresh response.");
+      }
+
+      sessionStorage.setItem(examTokenKey, data.access_token);
+      sessionStorage.setItem(examRefreshTokenKey, data.refresh_token);
+      setExamAccessToken(data.access_token);
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Unable to renew the examination session token."
+      );
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }, [examRefreshTokenKey, examTokenKey, sessionId]);
 
   const handleProctoringEvent = useCallback((event: {
     event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error";
@@ -114,6 +161,11 @@ export default function StudentExamPage() {
 
   const handleCameraStream = useCallback((stream: MediaStream | null) => {
     setCameraStream(stream);
+    if (!stream) setFaceVerified(false);
+  }, []);
+
+  const handleFaceVerified = useCallback(() => {
+    setFaceVerified(true);
   }, []);
 
   const handleCameraStatus = useCallback((status: "active" | "denied" | "unavailable" | "error") => {
@@ -361,6 +413,7 @@ export default function StudentExamPage() {
       }
 
       sessionStorage.removeItem(examTokenKey);
+      sessionStorage.removeItem(examRefreshTokenKey);
       sessionStorage.removeItem(examIdKey);
       sessionStorage.removeItem("examguard_active_exam_session");
 
@@ -384,6 +437,7 @@ export default function StudentExamPage() {
     }
   }, [
     examTokenKey,
+    examRefreshTokenKey,
     examIdKey,
     getHeaders,
     router,
@@ -425,6 +479,8 @@ export default function StudentExamPage() {
 
     loadPaper();
     loadRemainingTime();
+    setExamAccessToken(sessionStorage.getItem(examTokenKey));
+    void refreshExamAccessToken();
 
     const token = sessionStorage.getItem(examTokenKey);
     if (token) {
@@ -457,14 +513,25 @@ export default function StudentExamPage() {
     const timeInterval = setInterval(() => {
       loadRemainingTime();
     }, 15000);
+    const tokenRefreshInterval = setInterval(() => {
+      void refreshExamAccessToken();
+    }, 4 * 60 * 1000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshExamAccessToken();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       clearInterval(timeInterval);
+      clearInterval(tokenRefreshInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
       saveTimeoutsRef.current = {};
     };
-  }, [examTokenKey, loadPaper, loadRemainingTime, router, sessionId]);
+  }, [examTokenKey, loadPaper, loadRemainingTime, refreshExamAccessToken, router, sessionId]);
 
   useEffect(() => {
     if (remainingSeconds === null || remainingSeconds <= 0) {
@@ -488,9 +555,7 @@ export default function StudentExamPage() {
     }
   }, [remainingSeconds, submitExam]);
 
-  const heartbeatToken = typeof window !== "undefined"
-    ? sessionStorage.getItem(examTokenKey)
-    : null;
+  const heartbeatToken = examAccessToken;
   const heartbeatUrl = paper?.proctoring_enabled && heartbeatToken
     ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
     : null;
@@ -519,6 +584,13 @@ export default function StudentExamPage() {
       ) {
         setRemainingSeconds(0);
         setError("The examination session has expired. Submitting your saved answers.");
+      } else if (
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "token_expired"
+      ) {
+        void refreshExamAccessToken();
       }
     },
   });
@@ -764,7 +836,31 @@ export default function StudentExamPage() {
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
-        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+        <section className="relative rounded-2xl border border-white/10 bg-slate-900 p-6">
+          {paper.proctoring_enabled && !faceVerified && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-slate-950/95 p-6 text-center"
+            >
+              <div className="max-w-md">
+                <p className="text-lg font-bold text-white">
+                  Complete the face-presence check to begin
+                </p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  Keep your face clearly visible in the webcam. The examination
+                  questions remain locked until one face is detected continuously
+                  for a short verification period.
+                </p>
+                <p className="mt-4 text-sm text-amber-300">
+                  {cameraStream
+                    ? "Face-presence check is in progress..."
+                    : "Allow camera access and keep the webcam connected."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div
               role="alert"
@@ -909,12 +1005,13 @@ export default function StudentExamPage() {
                 enabled
                 sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
                 onFaceMissing={proctoring.reportFaceNotDetected}
+                onFaceVerified={handleFaceVerified}
                 onMultipleFaces={proctoring.reportMultipleFaces}
                 onGazeAway={proctoring.reportGazeAway}
                 onDetectorError={proctoring.reportWebcamError}
               />
               <p className="text-xs text-slate-400">
-                Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
+                Face presence: {faceVerified ? "Confirmed" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
                 Heartbeat: {websocketStatus}
               </p>
               {proctoring.isAutoFlagged && (
@@ -924,6 +1021,27 @@ export default function StudentExamPage() {
                 >
                   The configured tab-switch warning limit has been reached.
                   This session has been flagged for examiner review.
+                </div>
+              )}
+              {proctoring.events.length > 0 && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3"
+                >
+                  <p className="text-xs font-semibold text-amber-200">
+                    Recent proctoring alerts
+                  </p>
+                  <ul className="space-y-1">
+                    {proctoring.events.slice(-3).reverse().map((event, index) => (
+                      <li
+                        key={`${event.event_type}-${event.timestamp}-${index}`}
+                        className="text-xs text-amber-100"
+                      >
+                        {event.description}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
               <p className="text-xs text-amber-300">
@@ -944,7 +1062,7 @@ export default function StudentExamPage() {
             <button
               type="button"
               onClick={() => setShowSubmitConfirmation(true)}
-              disabled={submitting}
+              disabled={submitting || (paper.proctoring_enabled && !faceVerified)}
               className="mt-5 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Submit Examination

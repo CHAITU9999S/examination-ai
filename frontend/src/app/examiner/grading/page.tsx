@@ -22,6 +22,11 @@ interface PendingAnswer {
   image_path?: string | null;
   marks: number;
   awarded_marks?: number | null;
+  ai_suggested_marks?: number | null;
+  ai_justification?: string | null;
+  ai_matched_points?: string[] | null;
+  ai_missed_points?: string[] | null;
+  ai_model?: string | null;
 }
 
 interface GradingSuggestion {
@@ -159,12 +164,28 @@ export default function ExaminerGradingPage() {
 
   function openAnswer(answer: PendingAnswer) {
     setSelectedAnswer(answer);
-    setSuggestion(null);
+
+    const hasSavedAISuggestion =
+      answer.ai_suggested_marks !== null &&
+      answer.ai_suggested_marks !== undefined;
+
+    setSuggestion(
+      hasSavedAISuggestion
+        ? {
+            suggested_marks: answer.ai_suggested_marks as number,
+            justification: answer.ai_justification || "No justification was saved.",
+            matched_points: answer.ai_matched_points || [],
+            missed_points: answer.ai_missed_points || [],
+          }
+        : null
+    );
+
     setAwardedMarks(
-      answer.awarded_marks === null ||
-        answer.awarded_marks === undefined
-        ? ""
-        : String(answer.awarded_marks)
+      answer.awarded_marks !== null && answer.awarded_marks !== undefined
+        ? String(answer.awarded_marks)
+        : hasSavedAISuggestion
+          ? String(answer.ai_suggested_marks)
+          : ""
     );
     setError("");
     setMessage("");
@@ -487,23 +508,32 @@ export default function ExaminerGradingPage() {
                 </p>
               </div>
 
-              <div>
-                <button
-                  type="button"
-                  onClick={requestAISuggestion}
-                  disabled={suggestionLoading}
-                  className="rounded-lg border border-purple-400/40 bg-purple-500/10 px-5 py-3 font-semibold text-purple-300 transition hover:bg-purple-500/20 disabled:opacity-50"
-                >
-                  {suggestionLoading
-                    ? "Generating AI Suggestion..."
-                    : "Get AI Grading Suggestion"}
-                </button>
+              {selectedAnswer.question_type === "short_answer" ||
+              selectedAnswer.question_type === "long_answer" ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={requestAISuggestion}
+                    disabled={suggestionLoading}
+                    className="rounded-lg border border-purple-400/40 bg-purple-500/10 px-5 py-3 font-semibold text-purple-300 transition hover:bg-purple-500/20 disabled:opacity-50"
+                  >
+                    {suggestionLoading
+                      ? "Generating AI Suggestion..."
+                      : suggestion
+                        ? "Regenerate AI Grading Suggestion"
+                        : "Get AI Grading Suggestion"}
+                  </button>
 
-                <p className="mt-2 text-xs text-slate-500">
-                  AI suggestions are advisory. The examiner must decide
-                  and save the final marks.
+                  <p className="mt-2 text-xs text-slate-500">
+                    AI suggestions are advisory. The examiner must decide
+                    and save the final marks.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  Handwritten image answers are reviewed manually by an examiner.
                 </p>
-              </div>
+              )}
 
               {suggestion && (
                 <div className="space-y-4 rounded-xl border border-purple-400/30 bg-purple-500/5 p-5">

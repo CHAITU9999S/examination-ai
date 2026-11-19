@@ -189,8 +189,9 @@ export default function StudentExamsPage() {
         data.exam_token ??
         data.exam_access_token ??
         data.token;
+      const examRefreshToken = data.refresh_token;
 
-      if (!sessionId || !examToken) {
+      if (!sessionId || !examToken || !examRefreshToken) {
         throw new Error(
           "The server did not return the examination session ID and secure exam token."
         );
@@ -200,6 +201,10 @@ export default function StudentExamsPage() {
       sessionStorage.setItem(
         `examguard_exam_token_${sessionId}`,
         examToken
+      );
+      sessionStorage.setItem(
+        `examguard_exam_refresh_${sessionId}`,
+        examRefreshToken
       );
 
       sessionStorage.setItem(
