@@ -534,3 +534,52 @@ def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
     )
     assert second_refresh_response.status_code == 200
 
+def test_exam_refresh_rejects_inactive_student(
+    client,
+    db_session,
+):
+    student = create_student(
+        db_session,
+        email="inactive-refresh-student@test.com",
+    )
+    exam = create_exam(
+        db_session,
+        title="Inactive Refresh Exam",
+    )
+    question = QuestionBank(
+        question_text="A refresh authorization question",
+        question_type="MCQ",
+        subject="General",
+        difficulty="easy",
+        marks=1,
+        negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add(
+        ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=1,
+        )
+    )
+    db_session.commit()
+
+    login_token = create_access_token({"sub": str(student.id)})
+    start_response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {login_token}"},
+    )
+    assert start_response.status_code == 200
+    started = start_response.json()
+
+    student.is_active = False
+    db_session.commit()
+
+    refresh_response = client.post(
+        f"/exam-sessions/refresh/{started['session_id']}",
+        json={"refresh_token": started["refresh_token"]},
+    )
+    assert refresh_response.status_code == 403
+
