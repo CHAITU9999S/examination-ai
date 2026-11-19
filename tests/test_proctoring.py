@@ -701,8 +701,11 @@ def test_student_cannot_list_flagged_sessions(
     proctoring_data,
 ):
     data = proctoring_data
+    from app.auth import create_access_token
+
+    student_token = create_access_token({"sub": str(data["student"].id)})
     response = client.get(
         "/exam-sessions/proctoring/flagged",
-        headers=proctoring_headers(data["token"]),
+        headers=proctoring_headers(student_token),
     )
     assert response.status_code == 403
