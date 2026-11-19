@@ -1,214 +1,275 @@
-
 import Link from "next/link";
 
-const features = [
+const capabilities = [
   {
     number: "01",
-    title: "Secure Online Exams",
+    title: "Examination management",
     description:
-      "Conduct structured online examinations with scheduled sessions and controlled examination access.",
+      "Create and schedule assessments, organize question papers, and manage examination access from one place.",
+    roles: "Administrators · Examiners",
   },
   {
     number: "02",
-    title: "AI-Assisted Proctoring",
+    title: "Examination monitoring",
     description:
-      "Monitor examination activity through face detection, gaze tracking, and browser activity events.",
+      "Record relevant browser and proctoring events during an attempt so authorized staff can review flagged activity.",
+    roles: "Examiners · Administrators",
   },
   {
     number: "03",
-    title: "Automated Evaluation",
+    title: "Assessment and grading",
     description:
-      "Automatically evaluate objective answers and support examiner review of subjective responses.",
+      "Evaluate objective responses automatically and provide examiner-led review for descriptive answers.",
+    roles: "Examiners",
   },
   {
     number: "04",
-    title: "Performance Analysis",
+    title: "Results and performance",
     description:
-      "Calculate examination results and provide structured assessment information.",
+      "Publish examination results and give students a clear view of their assessment outcomes.",
+    roles: "Students · Examiners",
+  },
+];
+
+const workflow = [
+  ["01", "Prepare", "Create the examination and organize its questions."],
+  ["02", "Schedule", "Set the examination window and permitted access."],
+  ["03", "Conduct", "Students sign in and complete their timed attempts."],
+  ["04", "Review", "Authorized staff review responses and recorded events."],
+  ["05", "Publish", "Finalize assessment and release results to students."],
+];
+
+const audiences = [
+  {
+    title: "Students",
+    description:
+      "Access scheduled examinations, complete timed attempts, and view published results.",
+    action: "Create student account",
+    href: "/register",
+  },
+  {
+    title: "Examiners",
+    description:
+      "Manage question banks, conduct assessments, review flagged activity, and grade responses.",
+    action: "Examiner sign in",
+    href: "/login",
+  },
+  {
+    title: "Administrators",
+    description:
+      "Manage platform users, examination schedules, and institution-level activity.",
+    action: "Administrator sign in",
+    href: "/login",
   },
 ];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <header className="border-b border-white/10">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <Link
-            href="/"
-            className="text-2xl font-bold tracking-tight text-white"
-          >
-            ExamGuard <span className="text-blue-400">AI</span>
+    <main className="min-h-screen bg-[#f5f7fa] text-slate-800">
+      <header className="border-b border-slate-200 bg-white">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+          <Link href="/" className="flex items-center gap-3" aria-label="ExamGuard AI home">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#17365d] text-sm font-bold tracking-wide text-white">
+              EG
+            </span>
+            <span className="leading-tight">
+              <span className="block text-lg font-bold tracking-tight text-[#17365d]">
+                ExamGuard <span className="font-medium text-[#4776a8]">AI</span>
+              </span>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Examination management
+              </span>
+            </span>
           </Link>
 
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+              className="rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              Login
+              Sign in
             </Link>
-
             <Link
               href="/register"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="rounded-md bg-[#17365d] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#244b78]"
             >
-              Register
+              Student registration
             </Link>
           </div>
         </nav>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-12 px-6 py-24 md:grid-cols-2 md:items-center md:py-32">
-        <div>
-          <p className="mb-5 inline-flex rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-sm font-medium text-blue-300">
-            Intelligent Examination Platform
-          </p>
-
-          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-            A smarter and more secure way to conduct examinations.
-          </h1>
-
-          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
-            ExamGuard AI combines secure online examinations,
-            automated proctoring, objective evaluation, and
-            examiner-assisted assessment in one platform.
-          </p>
-
-          <div className="mt-9 flex flex-wrap gap-4">
-            <Link
-              href="/register"
-              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
-            >
-              Get Started
-            </Link>
-
-            <Link
-              href="/login"
-              className="rounded-xl border border-white/20 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-            >
-              Sign In
-            </Link>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 shadow-2xl shadow-black/30">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">
-                Examination Platform
-              </p>
-              <h2 className="mt-1 text-2xl font-bold">
-                ExamGuard AI
-              </h2>
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-16 lg:py-24">
+          <div>
+            <p className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-[#4776a8]">
+              Digital assessment · Secure examination workflow
+            </p>
+            <h1 className="max-w-2xl text-4xl font-bold leading-[1.12] tracking-tight text-[#17365d] sm:text-5xl lg:text-[3.55rem]">
+              A structured platform for conducting and managing examinations.
+            </h1>
+            <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
+              ExamGuard AI brings examination scheduling, timed student
+              attempts, proctoring-event review, assessment, and result
+              publication into a single role-based system.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link
+                href="/register"
+                className="rounded-md bg-[#17365d] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#244b78]"
+              >
+                Register as a student
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-md border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Sign in to your portal
+              </Link>
             </div>
+            <p className="mt-5 text-xs leading-6 text-slate-500">
+              Student accounts can be registered publicly. Examiner and
+              administrator access is provided through authorized accounts.
+            </p>
+          </div>
 
-            <div className="rounded-xl bg-blue-500/15 p-3 text-2xl">
-              <span role="img" aria-label="Security shield">
-                🛡️
+          <div className="rounded-xl border border-slate-200 bg-[#f8fafc] p-5 shadow-[0_12px_35px_rgba(15,35,60,0.08)] sm:p-7">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Platform workflow
+                </p>
+                <h2 className="mt-1 text-xl font-bold text-[#17365d]">
+                  From exam setup to results
+                </h2>
+              </div>
+              <span className="rounded-md border border-[#cbd8e6] bg-white px-3 py-1.5 text-xs font-semibold text-[#315d88]">
+                Role-based access
               </span>
             </div>
-          </div>
-
-          <div className="space-y-4">
-            {[
-              ["Secure access", "Controlled examination sessions"],
-              ["Smart monitoring", "Proctoring event tracking"],
-              ["Quick evaluation", "Objective answer assessment"],
-              ["Examiner review", "Subjective answer grading"],
-            ].map(([title, description]) => (
-              <div
-                key={title}
-                className="rounded-xl border border-white/10 bg-slate-800/70 p-4"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="mt-1 text-blue-400">✓</span>
-                  <div>
-                    <h3 className="font-semibold text-white">
-                      {title}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-400">
+            <div className="mt-5 space-y-4">
+              {workflow.map(([number, title, description], index) => (
+                <div key={number} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#cbd8e6] bg-white text-xs font-bold text-[#315d88]">
+                      {number}
+                    </span>
+                    {index !== workflow.length - 1 && (
+                      <span className="mt-1 h-6 w-px bg-slate-300" />
+                    )}
+                  </div>
+                  <div className="pb-2">
+                    <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
                       {description}
                     </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="mt-3 rounded-lg border border-[#d7e2ed] bg-white px-4 py-3">
+              <p className="text-xs leading-5 text-slate-600">
+                Examination access and management options depend on the
+                account&apos;s assigned role and permissions.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="border-y border-white/10 bg-slate-900/60">
-        <div className="mx-auto max-w-7xl px-6 py-20">
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
-              Platform capabilities
-            </p>
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
+        <div className="max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4776a8]">
+            Core capabilities
+          </p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#17365d] sm:text-4xl">
+            Tools for each stage of an examination
+          </h2>
+          <p className="mt-4 leading-7 text-slate-600">
+            The platform separates responsibilities by role while keeping
+            examination activity and assessment information connected.
+          </p>
+        </div>
 
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Everything needed for a modern examination workflow.
+        <div className="mt-9 grid gap-4 sm:grid-cols-2">
+          {capabilities.map((item) => (
+            <article
+              key={item.number}
+              className="rounded-lg border border-slate-200 bg-white p-6 transition hover:border-[#b8c9da] hover:shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-xs font-bold tracking-[0.14em] text-[#4776a8]">
+                  {item.number}
+                </span>
+                <span className="rounded bg-[#eef3f8] px-2.5 py-1 text-[11px] font-semibold text-[#426486]">
+                  {item.roles}
+                </span>
+              </div>
+              <h3 className="mt-5 text-lg font-bold text-[#17365d]">
+                {item.title}
+              </h3>
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                {item.description}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4776a8]">
+              Access by role
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#17365d] sm:text-4xl">
+              The right workspace for every participant
             </h2>
           </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
+          <div className="mt-9 grid gap-4 md:grid-cols-3">
+            {audiences.map((audience) => (
               <article
-                key={feature.number}
-                className="rounded-2xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50"
+                key={audience.title}
+                className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfcfd] p-6"
               >
-                <p className="text-sm font-bold text-blue-400">
-                  {feature.number}
-                </p>
-
-                <h3 className="mt-5 text-xl font-bold">
-                  {feature.title}
+                <h3 className="text-lg font-bold text-[#17365d]">
+                  {audience.title}
                 </h3>
-
-                <p className="mt-3 text-sm leading-7 text-slate-400">
-                  {feature.description}
+                <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
+                  {audience.description}
                 </p>
+                <Link
+                  href={audience.href}
+                  className="mt-6 inline-flex items-center text-sm font-semibold text-[#315d88] hover:text-[#17365d]"
+                >
+                  {audience.action}
+                  <span className="ml-2" aria-hidden="true">→</span>
+                </Link>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-20">
-        <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 px-8 py-12 text-center">
-          <h2 className="text-3xl font-bold">
-            Ready to use ExamGuard AI?
+      <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
+        <div className="rounded-lg border border-[#d7e2ed] bg-[#edf3f8] px-6 py-7 sm:px-9 sm:py-8">
+          <h2 className="text-xl font-bold text-[#17365d]">
+            Privacy-conscious examination monitoring
           </h2>
-
-          <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-300">
-            Students can create an account and access their
-            examinations. Examiners and administrators can
-            sign in using their authorized accounts.
+          <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-700">
+            Proctoring is designed around examination events and derived
+            monitoring signals for authorized review. Webcam frames are
+            processed in the browser and are not uploaded or stored by the
+            platform.
           </p>
-
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link
-              href="/register"
-              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500"
-            >
-              Student Registration
-            </Link>
-
-            <Link
-              href="/login"
-              className="rounded-xl border border-white/20 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-            >
-              Login to Platform
-            </Link>
-          </div>
         </div>
       </section>
 
-      <footer className="border-t border-white/10 px-6 py-8">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-sm text-slate-400 sm:flex-row">
-          <p>
-            © {new Date().getFullYear()} ExamGuard AI. All rights reserved.
-          </p>
-
-          <p>Intelligent Examination Platform</p>
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-7 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <p>© {new Date().getFullYear()} ExamGuard AI. All rights reserved.</p>
+          <p>Digital examination and assessment platform</p>
         </div>
       </footer>
     </main>
