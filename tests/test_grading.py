@@ -506,3 +506,63 @@ def test_examiner_can_list_submitted_sessions_for_review(
     assert response.status_code == 200
     sessions = response.json()["sessions"]
     assert any(item["session_id"] == data["session"].id for item in sessions)
+
+
+def test_examiner_can_save_rubric_breakdown(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "rubric_scores": [
+                {
+                    "criterion": "Concept accuracy",
+                    "description": "Explains the core concept.",
+                    "max_marks": 3.0,
+                    "awarded_marks": 2.5,
+                },
+                {
+                    "criterion": "Organization",
+                    "description": "Presents the information clearly.",
+                    "max_marks": 2.0,
+                    "awarded_marks": 1.5,
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(data["answer"])
+    assert len(data["answer"].rubric_scores) == 2
+    assert sum(
+        item["awarded_marks"] for item in data["answer"].rubric_scores
+    ) == pytest.approx(4.0)
+
+
+def test_rubric_maximum_must_match_question_maximum(
+    client,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "rubric_scores": [
+                {
+                    "criterion": "Concept accuracy",
+                    "max_marks": 4.0,
+                    "awarded_marks": 4.0,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "maximum marks" in response.json()["detail"].lower()
