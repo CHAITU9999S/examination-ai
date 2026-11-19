@@ -29,6 +29,14 @@ interface PendingAnswer {
   ai_model?: string | null;
   examiner_feedback?: string | null;
   image_annotations?: ImageAnnotation[] | null;
+  rubric_scores?: RubricScore[] | null;
+}
+
+interface RubricScore {
+  criterion: string;
+  description?: string | null;
+  max_marks: number;
+  awarded_marks: number;
 }
 
 interface ImageAnnotation {
@@ -67,6 +75,11 @@ export default function ExaminerGradingPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [examinerFeedback, setExaminerFeedback] = useState("");
   const [imageAnnotations, setImageAnnotations] = useState<ImageAnnotation[]>([]);
+  const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
+  const [rubricCriterion, setRubricCriterion] = useState("");
+  const [rubricDescription, setRubricDescription] = useState("");
+  const [rubricMaximum, setRubricMaximum] = useState("");
+  const [rubricAwarded, setRubricAwarded] = useState("");
   const [selectedForBulk, setSelectedForBulk] = useState<number[]>([]);
   const [bulkMarks, setBulkMarks] = useState<Record<number, string>>({});
   const [annotationType, setAnnotationType] = useState<"highlight" | "comment">("comment");
@@ -210,6 +223,11 @@ export default function ExaminerGradingPage() {
     );
     setExaminerFeedback(answer.examiner_feedback || "");
     setImageAnnotations(answer.image_annotations || []);
+    setRubricScores(answer.rubric_scores || []);
+    setRubricCriterion("");
+    setRubricDescription("");
+    setRubricMaximum("");
+    setRubricAwarded("");
     setAnnotationText("");
     setError("");
     setMessage("");
@@ -377,6 +395,7 @@ export default function ExaminerGradingPage() {
             awarded_marks: marks,
             examiner_feedback: examinerFeedback.trim() || null,
             image_annotations: imageAnnotations,
+            rubric_scores: rubricScores,
           }),
         }
       );
@@ -395,6 +414,7 @@ export default function ExaminerGradingPage() {
       setAwardedMarks("");
       setExaminerFeedback("");
       setImageAnnotations([]);
+      setRubricScores([]);
 
       await loadPendingAnswers();
     } catch (err) {
@@ -613,6 +633,7 @@ export default function ExaminerGradingPage() {
                   setAwardedMarks("");
                   setExaminerFeedback("");
                   setImageAnnotations([]);
+                  setRubricScores([]);
                 }}
                 className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
               >
@@ -813,6 +834,144 @@ export default function ExaminerGradingPage() {
                 <p className="mt-2 text-xs text-slate-500">
                   You can accept, modify, or ignore the AI suggestion.
                 </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <h3 className="font-semibold">Rubric-based marks breakdown</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Add criteria whose maximum marks total the question maximum. The awarded marks across criteria must equal the final score.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm">
+                    Criterion
+                    <input
+                      value={rubricCriterion}
+                      onChange={(event) => setRubricCriterion(event.target.value)}
+                      maxLength={200}
+                      placeholder="e.g. Concept accuracy"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Description (optional)
+                    <input
+                      value={rubricDescription}
+                      onChange={(event) => setRubricDescription(event.target.value)}
+                      maxLength={1000}
+                      placeholder="What should this criterion assess?"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Maximum marks
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={rubricMaximum}
+                      onChange={(event) => setRubricMaximum(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Awarded marks
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rubricAwarded}
+                      onChange={(event) => setRubricAwarded(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maximum = Number(rubricMaximum);
+                    const awarded = Number(rubricAwarded);
+                    const existingMaximum = rubricScores.reduce((sum, item) => sum + item.max_marks, 0);
+                    if (
+                      !rubricCriterion.trim() ||
+                      !Number.isFinite(maximum) ||
+                      !Number.isFinite(awarded) ||
+                      maximum <= 0 ||
+                      awarded < 0 ||
+                      awarded > maximum ||
+                      existingMaximum + maximum > selectedAnswer.marks + 0.01 ||
+                      rubricScores.some((item) => item.criterion.trim().toLowerCase() === rubricCriterion.trim().toLowerCase())
+                    ) {
+                      setError("Enter a unique rubric criterion with valid marks within the question maximum.");
+                      return;
+                    }
+                    const next = [
+                      ...rubricScores,
+                      {
+                        criterion: rubricCriterion.trim(),
+                        description: rubricDescription.trim() || null,
+                        max_marks: maximum,
+                        awarded_marks: awarded,
+                      },
+                    ];
+                    setRubricScores(next);
+                    setAwardedMarks(next.reduce((sum, item) => sum + item.awarded_marks, 0).toFixed(2));
+                    setRubricCriterion("");
+                    setRubricDescription("");
+                    setRubricMaximum("");
+                    setRubricAwarded("");
+                    setError("");
+                  }}
+                  className="mt-4 rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10"
+                >
+                  Add rubric criterion
+                </button>
+                {rubricScores.length > 0 && (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[500px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400">
+                          <th className="py-2">Criterion</th>
+                          <th className="py-2">Awarded</th>
+                          <th className="py-2">Maximum</th>
+                          <th className="py-2">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rubricScores.map((item, index) => (
+                          <tr key={`${item.criterion}-${index}`} className="border-b border-white/5">
+                            <td className="py-3">
+                              <p className="font-medium">{item.criterion}</p>
+                              {item.description && <p className="text-xs text-slate-400">{item.description}</p>}
+                            </td>
+                            <td className="py-3">{item.awarded_marks}</td>
+                            <td className="py-3">{item.max_marks}</td>
+                            <td className="py-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = rubricScores.filter((_, itemIndex) => itemIndex !== index);
+                                  setRubricScores(next);
+                                  setAwardedMarks(next.reduce((sum, row) => sum + row.awarded_marks, 0).toFixed(2));
+                                }}
+                                className="text-xs text-red-300 hover:text-red-200"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="font-semibold">
+                          <td className="py-3">Total</td>
+                          <td className="py-3">{rubricScores.reduce((sum, item) => sum + item.awarded_marks, 0)}</td>
+                          <td className="py-3">{rubricScores.reduce((sum, item) => sum + item.max_marks, 0)} / {selectedAnswer.marks}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
               </div>
 
               <div>
