@@ -1,3 +1,4 @@
+import hmac
 from datetime import datetime, timedelta
 from math import ceil
 
@@ -11,11 +12,14 @@ from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
 )
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import (
     create_exam_access_token,
+    create_exam_refresh_token,
+    hash_exam_refresh_token,
     verify_token,
 )
 from app.database import get_db
@@ -41,6 +45,13 @@ router = APIRouter(
 )
 
 exam_token_scheme = HTTPBearer(auto_error=False)
+
+
+class ExamTokenRefreshRequest(BaseModel):
+    refresh_token: str = Field(
+        min_length=32,
+        max_length=200,
+    )
 
 
 # ==========================================
@@ -318,6 +329,15 @@ def start_exam(
                     detail="Your exam session has expired or been submitted.",
                 )
 
+    # Rotate the opaque refresh token whenever a session is issued.
+    # Only its SHA-256 digest is stored in the database.
+    refresh_token = create_exam_refresh_token()
+    session.exam_token_refresh_hash = hash_exam_refresh_token(
+        refresh_token
+    )
+    db.commit()
+    db.refresh(session)
+
     exam_token = create_exam_access_token(
         exam_id=exam_id,
         student_id=current_user.id,
@@ -343,7 +363,97 @@ def start_exam(
             session.selected_question_ids or []
         ),
         "access_token": exam_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
+    }
+
+
+# ==========================================
+# ROTATE SHORT-LIVED EXAM ACCESS TOKEN
+# ==========================================
+
+@router.post("/refresh/{session_id}")
+def refresh_exam_access_token(
+    session_id: int,
+    submission: ExamTokenRefreshRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Rotate a one-time refresh token and issue a short-lived exam access token.
+
+    The refresh token is session-specific, expires with the exam session,
+    and is stored only as a SHA-256 digest.
+    """
+
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+    ).with_for_update().first()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exam session not found.",
+        )
+
+    now = get_current_utc_time()
+
+    if (
+        session.status != "in_progress"
+        or session.expires_at is None
+        or now >= normalize_to_naive_utc(session.expires_at)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The examination session is no longer active.",
+        )
+
+    stored_hash = session.exam_token_refresh_hash
+    supplied_hash = hash_exam_refresh_token(submission.refresh_token)
+
+    if (
+        not stored_hash
+        or not hmac.compare_digest(stored_hash, supplied_hash)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="The exam refresh token is invalid or has already been rotated.",
+        )
+
+    next_refresh_token = create_exam_refresh_token()
+    session.exam_token_refresh_hash = hash_exam_refresh_token(
+        next_refresh_token
+    )
+
+    try:
+        db.commit()
+        db.refresh(session)
+    except Exception:
+        db.rollback()
+        raise
+
+    access_token = create_exam_access_token(
+        exam_id=session.exam_id,
+        student_id=session.student_id,
+        session_id=session.id,
+        expires_at=normalize_to_naive_utc(session.expires_at),
+    )
+
+    return {
+        "session_id": session.id,
+        "access_token": access_token,
+        "refresh_token": next_refresh_token,
+        "token_type": "bearer",
+        "expires_in_seconds": min(
+            600,
+            max(
+                0,
+                int(
+                    (
+                        normalize_to_naive_utc(session.expires_at) - now
+                    ).total_seconds()
+                ),
+            ),
+        ),
     }
 
 
