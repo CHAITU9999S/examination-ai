@@ -228,6 +228,8 @@ def get_all_pending_subjective_answers(
                 "ai_matched_points": answer.ai_matched_points or [],
                 "ai_missed_points": answer.ai_missed_points or [],
                 "ai_model": answer.ai_model,
+                "examiner_feedback": answer.examiner_feedback,
+                "image_annotations": answer.image_annotations or [],
                 "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
             }
@@ -301,6 +303,8 @@ def get_pending_subjective_answers(
                 ),
                 "maximum_marks": question.marks,
                 "model_answer": question.model_answer_text,
+                "examiner_feedback": answer.examiner_feedback,
+                "image_annotations": answer.image_annotations or [],
                 "submitted_at": session.submitted_at,
             }
             for answer, session, question in rows
