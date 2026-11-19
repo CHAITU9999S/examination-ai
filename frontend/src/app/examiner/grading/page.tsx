@@ -67,6 +67,8 @@ export default function ExaminerGradingPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [examinerFeedback, setExaminerFeedback] = useState("");
   const [imageAnnotations, setImageAnnotations] = useState<ImageAnnotation[]>([]);
+  const [selectedForBulk, setSelectedForBulk] = useState<number[]>([]);
+  const [bulkMarks, setBulkMarks] = useState<Record<number, string>>({});
   const [annotationType, setAnnotationType] = useState<"highlight" | "comment">("comment");
   const [annotationX, setAnnotationX] = useState("50");
   const [annotationY, setAnnotationY] = useState("50");
@@ -211,6 +213,93 @@ export default function ExaminerGradingPage() {
     setAnnotationText("");
     setError("");
     setMessage("");
+  }
+
+  function toggleBulkSelection(answer: PendingAnswer, checked: boolean) {
+    if (checked) {
+      const selected = answers.filter((item) => selectedForBulk.includes(item.answer_id));
+      if (selected.length > 0 && selected[0].session_id !== answer.session_id) {
+        setError("Bulk grading can include answers from one examination session only.");
+        return;
+      }
+      setSelectedForBulk((current) =>
+        current.includes(answer.answer_id) ? current : [...current, answer.answer_id]
+      );
+      setBulkMarks((current) => ({
+        ...current,
+        [answer.answer_id]: current[answer.answer_id] ?? "",
+      }));
+      setError("");
+    } else {
+      setSelectedForBulk((current) => current.filter((id) => id !== answer.answer_id));
+      setBulkMarks((current) => {
+        const next = { ...current };
+        delete next[answer.answer_id];
+        return next;
+      });
+    }
+  }
+
+  async function submitBulkGrades() {
+    const selected = answers.filter((answer) =>
+      selectedForBulk.includes(answer.answer_id)
+    );
+    if (selected.length === 0) {
+      setError("Select at least one answer for bulk grading.");
+      return;
+    }
+    const sessionId = selected[0].session_id;
+    if (selected.some((answer) => answer.session_id !== sessionId)) {
+      setError("Bulk grading can include answers from one examination session only.");
+      return;
+    }
+
+    const grades = [];
+    for (const answer of selected) {
+      const raw = bulkMarks[answer.answer_id] ?? "";
+      const marks = Number(raw);
+      if (
+        raw.trim() === "" ||
+        !Number.isFinite(marks) ||
+        marks < 0 ||
+        marks > answer.marks
+      ) {
+        setError(`Enter valid marks between 0 and ${answer.marks} for answer #${answer.answer_id}.`);
+        return;
+      }
+      grades.push({
+        answer_id: answer.answer_id,
+        awarded_marks: marks,
+      });
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(
+        `${API_URL}/grading/sessions/${sessionId}/bulk-grade`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ grades }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to save bulk grading.");
+      }
+      setMessage(`${data.graded_answer_count} answers were graded successfully.`);
+      setSelectedForBulk([]);
+      setBulkMarks({});
+      await loadPendingAnswers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save bulk grading.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function requestAISuggestion() {
@@ -383,6 +472,16 @@ export default function ExaminerGradingPage() {
               </p>
             </div>
 
+            {selectedForBulk.length > 0 && (
+              <button
+                type="button"
+                onClick={submitBulkGrades}
+                disabled={saving}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : `Submit ${selectedForBulk.length} selected grades`}
+              </button>
+            )}
             <button
               type="button"
               onClick={loadPendingAnswers}
@@ -409,6 +508,32 @@ export default function ExaminerGradingPage() {
                   className="rounded-xl border border-white/10 bg-slate-800/60 p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={selectedForBulk.includes(answer.answer_id)}
+                        onChange={(event) => toggleBulkSelection(answer, event.target.checked)}
+                        aria-label={`Select answer ${answer.answer_id} for bulk grading`}
+                      />
+                      Bulk select
+                    </label>
+                    {selectedForBulk.includes(answer.answer_id) && (
+                      <label className="text-xs text-slate-400">
+                        Marks
+                        <input
+                          type="number"
+                          min="0"
+                          max={answer.marks}
+                          step="0.01"
+                          value={bulkMarks[answer.answer_id] ?? ""}
+                          onChange={(event) => setBulkMarks((current) => ({
+                            ...current,
+                            [answer.answer_id]: event.target.value,
+                          }))}
+                          className="ml-2 w-24 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-white"
+                        />
+                      </label>
+                    )}
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold">
                         {answer.exam_title || `Examination #${answer.exam_id}`}
