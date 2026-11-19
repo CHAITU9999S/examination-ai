@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     JSON,
     String,
     Text,
@@ -173,6 +174,8 @@ class Question(Base):
 
     # Relative path of an optional image attached to the question prompt.
     question_image_path = Column(String(500), nullable=True)
+    question_image_data = Column(LargeBinary, nullable=True)
+    question_image_mime_type = Column(String(50), nullable=True)
 
     # Compatibility with existing code using model_answer.
     model_answer = synonym("model_answer_text")
@@ -457,6 +460,9 @@ class Answer(Base):
     answer_text = Column(Text, nullable=True)
 
     image_path = Column(String(500), nullable=True)
+    image_data = Column(LargeBinary, nullable=True)
+    thumbnail_data = Column(LargeBinary, nullable=True)
+    image_mime_type = Column(String(50), nullable=True)
 
     # Compatibility with existing answer-handling code.
     uploaded_file_path = synonym("image_path")
