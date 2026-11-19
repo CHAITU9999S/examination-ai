@@ -14,6 +14,7 @@ from fastapi import (
 )
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import verify_token
@@ -21,6 +22,7 @@ from app.database import get_db
 from app.models import (
     Exam,
     ExamSession,
+    ProctorEvent,
     User,
 )
 from app.services.proctoring_service import (
@@ -490,8 +492,51 @@ async def proctoring_heartbeat(
                 break
 
             heartbeat_time = get_current_utc_time()
+
+            # Heartbeat counters originate in the browser and can be forged.
+            # Keep them as diagnostic client telemetry, but calculate the
+            # official event summary and auto-flag state from persisted events.
+            persisted_counts = db.query(
+                ProctorEvent.event_type,
+                func.count(ProctorEvent.id),
+            ).filter(
+                ProctorEvent.session_id == session_id,
+            ).group_by(
+                ProctorEvent.event_type,
+            ).all()
+
+            server_event_counts = {
+                event_type: int(count)
+                for event_type, count in persisted_counts
+            }
+            server_total_event_count = sum(server_event_counts.values())
+            server_tab_switch_count = server_event_counts.get("tab_switch", 0)
+
+            exam = db.query(Exam).filter(
+                Exam.id == session.exam_id,
+            ).first()
+            flag_threshold = (
+                int(exam.max_tab_switch_warnings)
+                if exam is not None and exam.max_tab_switch_warnings is not None
+                else None
+            )
+            server_auto_flagged = (
+                flag_threshold is not None
+                and flag_threshold > 0
+                and server_tab_switch_count >= flag_threshold
+            )
+
+            authoritative_signals = {
+                "event_counts": server_event_counts,
+                "total_event_count": server_total_event_count,
+                "tab_switch_count": server_tab_switch_count,
+                "auto_flagged": server_auto_flagged,
+                "auto_flag_threshold": flag_threshold,
+                "client_reported_signals": normalized_signals,
+            }
+
             session.last_heartbeat_at = heartbeat_time
-            session.last_heartbeat_signals = normalized_signals
+            session.last_heartbeat_signals = authoritative_signals
             db.commit()
 
             remaining_seconds = max(
@@ -509,7 +554,10 @@ async def proctoring_heartbeat(
                 "session_id": session_id,
                 "server_time": heartbeat_time.isoformat(),
                 "last_heartbeat_at": heartbeat_time.isoformat(),
-                "signals_received": normalized_signals,
+                "signals_received": authoritative_signals,
+                "server_suspicion_score": float(session.suspicion_score or 0),
+                "server_event_counts": server_event_counts,
+                "server_auto_flagged": server_auto_flagged,
                 "remaining_seconds": remaining_seconds,
                 "status": session.status,
             })
