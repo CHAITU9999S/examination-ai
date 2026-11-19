@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -230,40 +230,39 @@ async def upload_question_image(
             detail="Unsupported image format.",
         )
 
-    upload_root = Path(
-        os.getenv("QUESTION_UPLOAD_DIR")
-        or os.getenv("UPLOAD_DIRECTORY", "uploads")
-    ).resolve()
-    question_directory = upload_root / "questions"
-    question_directory.mkdir(parents=True, exist_ok=True)
+    mime_types = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "WEBP": "image/webp",
+        "TIFF": "image/tiff",
+        "BMP": "image/bmp",
+    }
+    media_type = mime_types.get(image_format)
+    if media_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported image format.",
+        )
 
-    stored_name = f"{uuid.uuid4().hex}{extension}"
-    stored_file = question_directory / stored_name
-    relative_path = f"questions/{stored_name}"
+    question.question_image_data = image_bytes
+    question.question_image_mime_type = media_type
+    question.question_image_path = f"neon:{media_type}"
 
-    old_path = question.question_image_path
     try:
-        stored_file.write_bytes(image_bytes)
-        question.question_image_path = relative_path
         db.commit()
         db.refresh(question)
     except Exception:
         db.rollback()
-        stored_file.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to save the question image.",
+            detail="Unable to save the question image in Neon.",
         )
 
-    if old_path:
-        old_file = (upload_root / old_path).resolve()
-        if old_file.is_relative_to(upload_root):
-            old_file.unlink(missing_ok=True)
-
     return {
-        "message": "Question image uploaded successfully.",
+        "message": "Question image stored in Neon successfully.",
         "question_id": question.id,
         "image_uploaded": True,
+        "storage": "neon_postgresql",
     }
 
 
@@ -277,7 +276,7 @@ def get_question_image(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin")),
 ):
-    """Return a question image to an authenticated examiner or admin."""
+    """Return a question image from Neon to an authenticated examiner or admin."""
 
     question = db.query(QuestionBank).filter(
         QuestionBank.id == question_id
@@ -287,6 +286,20 @@ def get_question_image(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question image not found.",
+        )
+
+    if question.question_image_data:
+        return Response(
+            content=question.question_image_data,
+            media_type=question.question_image_mime_type or "application/octet-stream",
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    # Backward compatibility for images uploaded before Neon binary storage.
+    if question.question_image_path.startswith("neon:"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored question image data is unavailable.",
         )
 
     upload_root = Path(
@@ -302,6 +315,7 @@ def get_question_image(
         )
 
     return FileResponse(image_path)
+
 
 
 # ==========================================
