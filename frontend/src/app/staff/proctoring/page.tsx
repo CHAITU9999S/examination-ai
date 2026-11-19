@@ -76,15 +76,12 @@ export default function StaffProctoringReviewPage() {
       const data = await response.json();
       const list = Array.isArray(data.sessions) ? data.sessions : [];
       setSessions(list);
-      if (selected) {
-        setSelected(list.find((item: FlaggedSession) => item.session_id === selected.session_id) || null);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load proctoring review.");
     } finally {
       setLoading(false);
     }
-  }, [router, selected]);
+  }, [router]);
 
   useEffect(() => {
     loadFlaggedSessions();
