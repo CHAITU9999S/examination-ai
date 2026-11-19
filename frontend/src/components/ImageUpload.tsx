@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useState,
   type ChangeEvent,
   type DragEvent,
@@ -28,6 +29,8 @@ export default function ImageUpload({
   disabled = false,
   acceptedTypes = DEFAULT_ACCEPTED_TYPES,
 }: ImageUploadProps) {
+  const inputId = useId().replace(/:/g, "");
+  const cameraInputId = `${inputId}-camera`;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
@@ -92,10 +95,10 @@ export default function ImageUpload({
     onFileSelect(null);
 
     const fileInput = document.getElementById(
-      "exam-image-upload"
+      inputId
     ) as HTMLInputElement | null;
     const cameraInput = document.getElementById(
-      "exam-camera-capture"
+      cameraInputId
     ) as HTMLInputElement | null;
 
     if (fileInput) fileInput.value = "";
@@ -146,13 +149,13 @@ export default function ImageUpload({
 
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <label
-            htmlFor="exam-image-upload"
+            htmlFor={inputId}
             className={`cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 ${disabled ? "pointer-events-none opacity-50" : ""}`}
           >
             Choose from device
           </label>
           <label
-            htmlFor="exam-camera-capture"
+            htmlFor={cameraInputId}
             className={`cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 ${disabled ? "pointer-events-none opacity-50" : ""}`}
           >
             Take photo
@@ -160,7 +163,7 @@ export default function ImageUpload({
         </div>
 
         <input
-          id="exam-image-upload"
+          id={inputId}
           type="file"
           accept={acceptedTypes.join(",")}
           onChange={handleFileChange}
@@ -168,7 +171,7 @@ export default function ImageUpload({
           className="sr-only"
         />
         <input
-          id="exam-camera-capture"
+          id={cameraInputId}
           type="file"
           accept="image/*"
           capture="environment"
