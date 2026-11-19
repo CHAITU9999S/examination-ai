@@ -8,13 +8,16 @@ export default function HomePage() {
           <Link href="/" className="text-xl font-semibold text-blue-900">
             ExamGuard AI
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/login" className="text-gray-700 hover:text-blue-800">
+          <nav className="flex items-center gap-3 text-sm">
+            <Link
+              href="/login"
+              className="rounded border border-blue-200 bg-blue-50 px-4 py-2 font-medium text-blue-900 hover:bg-blue-100"
+            >
               Login
             </Link>
             <Link
               href="/register"
-              className="rounded bg-blue-800 px-4 py-2 text-white hover:bg-blue-900"
+              className="rounded border border-blue-200 bg-blue-50 px-4 py-2 font-medium text-blue-900 hover:bg-blue-100"
             >
               Student Register
             </Link>
@@ -36,13 +39,13 @@ export default function HomePage() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/login"
-              className="rounded bg-blue-800 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-900"
+              className="rounded border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-medium text-blue-900 hover:bg-blue-100"
             >
               Login
             </Link>
             <Link
               href="/register"
-              className="rounded border border-blue-800 px-5 py-2.5 text-sm font-medium text-blue-800 hover:bg-blue-50"
+              className="rounded border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-medium text-blue-900 hover:bg-blue-100"
             >
               Register as Student
             </Link>
@@ -84,6 +87,36 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section className="mt-8 rounded border bg-white p-5 sm:p-6">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Account Registration and Management
+          </h2>
+          <ul className="mt-4 list-disc space-y-3 pl-5 text-sm leading-6 text-gray-600">
+            <li>
+              <span className="font-semibold text-gray-800">Student accounts:</span>{" "}
+              Students can create their own accounts only through the Student
+              Register option on this homepage. Public registration is for
+              students only.
+            </li>
+            <li>
+              <span className="font-semibold text-gray-800">Examiner accounts:</span>{" "}
+              Any Admin can create Examiner accounts from the Admin dashboard.
+            </li>
+            <li>
+              <span className="font-semibold text-gray-800">Admin accounts:</span>{" "}
+              The first Admin account is created through the secure bootstrap
+              setup. After that, an existing Admin can create additional Admin
+              accounts.
+            </li>
+            <li>
+              <span className="font-semibold text-gray-800">Account deactivation:</span>{" "}
+              Any Admin can deactivate another account when required. An Admin
+              cannot deactivate their own account, and the last active Admin
+              account cannot be deactivated.
+            </li>
+          </ul>
+        </section>
+
         <section className="mt-8 rounded border bg-white p-5">
           <h2 className="text-xl font-semibold text-gray-800">
             User Login
@@ -91,7 +124,7 @@ export default function HomePage() {
           <p className="mt-2 text-sm leading-6 text-gray-600">
             Students, Examiners and Admins use the login page. New student
             accounts can be created using the registration page. Examiner and
-            Admin accounts are provided by the system administrator.
+            additional Admin accounts are created by an existing Admin.
           </p>
           <Link
             href="/login"
