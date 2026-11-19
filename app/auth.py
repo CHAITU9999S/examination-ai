@@ -1,5 +1,7 @@
 
+import hashlib
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -20,6 +22,10 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+)
+
+EXAM_ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("EXAM_ACCESS_TOKEN_EXPIRE_MINUTES", "10")
 )
 
 
@@ -147,13 +153,21 @@ def create_exam_access_token(
     if expires_at_utc <= now:
         raise ValueError("Examination token expiry must be in the future")
 
+    if EXAM_ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        raise ValueError("Exam access token lifetime must be positive")
+
+    token_expires_at = min(
+        now + timedelta(minutes=EXAM_ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_at_utc,
+    )
+
     payload = {
         "sub": str(student_id),
         "exam_id": exam_id,
         "student_id": student_id,
         "session_id": session_id,
         "iat": now,
-        "exp": expires_at_utc,
+        "exp": token_expires_at,
         "token_type": "exam",
     }
 
@@ -162,6 +176,25 @@ def create_exam_access_token(
         JWT_SECRET_KEY,
         algorithm=JWT_ALGORITHM
     )
+
+
+# ==========================================
+# ROTATING EXAM REFRESH TOKENS
+# ==========================================
+
+def create_exam_refresh_token() -> str:
+    """Create a high-entropy opaque token used only to rotate exam access tokens."""
+
+    return secrets.token_urlsafe(48)
+
+
+def hash_exam_refresh_token(token: str) -> str:
+    """Return a SHA-256 digest for safe storage of an exam refresh token."""
+
+    if not isinstance(token, str) or len(token) < 32:
+        raise ValueError("A valid exam refresh token is required")
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # ==========================================
