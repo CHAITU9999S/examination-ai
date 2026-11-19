@@ -173,10 +173,13 @@ export default function StudentResultDetailPage() {
                       1,
                       ...result.cohort_distribution!.score_bands.map((item) => item.share_percentage)
                     );
+                    const currentPercentage =
+                      result.cohort_distribution!.current_student_percentage;
+                    const bandStart = Number(band.label.split("-")[0]);
                     const isCurrentBand =
-                      result.cohort_distribution!.current_student_percentage !== null &&
-                      result.cohort_distribution!.current_student_percentage >= Number(band.label.split("-")[0]) &&
-                      result.cohort_distribution!.current_student_percentage <= Number(band.label.split("-")[1].replace("%", ""));
+                      currentPercentage !== null &&
+                      Math.min(9, Math.floor(currentPercentage / 10)) ===
+                        Math.floor(bandStart / 10);
                     return (
                       <div key={band.label} className="flex min-w-0 flex-col items-center gap-2">
                         <span className="text-[10px] tabular-nums text-slate-400">{band.count}</span>
