@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import (
+    EXAM_ACCESS_TOKEN_EXPIRE_MINUTES,
     create_exam_access_token,
     create_exam_refresh_token,
     hash_exam_refresh_token,
@@ -457,7 +458,7 @@ def refresh_exam_access_token(
         "refresh_token": next_refresh_token,
         "token_type": "bearer",
         "expires_in_seconds": min(
-            600,
+            EXAM_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             max(
                 0,
                 int(
