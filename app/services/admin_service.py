@@ -1,15 +1,14 @@
-
 from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
-    User,
+    AdminActivityLog,
     Exam,
-    QuestionBank,
     ExamSession,
-    AdminActivity,
+    QuestionBank,
+    User,
 )
 
 
@@ -21,20 +20,17 @@ def record_admin_activity(
     details: Optional[dict] = None,
 ):
     """
-    Record an action performed by an Admin.
+    Add an Admin audit event to the current transaction.
 
     The caller is responsible for committing the transaction.
     """
-
-    activity = AdminActivity(
+    activity = AdminActivityLog(
         actor_user_id=actor_user_id,
         target_user_id=target_user_id,
         action=action,
         details=details,
     )
-
     db.add(activity)
-
     return activity
 
 
@@ -44,54 +40,35 @@ def get_dashboard_statistics(db: Session):
 
     Accounts with a NULL is_active value are counted as inactive.
     """
-
-    total_users = (
-        db.query(func.count(User.id)).scalar() or 0
-    )
-
+    total_users = db.query(func.count(User.id)).scalar() or 0
     total_students = (
         db.query(func.count(User.id))
         .filter(User.role == "student")
         .scalar() or 0
     )
-
     total_examiners = (
         db.query(func.count(User.id))
         .filter(User.role == "examiner")
         .scalar() or 0
     )
-
     total_admins = (
         db.query(func.count(User.id))
         .filter(User.role == "admin")
         .scalar() or 0
     )
-
     active_users = (
         db.query(func.count(User.id))
         .filter(User.is_active.is_(True))
         .scalar() or 0
     )
-
     inactive_users = (
         db.query(func.count(User.id))
-        .filter(
-            func.coalesce(User.is_active, False).is_(False)
-        )
+        .filter(func.coalesce(User.is_active, False).is_(False))
         .scalar() or 0
     )
-
-    total_exams = (
-        db.query(func.count(Exam.id)).scalar() or 0
-    )
-
-    total_questions = (
-        db.query(func.count(QuestionBank.id)).scalar() or 0
-    )
-
-    total_exam_sessions = (
-        db.query(func.count(ExamSession.id)).scalar() or 0
-    )
+    total_exams = db.query(func.count(Exam.id)).scalar() or 0
+    total_questions = db.query(func.count(QuestionBank.id)).scalar() or 0
+    total_sessions = db.query(func.count(ExamSession.id)).scalar() or 0
 
     return {
         "total_users": total_users,
@@ -102,5 +79,7 @@ def get_dashboard_statistics(db: Session):
         "inactive_users": inactive_users,
         "total_exams": total_exams,
         "total_questions": total_questions,
-        "total_exam_sessions": total_exam_sessions,
+        "total_sessions": total_sessions,
+        # Preserve the earlier service key for any existing callers.
+        "total_exam_sessions": total_sessions,
     }
