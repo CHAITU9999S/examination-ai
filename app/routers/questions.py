@@ -1,4 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import io
+import os
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -7,6 +14,7 @@ from app.models import QuestionBank, Option
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
 from app.services.question_validation import validate_question
+from app.services.ocr_service import validate_image_bytes
 
 
 router = APIRouter(
@@ -162,6 +170,7 @@ def list_questions(
             "model_answer_text": question.model_answer_text,
             "marks": question.marks,
             "negative_marks": question.negative_marks,
+            "question_image_available": bool(question.question_image_path),
             "tags": question.tags or [],
             "options": options_by_question.get(
                 question.id,
@@ -170,6 +179,129 @@ def list_questions(
         }
         for question in questions
     ]
+
+
+# ==========================================
+# UPLOAD QUESTION PROMPT IMAGE
+# ==========================================
+
+@router.post("/{question_id}/image", status_code=status.HTTP_201_CREATED)
+async def upload_question_image(
+    question_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Store an optional image that forms part of a question prompt."""
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first()
+
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+
+    image_bytes = await file.read(10 * 1024 * 1024 + 1)
+    validate_image_bytes(image_bytes)
+
+    try:
+        image_format = Image.open(io.BytesIO(image_bytes)).format
+    except (OSError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded file is not a valid image.",
+        )
+
+    extensions = {
+        "JPEG": ".jpg",
+        "PNG": ".png",
+        "WEBP": ".webp",
+        "TIFF": ".tiff",
+        "BMP": ".bmp",
+    }
+    extension = extensions.get(image_format)
+
+    if extension is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported image format.",
+        )
+
+    upload_root = Path(
+        os.getenv("QUESTION_UPLOAD_DIR")
+        or os.getenv("UPLOAD_DIRECTORY", "uploads")
+    ).resolve()
+    question_directory = upload_root / "questions"
+    question_directory.mkdir(parents=True, exist_ok=True)
+
+    stored_name = f"{uuid.uuid4().hex}{extension}"
+    stored_file = question_directory / stored_name
+    relative_path = f"questions/{stored_name}"
+
+    old_path = question.question_image_path
+    try:
+        stored_file.write_bytes(image_bytes)
+        question.question_image_path = relative_path
+        db.commit()
+        db.refresh(question)
+    except Exception:
+        db.rollback()
+        stored_file.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to save the question image.",
+        )
+
+    if old_path:
+        old_file = (upload_root / old_path).resolve()
+        if old_file.is_relative_to(upload_root):
+            old_file.unlink(missing_ok=True)
+
+    return {
+        "message": "Question image uploaded successfully.",
+        "question_id": question.id,
+        "image_uploaded": True,
+    }
+
+
+# ==========================================
+# GET QUESTION PROMPT IMAGE
+# ==========================================
+
+@router.get("/{question_id}/image")
+def get_question_image(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Return a question image to an authenticated examiner or admin."""
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first()
+
+    if question is None or not question.question_image_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question image not found.",
+        )
+
+    upload_root = Path(
+        os.getenv("QUESTION_UPLOAD_DIR")
+        or os.getenv("UPLOAD_DIRECTORY", "uploads")
+    ).resolve()
+    image_path = (upload_root / question.question_image_path).resolve()
+
+    if not image_path.is_relative_to(upload_root) or not image_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question image file is unavailable.",
+        )
+
+    return FileResponse(image_path)
 
 
 # ==========================================
