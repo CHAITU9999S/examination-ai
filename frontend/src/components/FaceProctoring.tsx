@@ -142,6 +142,7 @@ export default function FaceProctoring({
   const gazeSamplesRef = useRef<GazeEstimate[]>([]);
   const lastReportedRef = useRef<Record<string, number>>({});
   const [status, setStatus] = useState<DetectorStatus>("idle");
+  const [alertMessage, setAlertMessage] = useState("");
 
   useEffect(() => {
     if (!enabled || !stream) {
@@ -181,6 +182,7 @@ export default function FaceProctoring({
           missingSinceRef.current = now;
         }
         if (now - missingSinceRef.current >= 1500) {
+          setAlertMessage("Face not detected. Keep your face clearly visible in the webcam.");
           reportWithCooldown("missing", onFaceMissing);
         }
         gazeAwaySinceRef.current = null;
@@ -191,12 +193,15 @@ export default function FaceProctoring({
       missingSinceRef.current = null;
 
       if (faces.length > 1) {
+        setAlertMessage("Multiple faces detected. Only the candidate should be visible.");
         facePresentSinceRef.current = null;
         reportWithCooldown("multiple", onMultipleFaces, 7000);
         gazeAwaySinceRef.current = null;
         gazeSamplesRef.current = [];
         return;
       }
+
+      setAlertMessage("");
 
       // Require one continuously detected face for at least one second
       // before marking the exam-entry face-presence check complete.
@@ -272,6 +277,7 @@ export default function FaceProctoring({
         }
 
         if (now - gazeAwaySinceRef.current >= 1200) {
+          setAlertMessage("Please look toward the examination screen.");
           reportWithCooldown("gaze", () => onGazeAway({
             direction: horizontalAway
               ? (smoothedHorizontal < threshold ? "left" : "right")
@@ -291,6 +297,7 @@ export default function FaceProctoring({
         }
       } else {
         gazeAwaySinceRef.current = null;
+        setAlertMessage("");
       }
     };
 
@@ -330,6 +337,7 @@ export default function FaceProctoring({
 
     async function start() {
       setStatus("loading");
+      setAlertMessage("");
       gazeSamplesRef.current = [];
       gazeAwaySinceRef.current = null;
       missingSinceRef.current = null;
@@ -398,6 +406,7 @@ export default function FaceProctoring({
         const message = error instanceof Error
           ? error.message
           : "Unable to initialize the TensorFlow.js face detector.";
+        setAlertMessage("Proctoring detector unavailable: " + message);
         onDetectorError(message);
       }
     }
@@ -444,6 +453,11 @@ export default function FaceProctoring({
                 : "Waiting for camera"}
         </span>
       </p>
+      {alertMessage && (
+        <p role="alert" aria-live="assertive" className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {alertMessage}
+        </p>
+      )}
       <p className="mt-1 text-[11px] text-slate-400">
         MediaPipe FaceMesh runs through the TensorFlow.js runtime in this browser.
         Camera frames are analysed locally and are not uploaded. Gaze checks are
