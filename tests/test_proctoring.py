@@ -649,7 +649,9 @@ def test_heartbeat_uses_server_persisted_events_not_client_counters(
         == 999
     )
 
-    db_session.refresh(data["session"])
-    assert data["session"].last_heartbeat_signals["tab_switch_count"] == 1
-    assert data["session"].last_heartbeat_signals["auto_flagged"] is True
+    stored_session = db_session.query(ExamSession).filter_by(
+        id=data["session"].id,
+    ).one()
+    assert stored_session.last_heartbeat_signals["tab_switch_count"] == 1
+    assert stored_session.last_heartbeat_signals["auto_flagged"] is True
 
