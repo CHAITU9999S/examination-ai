@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from app.auth import (
     create_access_token,
     create_exam_access_token,
+    verify_token,
 )
 from app.services.session_service import get_or_create_session_question_ids
 from app.models import (
@@ -503,7 +504,7 @@ def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
     assert session.exam_token_refresh_hash
     assert session.exam_token_refresh_hash != started["refresh_token"]
 
-    first_claims = __import__("app.auth", fromlist=["verify_token"]).verify_token(
+    first_claims = verify_token(
         started["access_token"],
         expected_token_type="exam",
     )
