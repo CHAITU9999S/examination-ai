@@ -386,6 +386,22 @@ async def proctoring_heartbeat(
         while True:
             message = await websocket.receive_text()
 
+            # The WebSocket must not keep an expired access token alive.
+            # The browser rotates its token periodically and reconnects.
+            if not verify_token(
+                token,
+                expected_token_type="exam",
+            ):
+                await websocket.send_json({
+                    "type": "token_expired",
+                    "message": "The examination access token expired. Renew the token and reconnect.",
+                })
+                await websocket.close(
+                    code=4401,
+                    reason="Exam access token expired.",
+                )
+                break
+
             try:
                 payload = json.loads(message)
 
