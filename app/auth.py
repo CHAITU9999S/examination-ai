@@ -166,6 +166,7 @@ def create_exam_access_token(
         "exam_id": exam_id,
         "student_id": student_id,
         "session_id": session_id,
+        "jti": secrets.token_urlsafe(16),
         "iat": now,
         "exp": token_expires_at,
         "token_type": "exam",
