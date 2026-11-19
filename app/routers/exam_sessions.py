@@ -395,6 +395,19 @@ def refresh_exam_access_token(
             detail="Exam session not found.",
         )
 
+    student = db.query(User).filter(
+        User.id == session.student_id,
+    ).first()
+    if (
+        student is None
+        or not student.is_active
+        or student.role != "student"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Student account is invalid or inactive.",
+        )
+
     now = get_current_utc_time()
 
     if (
