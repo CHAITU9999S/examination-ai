@@ -223,3 +223,158 @@ def test_student_cannot_view_uploaded_answer_image(
 
     assert response.status_code == 403
 
+
+
+
+def _mock_openai_response(monkeypatch, payload):
+    import json
+    from types import SimpleNamespace
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=json.dumps(payload))
+                    )
+                ]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(
+                completions=FakeCompletions()
+            )
+
+    monkeypatch.setattr(
+        "app.services.subjective_grading.OpenAI",
+        FakeOpenAI,
+    )
+
+
+def test_ai_grading_generates_and_persists_suggestion_without_awarding_marks(
+    client,
+    db_session,
+    grading_data,
+    monkeypatch,
+):
+    data = grading_data
+    monkeypatch.setenv("AI_GRADING_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_GRADING_MODEL", "test-model")
+    _mock_openai_response(
+        monkeypatch,
+        {
+            "suggested_marks": 4.5,
+            "justification": "The answer correctly explains organized data.",
+            "matched_points": ["Explains organized information."],
+            "missed_points": ["Does not mention relationships between records."],
+        },
+    )
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/ai-suggestion",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["suggested_marks"] == pytest.approx(4.5)
+    assert payload["maximum_marks"] == pytest.approx(5.0)
+    assert payload["status"] == "pending_examiner_approval"
+
+    db_session.refresh(data["answer"])
+    assert data["answer"].ai_suggested_marks == pytest.approx(4.5)
+    assert data["answer"].ai_model == "test-model"
+    assert data["answer"].awarded_marks is None
+
+
+def test_ai_grading_rejects_score_above_question_maximum(
+    client,
+    db_session,
+    grading_data,
+    monkeypatch,
+):
+    data = grading_data
+    monkeypatch.setenv("AI_GRADING_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai_response(
+        monkeypatch,
+        {
+            "suggested_marks": 9,
+            "justification": "Invalid score.",
+            "matched_points": [],
+            "missed_points": [],
+        },
+    )
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/ai-suggestion",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 502
+    db_session.refresh(data["answer"])
+    assert data["answer"].ai_suggested_marks is None
+    assert data["answer"].awarded_marks is None
+
+
+def test_examiner_can_approve_ai_suggestion_as_final_marks(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    data["answer"].ai_suggested_marks = 4.0
+    data["answer"].ai_justification = "Mostly correct."
+    db_session.commit()
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/approve-ai",
+        headers=auth_headers(data["examiner"]),
+        json={"awarded_marks": 3.5},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["awarded_marks"] == pytest.approx(3.5)
+
+    db_session.refresh(data["answer"])
+    assert data["answer"].awarded_marks == pytest.approx(3.5)
+
+
+def test_student_cannot_request_ai_grading(
+    client,
+    grading_data,
+    monkeypatch,
+):
+    data = grading_data
+    monkeypatch.setenv("AI_GRADING_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/ai-suggestion",
+        headers=auth_headers(data["student"]),
+    )
+
+    assert response.status_code == 403
+
+
+def test_ai_grading_rejects_image_upload_answers(
+    client,
+    db_session,
+    grading_data,
+    monkeypatch,
+):
+    data = grading_data
+    data["question"].question_type = "image_upload"
+    db_session.commit()
+    monkeypatch.setenv("AI_GRADING_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/ai-suggestion",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 400
+    assert "short and long" in response.json()["detail"].lower()
