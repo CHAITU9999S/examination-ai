@@ -24,58 +24,96 @@ function point(landmarks: Array<{ x: number; y: number }>, index: number) {
   return landmarks[index];
 }
 
-interface HorizontalGazeEstimate {
-  position: number;
+interface GazeEstimate {
+  horizontalPosition: number;
+  verticalPosition: number;
   confidence: number;
 }
 
-function estimateHorizontalGaze(
+function estimateGaze(
   landmarks: Array<{ x: number; y: number }>
-): HorizontalGazeEstimate | null {
-  // Compare both iris positions relative to their own eye corners.
-  // A large disagreement between the eyes is treated as unreliable.
+): GazeEstimate | null {
+  // Compare both iris positions relative to each eye's own corners and lids.
+  // Large left/right or up/down disagreement is treated as unreliable.
   // This remains an approximate screen-attention heuristic.
   const leftIris = point(landmarks, 468);
   const leftOuter = point(landmarks, 33);
   const leftInner = point(landmarks, 133);
+  const leftTop = point(landmarks, 159);
+  const leftBottom = point(landmarks, 145);
   const rightIris = point(landmarks, 473);
   const rightInner = point(landmarks, 362);
   const rightOuter = point(landmarks, 263);
+  const rightTop = point(landmarks, 386);
+  const rightBottom = point(landmarks, 374);
 
   if (
-    !leftIris || !leftOuter || !leftInner ||
-    !rightIris || !rightInner || !rightOuter
+    !leftIris || !leftOuter || !leftInner || !leftTop || !leftBottom ||
+    !rightIris || !rightInner || !rightOuter || !rightTop || !rightBottom
   ) {
     return null;
   }
 
   const leftWidth = Math.abs(leftInner.x - leftOuter.x);
   const rightWidth = Math.abs(rightOuter.x - rightInner.x);
-
-  if (leftWidth < 0.001 || rightWidth < 0.001) return null;
-
-  const leftRatio =
-    (leftIris.x - Math.min(leftOuter.x, leftInner.x)) / leftWidth;
-  const rightRatio =
-    (rightIris.x - Math.min(rightInner.x, rightOuter.x)) / rightWidth;
+  const leftHeight = Math.abs(leftBottom.y - leftTop.y);
+  const rightHeight = Math.abs(rightBottom.y - rightTop.y);
 
   if (
-    !Number.isFinite(leftRatio) ||
-    !Number.isFinite(rightRatio) ||
-    leftRatio < -0.15 ||
-    leftRatio > 1.15 ||
-    rightRatio < -0.15 ||
-    rightRatio > 1.15
+    leftWidth < 0.001 || rightWidth < 0.001 ||
+    leftHeight < 0.001 || rightHeight < 0.001
   ) {
     return null;
   }
 
-  const eyeDisagreement = Math.abs(leftRatio - rightRatio);
-  if (eyeDisagreement > 0.25) return null;
+  const leftHorizontal =
+    (leftIris.x - Math.min(leftOuter.x, leftInner.x)) / leftWidth;
+  const rightHorizontal =
+    (rightIris.x - Math.min(rightInner.x, rightOuter.x)) / rightWidth;
+  const leftVertical =
+    (leftIris.y - Math.min(leftTop.y, leftBottom.y)) / leftHeight;
+  const rightVertical =
+    (rightIris.y - Math.min(rightTop.y, rightBottom.y)) / rightHeight;
+
+  const ratios = [
+    leftHorizontal,
+    rightHorizontal,
+    leftVertical,
+    rightVertical,
+  ];
+
+  if (
+    ratios.some((ratio) =>
+      !Number.isFinite(ratio) || ratio < -0.15 || ratio > 1.15
+    )
+  ) {
+    return null;
+  }
+
+  const horizontalDisagreement = Math.abs(
+    leftHorizontal - rightHorizontal
+  );
+  const verticalDisagreement = Math.abs(
+    leftVertical - rightVertical
+  );
+
+  if (
+    horizontalDisagreement > 0.25 ||
+    verticalDisagreement > 0.35
+  ) {
+    return null;
+  }
+
+  const horizontalConfidence = 1 - horizontalDisagreement / 0.25;
+  const verticalConfidence = 1 - verticalDisagreement / 0.35;
 
   return {
-    position: (leftRatio + rightRatio) / 2,
-    confidence: Math.max(0, Math.min(1, 1 - eyeDisagreement / 0.25)),
+    horizontalPosition: (leftHorizontal + rightHorizontal) / 2,
+    verticalPosition: (leftVertical + rightVertical) / 2,
+    confidence: Math.max(
+      0,
+      Math.min(1, horizontalConfidence, verticalConfidence)
+    ),
   };
 }
 
@@ -96,7 +134,7 @@ export default function FaceProctoring({
   const facePresentSinceRef = useRef<number | null>(null);
   const faceVerifiedRef = useRef(false);
   const gazeAwaySinceRef = useRef<number | null>(null);
-  const gazeSamplesRef = useRef<HorizontalGazeEstimate[]>([]);
+  const gazeSamplesRef = useRef<GazeEstimate[]>([]);
   const lastReportedRef = useRef<Record<string, number>>({});
   const [status, setStatus] = useState<DetectorStatus>("idle");
 
@@ -208,7 +246,7 @@ export default function FaceProctoring({
                   onFaceVerified();
                 }
 
-                const estimate = estimateHorizontalGaze(faces[0]);
+                const estimate = estimateGaze(faces[0]);
 
                 if (estimate) {
                   gazeSamplesRef.current = [
@@ -218,8 +256,12 @@ export default function FaceProctoring({
 
                   // Smooth short-lived landmark jitter before classifying gaze.
                   const samples = gazeSamplesRef.current;
-                  const smoothedGaze = samples.reduce(
-                    (total, sample) => total + sample.position,
+                  const smoothedHorizontal = samples.reduce(
+                    (total, sample) => total + sample.horizontalPosition,
+                    0
+                  ) / samples.length;
+                  const smoothedVertical = samples.reduce(
+                    (total, sample) => total + sample.verticalPosition,
                     0
                   ) / samples.length;
                   const averageConfidence = samples.reduce(
@@ -227,9 +269,13 @@ export default function FaceProctoring({
                     0
                   ) / samples.length;
 
-                  const lookingAway =
-                    smoothedGaze < threshold ||
-                    smoothedGaze > 1 - threshold;
+                  const horizontalAway =
+                    smoothedHorizontal < threshold ||
+                    smoothedHorizontal > 1 - threshold;
+                  const verticalAway =
+                    smoothedVertical < threshold ||
+                    smoothedVertical > 1 - threshold;
+                  const lookingAway = horizontalAway || verticalAway;
 
                   if (lookingAway && samples.length >= 4) {
                     if (gazeAwaySinceRef.current === null) {
@@ -238,12 +284,15 @@ export default function FaceProctoring({
 
                     if (now - gazeAwaySinceRef.current >= 1200) {
                       reportWithCooldown("gaze", () => onGazeAway({
-                        direction: smoothedGaze < threshold ? "left" : "right",
-                        normalized_horizontal_position: Number(smoothedGaze.toFixed(3)),
+                        direction: horizontalAway
+                          ? (smoothedHorizontal < threshold ? "left" : "right")
+                          : (smoothedVertical < threshold ? "up" : "down"),
+                        normalized_horizontal_position: Number(smoothedHorizontal.toFixed(3)),
+                        normalized_vertical_position: Number(smoothedVertical.toFixed(3)),
                         confidence: Number(averageConfidence.toFixed(2)),
                         consistent_samples: samples.length,
                         detector: "mediapipe_face_landmarker",
-                        estimation: "bilateral_iris_ratio_smoothed",
+                        estimation: "bilateral_iris_ratio_2d_smoothed",
                       }));
                     }
                   } else {
