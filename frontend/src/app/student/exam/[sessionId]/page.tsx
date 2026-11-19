@@ -29,6 +29,7 @@ interface ExamQuestion {
   question_type: string;
   marks: number;
   options?: ExamOption[];
+  question_image_available?: boolean;
 }
 
 interface ExamPaper {
@@ -67,6 +68,7 @@ export default function StudentExamPage() {
   const [examAccessToken, setExamAccessToken] = useState<string | null>(null);
   const [faceVerified, setFaceVerified] = useState(false);
   const [uploadedImageQuestionIds, setUploadedImageQuestionIds] = useState<number[]>([]);
+  const [questionImageUrls, setQuestionImageUrls] = useState<Record<number, string>>({});
   const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
   const [imageUploading, setImageUploading] = useState(false);
   const [websocketStatus, setWebsocketStatus] = useState("disconnected");
@@ -264,6 +266,55 @@ export default function StudentExamPage() {
       setLoading(false);
     }
   }, [examIdKey, getHeaders, sessionId]);
+
+  useEffect(() => {
+    if (!paper) return;
+
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    const token = getExamToken();
+
+    if (!token) return;
+
+    const imageQuestions = paper.questions.filter(
+      (question) => question.question_image_available
+    );
+
+    Promise.all(
+      imageQuestions.map(async (question) => {
+        const response = await fetch(
+          `${API_URL}/answers/${sessionId}/questions/${question.id}/image`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok) return null;
+
+        const imageBlob = await response.blob();
+        const imageUrl = URL.createObjectURL(imageBlob);
+        createdUrls.push(imageUrl);
+        return [question.id, imageUrl] as const;
+      })
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const nextUrls: Record<number, string> = {};
+        for (const result of results) {
+          if (result) nextUrls[result[0]] = result[1];
+        }
+        setQuestionImageUrls(nextUrls);
+      })
+      .catch(() => {
+        if (!cancelled) setQuestionImageUrls({});
+      });
+
+    return () => {
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [paper, getExamToken, sessionId]);
 
   const loadRemainingTime = useCallback(async () => {
     const headers = getHeaders();
@@ -712,7 +763,7 @@ export default function StudentExamPage() {
       );
     }
 
-    if (question.question_type === "image_upload") {
+    if (String(question.question_type).toLowerCase() === "image_upload") {
       return (
         <div className="mt-5 space-y-3">
           {uploadedImageQuestionIds.includes(question.id) ? (
@@ -895,6 +946,19 @@ export default function StudentExamPage() {
                 <h2 className="whitespace-pre-wrap text-lg font-semibold leading-8">
                   {currentQuestion.question_text}
                 </h2>
+
+                {questionImageUrls[currentQuestion.id] && (
+                  <div className="mt-5 rounded-xl border border-slate-700 bg-slate-800 p-3">
+                    <p className="mb-2 text-xs font-medium text-slate-400">
+                      Question Image
+                    </p>
+                    <img
+                      src={questionImageUrls[currentQuestion.id]}
+                      alt="Image attached to the examination question"
+                      className="max-h-96 w-full rounded-lg bg-white object-contain"
+                    />
+                  </div>
+                )}
 
                 {renderAnswerInput(currentQuestion)}
               </div>
