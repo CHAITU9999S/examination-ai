@@ -1023,6 +1023,27 @@ export default function StudentExamPage() {
                   This session has been flagged for examiner review.
                 </div>
               )}
+              {proctoring.events.length > 0 && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3"
+                >
+                  <p className="text-xs font-semibold text-amber-200">
+                    Recent proctoring alerts
+                  </p>
+                  <ul className="space-y-1">
+                    {proctoring.events.slice(-3).reverse().map((event, index) => (
+                      <li
+                        key={`${event.event_type}-${event.timestamp}-${index}`}
+                        className="text-xs text-amber-100"
+                      >
+                        {event.description}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="text-xs text-amber-300">
                 Proctoring checks are automated indicators for examiner review, not proof of misconduct.
               </p>
