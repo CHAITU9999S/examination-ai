@@ -119,6 +119,12 @@ def test_student_can_open_own_published_result(client, db_session):
     assert data["result_id"] == result.id
     assert data["obtained_marks"] == 7.5
     assert data["percentage"] == 75
+    distribution = data["cohort_distribution"]
+    assert distribution["cohort_size"] == 1
+    assert distribution["current_student_percentage"] == 75.0
+    assert sum(band["count"] for band in distribution["score_bands"]) == 1
+    assert distribution["score_bands"][7]["count"] == 1
+    assert all("email" not in band for band in distribution["score_bands"])
 
 
 def test_student_cannot_view_another_students_result(client, db_session):
