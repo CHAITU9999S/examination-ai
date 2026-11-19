@@ -845,7 +845,7 @@ export default function StudentExamPage() {
             >
               <div className="max-w-md">
                 <p className="text-lg font-bold text-white">
-                  Complete face verification to begin
+                  Complete the face-presence check to begin
                 </p>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
                   Keep your face clearly visible in the webcam. The examination
@@ -854,7 +854,7 @@ export default function StudentExamPage() {
                 </p>
                 <p className="mt-4 text-sm text-amber-300">
                   {cameraStream
-                    ? "Face verification is in progress..."
+                    ? "Face-presence check is in progress..."
                     : "Allow camera access and keep the webcam connected."}
                 </p>
               </div>
@@ -1011,7 +1011,7 @@ export default function StudentExamPage() {
                 onDetectorError={proctoring.reportWebcamError}
               />
               <p className="text-xs text-slate-400">
-                Entry face check: {faceVerified ? "Verified" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
+                Face presence: {faceVerified ? "Confirmed" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
                 Heartbeat: {websocketStatus}
               </p>
               {proctoring.isAutoFlagged && (
