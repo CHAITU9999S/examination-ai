@@ -30,6 +30,13 @@ router = APIRouter(
 )
 
 
+class RubricScore(BaseModel):
+    criterion: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    max_marks: float = Field(gt=0, allow_inf_nan=False)
+    awarded_marks: float = Field(ge=0, allow_inf_nan=False)
+
+
 class ImageAnnotation(BaseModel):
     annotation_type: Literal["highlight", "comment"]
     x: float = Field(ge=0, le=100, allow_inf_nan=False)
@@ -48,6 +55,10 @@ class ManualGradeSubmission(BaseModel):
     image_annotations: list[ImageAnnotation] = Field(
         default_factory=list,
         max_length=50,
+    )
+    rubric_scores: list[RubricScore] = Field(
+        default_factory=list,
+        max_length=30,
     )
 
 
@@ -97,6 +108,44 @@ def get_authorized_exam(
         )
 
     return exam
+
+
+def _validate_rubric_scores(question, rubric_scores, awarded_marks):
+    """Validate a per-criterion rubric and ensure its total matches final marks."""
+    if not rubric_scores:
+        return None
+
+    criterion_names = [item.criterion.strip().casefold() for item in rubric_scores]
+    if len(criterion_names) != len(set(criterion_names)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rubric criteria must be unique.",
+        )
+
+    maximum_total = sum(float(item.max_marks) for item in rubric_scores)
+    awarded_total = sum(float(item.awarded_marks) for item in rubric_scores)
+    question_maximum = float(question.marks or 0)
+
+    if not math.isclose(maximum_total, question_maximum, rel_tol=0, abs_tol=0.01):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rubric maximum marks must add up to the question's maximum marks.",
+        )
+
+    for item in rubric_scores:
+        if item.awarded_marks > item.max_marks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Rubric marks for '{item.criterion}' exceed its maximum.",
+            )
+
+    if not math.isclose(awarded_total, float(awarded_marks), rel_tol=0, abs_tol=0.01):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The sum of rubric marks must equal the final awarded marks.",
+        )
+
+    return [item.model_dump() for item in rubric_scores]
 
 
 def _get_submitted_answer_context(
@@ -230,6 +279,7 @@ def get_all_pending_subjective_answers(
                 "ai_model": answer.ai_model,
                 "examiner_feedback": answer.examiner_feedback,
                 "image_annotations": answer.image_annotations or [],
+                "rubric_scores": answer.rubric_scores or [],
                 "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
             }
@@ -305,6 +355,7 @@ def get_pending_subjective_answers(
                 "model_answer": question.model_answer_text,
                 "examiner_feedback": answer.examiner_feedback,
                 "image_annotations": answer.image_annotations or [],
+                "rubric_scores": answer.rubric_scores or [],
                 "submitted_at": session.submitted_at,
             }
             for answer, session, question in rows
@@ -569,6 +620,11 @@ def grade_subjective_answer(
             if submission.image_annotations
             else None
         )
+        locked_answer.rubric_scores = _validate_rubric_scores(
+            question,
+            submission.rubric_scores,
+            submission.awarded_marks,
+        )
         db.commit()
 
         result = calculate_session_result(
@@ -750,6 +806,11 @@ def bulk_grade_session_answers(
                 [annotation.model_dump() for annotation in item.image_annotations]
                 if item.image_annotations
                 else None
+            )
+            answer.rubric_scores = _validate_rubric_scores(
+                question,
+                item.rubric_scores,
+                item.awarded_marks,
             )
 
         db.commit()
