@@ -584,6 +584,13 @@ export default function StudentExamPage() {
       ) {
         setRemainingSeconds(0);
         setError("The examination session has expired. Submitting your saved answers.");
+      } else if (
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "token_expired"
+      ) {
+        void refreshExamAccessToken();
       }
     },
   });
