@@ -703,7 +703,7 @@ export default function StudentExamPage() {
             rows={question.question_type === "short_answer" ? 4 : 9}
             maxLength={50000}
             placeholder="Type your answer here..."
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
+            className="w-full select-text rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
           />
           <p className={`mt-2 text-right text-xs ${wordCount > wordLimit ? "text-red-400" : "text-slate-400"}`} aria-live="polite">
             {wordCount} / {wordLimit} words
@@ -797,29 +797,11 @@ export default function StudentExamPage() {
 
   return (
     <main
-      className="min-h-screen bg-slate-950 text-white"
+      className="min-h-screen select-none bg-slate-950 text-white"
       onContextMenu={(event) => event.preventDefault()}
       onCopy={(event) => event.preventDefault()}
       onCut={(event) => event.preventDefault()}
       onPaste={(event) => event.preventDefault()}
-      onSelectStart={(event) => {
-        const target = event.target as HTMLElement | null;
-        if (
-          target?.closest(
-            "input, textarea, select, [contenteditable='true'], [role='textbox']"
-          )
-        ) {
-          return;
-        }
-        event.preventDefault();
-      }}
-      onDragStart={(event) => {
-        const target = event.target as HTMLElement | null;
-        if (target?.closest("input, textarea, [contenteditable='true']")) {
-          return;
-        }
-        event.preventDefault();
-      }}
     >
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
