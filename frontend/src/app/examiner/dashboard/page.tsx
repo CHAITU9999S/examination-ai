@@ -43,6 +43,16 @@ const navigation = [
     description: "Review and grade submitted subjective answers.",
     href: "/examiner/grading",
   },
+  {
+    title: "Result Publication",
+    description: "Review completed grading and publish student results.",
+    href: "/examiner/results",
+  },
+  {
+    title: "Proctoring Review",
+    description: "Review flagged sessions and recorded proctoring events.",
+    href: "/staff/proctoring",
+  },
 ];
 
 function formatDate(value?: string | null) {

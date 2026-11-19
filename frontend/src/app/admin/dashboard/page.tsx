@@ -49,6 +49,16 @@ const navigation = [
     description: "View and manage examination records.",
     href: "/admin/exams",
   },
+  {
+    title: "Admin Activity Logs",
+    description: "Review administrator actions and account changes.",
+    href: "/admin/activity-logs",
+  },
+  {
+    title: "Proctoring Review",
+    description: "Review flagged sessions and recorded proctoring events.",
+    href: "/staff/proctoring",
+  },
 ];
 
 export default function AdminDashboardPage() {

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import verify_token
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models import (
     Exam,
     ExamSession,
@@ -271,6 +272,118 @@ def record_proctoring_event(
         "session_id": session_id,
         "recorded": True,
     }
+
+# ==========================================
+# LIST FLAGGED EXAMINATION SESSIONS
+# ==========================================
+
+@router.get("/proctoring/flagged")
+def list_flagged_proctoring_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List suspicious sessions for authorized examiners and Admins."""
+
+    role = getattr(current_user.role, "value", current_user.role)
+    if role not in {"admin", "examiner"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only examiners and administrators can review flagged sessions.",
+        )
+
+    query = db.query(
+        ExamSession,
+        Exam,
+        User,
+    ).join(
+        Exam,
+        ExamSession.exam_id == Exam.id,
+    ).join(
+        User,
+        ExamSession.student_id == User.id,
+    )
+
+    if role == "examiner":
+        query = query.filter(Exam.created_by == current_user.id)
+
+    rows = query.order_by(
+        ExamSession.started_at.desc(),
+        ExamSession.id.desc(),
+    ).limit(250).all()
+
+    flagged_sessions = []
+    for session, exam, student in rows:
+        event_rows = db.query(
+            ProctorEvent.event_type,
+            func.count(ProctorEvent.id),
+        ).filter(
+            ProctorEvent.session_id == session.id,
+        ).group_by(
+            ProctorEvent.event_type,
+        ).all()
+
+        event_counts = {
+            event_type: int(count)
+            for event_type, count in event_rows
+        }
+        tab_switch_count = event_counts.get("tab_switch", 0)
+        threshold = (
+            int(exam.max_tab_switch_warnings)
+            if exam.max_tab_switch_warnings is not None
+            else None
+        )
+        auto_flagged = (
+            threshold is not None
+            and threshold > 0
+            and tab_switch_count >= threshold
+        )
+        score = float(session.suspicion_score or 0)
+        flagged = auto_flagged or score >= 50
+
+        if not flagged:
+            continue
+
+        events = db.query(ProctorEvent).filter(
+            ProctorEvent.session_id == session.id,
+        ).order_by(
+            ProctorEvent.created_at.desc(),
+            ProctorEvent.id.desc(),
+        ).limit(20).all()
+
+        flagged_sessions.append({
+            "session_id": session.id,
+            "exam_id": exam.id,
+            "exam_title": exam.title,
+            "student_id": student.id,
+            "student_name": student.full_name,
+            "session_status": session.status,
+            "started_at": session.started_at,
+            "submitted_at": session.submitted_at,
+            "suspicion_score": score,
+            "auto_flagged": auto_flagged,
+            "tab_switch_count": tab_switch_count,
+            "tab_switch_threshold": threshold,
+            "event_counts": event_counts,
+            "events": [
+                {
+                    "event_id": event.id,
+                    "event_type": event.event_type,
+                    "description": event.description,
+                    "suspicion_points": event.suspicion_points,
+                    "cumulative_suspicion_score": event.cumulative_suspicion_score,
+                    "created_at": event.created_at,
+                }
+                for event in events
+            ],
+            # Webcam frames are intentionally not uploaded or stored.
+            "webcam_snapshots_available": False,
+        })
+
+    return {
+        "total_flagged": len(flagged_sessions),
+        "sessions": flagged_sessions,
+    }
+
 
 # ==========================================
 # GET PROCTORING SUMMARY

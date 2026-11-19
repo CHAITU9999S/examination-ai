@@ -189,13 +189,21 @@ export default function StudentDashboardPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-lg border border-red-400/30 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
-          >
-            Logout
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/student/results"
+              className="rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/10"
+            >
+              My Results
+            </Link>
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-red-400/30 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 

@@ -378,3 +378,191 @@ def test_ai_grading_rejects_image_upload_answers(
 
     assert response.status_code == 400
     assert "short and long" in response.json()["detail"].lower()
+
+
+def test_examiner_review_queue_groups_answers_by_question(
+    client,
+    grading_data,
+):
+    data = grading_data
+    response = client.get(
+        f"/grading/exams/{data['exam'].id}/review-groups",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    groups = response.json()["question_groups"]
+    assert len(groups) == 1
+    assert groups[0]["question_id"] == data["question"].id
+    assert groups[0]["answers"][0]["answer_id"] == data["answer"].id
+
+
+def test_examiner_can_bulk_grade_and_save_feedback(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/sessions/{data['session'].id}/bulk-grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "grades": [
+                {
+                    "answer_id": data["answer"].id,
+                    "awarded_marks": 4.0,
+                    "examiner_feedback": "Good explanation.",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["graded_answer_count"] == 1
+    db_session.refresh(data["answer"])
+    assert data["answer"].awarded_marks == pytest.approx(4.0)
+    assert data["answer"].examiner_feedback == "Good explanation."
+
+
+def test_examiner_can_publish_complete_result_and_student_can_view_it(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    grade_response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "examiner_feedback": "Correct core concept; add an example.",
+        },
+    )
+    assert grade_response.status_code == 200
+
+    publish_response = client.post(
+        f"/grading/sessions/{data['session'].id}/publish",
+        headers=auth_headers(data["examiner"]),
+    )
+    assert publish_response.status_code == 200
+    assert publish_response.json()["published"] is True
+
+    db_session.refresh(data["answer"])
+    result = db_session.query(Result).filter(
+        Result.session_id == data["session"].id,
+    ).one()
+    assert result.is_published is True
+    assert result.published_at is not None
+
+    student_results = client.get(
+        "/results/me",
+        headers=auth_headers(data["student"]),
+    )
+    assert student_results.status_code == 200
+    assert len(student_results.json()["results"]) == 1
+
+    detail = client.get(
+        f"/results/{data['session'].id}",
+        headers=auth_headers(data["student"]),
+    )
+    assert detail.status_code == 200
+    question_result = detail.json()["question_results"][0]
+    assert question_result["outcome"] == "partial"
+    assert question_result["examiner_feedback"] == "Correct core concept; add an example."
+
+
+def test_published_result_cannot_be_changed(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    data["answer"].awarded_marks = 4.0
+    db_session.commit()
+
+    publish_response = client.post(
+        f"/grading/sessions/{data['session'].id}/publish",
+        headers=auth_headers(data["examiner"]),
+    )
+    assert publish_response.status_code == 200
+
+    edit_response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={"awarded_marks": 2.0},
+    )
+    assert edit_response.status_code == 409
+
+
+def test_examiner_can_list_submitted_sessions_for_review(
+    client,
+    grading_data,
+):
+    data = grading_data
+    response = client.get(
+        "/grading/sessions",
+        headers=auth_headers(data["examiner"]),
+    )
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+    assert any(item["session_id"] == data["session"].id for item in sessions)
+
+
+def test_examiner_can_save_rubric_breakdown(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "rubric_scores": [
+                {
+                    "criterion": "Concept accuracy",
+                    "description": "Explains the core concept.",
+                    "max_marks": 3.0,
+                    "awarded_marks": 2.5,
+                },
+                {
+                    "criterion": "Organization",
+                    "description": "Presents the information clearly.",
+                    "max_marks": 2.0,
+                    "awarded_marks": 1.5,
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(data["answer"])
+    assert len(data["answer"].rubric_scores) == 2
+    assert sum(
+        item["awarded_marks"] for item in data["answer"].rubric_scores
+    ) == pytest.approx(4.0)
+
+
+def test_rubric_maximum_must_match_question_maximum(
+    client,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "rubric_scores": [
+                {
+                    "criterion": "Concept accuracy",
+                    "max_marks": 4.0,
+                    "awarded_marks": 4.0,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "maximum marks" in response.json()["detail"].lower()

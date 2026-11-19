@@ -15,6 +15,7 @@ from app.routers import (
     answers,
     proctoring,
     grading,
+    results,
 )
 from app.services.exam_scheduler import (
     start_exam_scheduler,
@@ -127,6 +128,7 @@ app.include_router(answers.router)
 app.include_router(answers.legacy_router)
 app.include_router(proctoring.router)
 app.include_router(grading.router)
+app.include_router(results.router)
 
 
 # ==========================================

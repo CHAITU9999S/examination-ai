@@ -27,6 +27,25 @@ interface PendingAnswer {
   ai_matched_points?: string[] | null;
   ai_missed_points?: string[] | null;
   ai_model?: string | null;
+  examiner_feedback?: string | null;
+  image_annotations?: ImageAnnotation[] | null;
+  rubric_scores?: RubricScore[] | null;
+}
+
+interface RubricScore {
+  criterion: string;
+  description?: string | null;
+  max_marks: number;
+  awarded_marks: number;
+}
+
+interface ImageAnnotation {
+  annotation_type: "highlight" | "comment";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
 }
 
 interface GradingSuggestion {
@@ -54,6 +73,21 @@ export default function ExaminerGradingPage() {
   const [saving, setSaving] = useState(false);
   const [awardedMarks, setAwardedMarks] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [examinerFeedback, setExaminerFeedback] = useState("");
+  const [imageAnnotations, setImageAnnotations] = useState<ImageAnnotation[]>([]);
+  const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
+  const [rubricCriterion, setRubricCriterion] = useState("");
+  const [rubricDescription, setRubricDescription] = useState("");
+  const [rubricMaximum, setRubricMaximum] = useState("");
+  const [rubricAwarded, setRubricAwarded] = useState("");
+  const [selectedForBulk, setSelectedForBulk] = useState<number[]>([]);
+  const [bulkMarks, setBulkMarks] = useState<Record<number, string>>({});
+  const [annotationType, setAnnotationType] = useState<"highlight" | "comment">("comment");
+  const [annotationX, setAnnotationX] = useState("50");
+  const [annotationY, setAnnotationY] = useState("50");
+  const [annotationWidth, setAnnotationWidth] = useState("15");
+  const [annotationHeight, setAnnotationHeight] = useState("10");
+  const [annotationText, setAnnotationText] = useState("");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -187,8 +221,103 @@ export default function ExaminerGradingPage() {
           ? String(answer.ai_suggested_marks)
           : ""
     );
+    setExaminerFeedback(answer.examiner_feedback || "");
+    setImageAnnotations(answer.image_annotations || []);
+    setRubricScores(answer.rubric_scores || []);
+    setRubricCriterion("");
+    setRubricDescription("");
+    setRubricMaximum("");
+    setRubricAwarded("");
+    setAnnotationText("");
     setError("");
     setMessage("");
+  }
+
+  function toggleBulkSelection(answer: PendingAnswer, checked: boolean) {
+    if (checked) {
+      const selected = answers.filter((item) => selectedForBulk.includes(item.answer_id));
+      if (selected.length > 0 && selected[0].session_id !== answer.session_id) {
+        setError("Bulk grading can include answers from one examination session only.");
+        return;
+      }
+      setSelectedForBulk((current) =>
+        current.includes(answer.answer_id) ? current : [...current, answer.answer_id]
+      );
+      setBulkMarks((current) => ({
+        ...current,
+        [answer.answer_id]: current[answer.answer_id] ?? "",
+      }));
+      setError("");
+    } else {
+      setSelectedForBulk((current) => current.filter((id) => id !== answer.answer_id));
+      setBulkMarks((current) => {
+        const next = { ...current };
+        delete next[answer.answer_id];
+        return next;
+      });
+    }
+  }
+
+  async function submitBulkGrades() {
+    const selected = answers.filter((answer) =>
+      selectedForBulk.includes(answer.answer_id)
+    );
+    if (selected.length === 0) {
+      setError("Select at least one answer for bulk grading.");
+      return;
+    }
+    const sessionId = selected[0].session_id;
+    if (selected.some((answer) => answer.session_id !== sessionId)) {
+      setError("Bulk grading can include answers from one examination session only.");
+      return;
+    }
+
+    const grades = [];
+    for (const answer of selected) {
+      const raw = bulkMarks[answer.answer_id] ?? "";
+      const marks = Number(raw);
+      if (
+        raw.trim() === "" ||
+        !Number.isFinite(marks) ||
+        marks < 0 ||
+        marks > answer.marks
+      ) {
+        setError(`Enter valid marks between 0 and ${answer.marks} for answer #${answer.answer_id}.`);
+        return;
+      }
+      grades.push({
+        answer_id: answer.answer_id,
+        awarded_marks: marks,
+      });
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(
+        `${API_URL}/grading/sessions/${sessionId}/bulk-grade`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ grades }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to save bulk grading.");
+      }
+      setMessage(`${data.graded_answer_count} answers were graded successfully.`);
+      setSelectedForBulk([]);
+      setBulkMarks({});
+      await loadPendingAnswers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save bulk grading.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function requestAISuggestion() {
@@ -264,6 +393,9 @@ export default function ExaminerGradingPage() {
           headers,
           body: JSON.stringify({
             awarded_marks: marks,
+            examiner_feedback: examinerFeedback.trim() || null,
+            image_annotations: imageAnnotations,
+            rubric_scores: rubricScores,
           }),
         }
       );
@@ -280,6 +412,9 @@ export default function ExaminerGradingPage() {
       setSelectedAnswer(null);
       setSuggestion(null);
       setAwardedMarks("");
+      setExaminerFeedback("");
+      setImageAnnotations([]);
+      setRubricScores([]);
 
       await loadPendingAnswers();
     } catch (err) {
@@ -292,6 +427,16 @@ export default function ExaminerGradingPage() {
       setSaving(false);
     }
   }
+
+  const questionGroups = answers.reduce<Record<string, PendingAnswer[]>>(
+    (groups, answer) => {
+      const key = `${answer.exam_id}-${answer.question_id}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(answer);
+      return groups;
+    },
+    {}
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -359,6 +504,16 @@ export default function ExaminerGradingPage() {
               </p>
             </div>
 
+            {selectedForBulk.length > 0 && (
+              <button
+                type="button"
+                onClick={submitBulkGrades}
+                disabled={saving}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : `Submit ${selectedForBulk.length} selected grades`}
+              </button>
+            )}
             <button
               type="button"
               onClick={loadPendingAnswers}
@@ -379,12 +534,44 @@ export default function ExaminerGradingPage() {
             </p>
           ) : (
             <div className="mt-6 space-y-4">
-              {answers.map((answer) => (
+              {Object.entries(questionGroups).map(([groupKey, group]) => (
+                <div key={groupKey} className="rounded-xl border border-white/10 bg-slate-900/50 p-4">
+                  <h3 className="mb-3 font-semibold text-blue-300">
+                    {group[0].question_text}
+                  </h3>
+                  <div className="space-y-4">
+                  {group.map((answer) => (
                 <article
                   key={answer.answer_id}
                   className="rounded-xl border border-white/10 bg-slate-800/60 p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={selectedForBulk.includes(answer.answer_id)}
+                        onChange={(event) => toggleBulkSelection(answer, event.target.checked)}
+                        aria-label={`Select answer ${answer.answer_id} for bulk grading`}
+                      />
+                      Bulk select
+                    </label>
+                    {selectedForBulk.includes(answer.answer_id) && (
+                      <label className="text-xs text-slate-400">
+                        Marks
+                        <input
+                          type="number"
+                          min="0"
+                          max={answer.marks}
+                          step="0.01"
+                          value={bulkMarks[answer.answer_id] ?? ""}
+                          onChange={(event) => setBulkMarks((current) => ({
+                            ...current,
+                            [answer.answer_id]: event.target.value,
+                          }))}
+                          className="ml-2 w-24 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-white"
+                        />
+                      </label>
+                    )}
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold">
                         {answer.exam_title || `Examination #${answer.exam_id}`}
@@ -423,6 +610,9 @@ export default function ExaminerGradingPage() {
                     </button>
                   </div>
                 </article>
+                  ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -441,6 +631,9 @@ export default function ExaminerGradingPage() {
                   setSelectedAnswer(null);
                   setSuggestion(null);
                   setAwardedMarks("");
+                  setExaminerFeedback("");
+                  setImageAnnotations([]);
+                  setRubricScores([]);
                 }}
                 className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
               >
@@ -481,11 +674,30 @@ export default function ExaminerGradingPage() {
                 {selectedAnswer.image_path && (
                   <div className="mt-3 rounded-lg bg-slate-800 p-4">
                     {imagePreviewUrl ? (
-                      <img
-                        src={imagePreviewUrl}
-                        alt="Uploaded handwritten examination answer"
-                        className="max-h-[32rem] w-full rounded-lg object-contain"
-                      />
+                      <div className="relative inline-block max-w-full">
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Uploaded handwritten examination answer"
+                          className="max-h-[32rem] w-full rounded-lg object-contain"
+                        />
+                        {imageAnnotations.map((annotation, index) => (
+                          <div
+                            key={index}
+                            title={annotation.text}
+                            className={annotation.annotation_type === "highlight"
+                              ? "pointer-events-none absolute border-2 border-amber-400 bg-amber-300/10"
+                              : "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-400 bg-red-500/30 px-2 py-1 text-[10px] text-white"}
+                            style={{
+                              left: `${annotation.x}%`,
+                              top: `${annotation.y}%`,
+                              width: annotation.annotation_type === "highlight" ? `${annotation.width}%` : "auto",
+                              height: annotation.annotation_type === "highlight" ? `${annotation.height}%` : "auto",
+                            }}
+                          >
+                            {annotation.annotation_type === "comment" ? index + 1 : null}
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-sm text-slate-400">Loading uploaded answer image...</p>
                     )}
@@ -623,6 +835,268 @@ export default function ExaminerGradingPage() {
                   You can accept, modify, or ignore the AI suggestion.
                 </p>
               </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <h3 className="font-semibold">Rubric-based marks breakdown</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Add criteria whose maximum marks total the question maximum. The awarded marks across criteria must equal the final score.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm">
+                    Criterion
+                    <input
+                      value={rubricCriterion}
+                      onChange={(event) => setRubricCriterion(event.target.value)}
+                      maxLength={200}
+                      placeholder="e.g. Concept accuracy"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Description (optional)
+                    <input
+                      value={rubricDescription}
+                      onChange={(event) => setRubricDescription(event.target.value)}
+                      maxLength={1000}
+                      placeholder="What should this criterion assess?"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Maximum marks
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={rubricMaximum}
+                      onChange={(event) => setRubricMaximum(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Awarded marks
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rubricAwarded}
+                      onChange={(event) => setRubricAwarded(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maximum = Number(rubricMaximum);
+                    const awarded = Number(rubricAwarded);
+                    const existingMaximum = rubricScores.reduce((sum, item) => sum + item.max_marks, 0);
+                    if (
+                      !rubricCriterion.trim() ||
+                      !Number.isFinite(maximum) ||
+                      !Number.isFinite(awarded) ||
+                      maximum <= 0 ||
+                      awarded < 0 ||
+                      awarded > maximum ||
+                      existingMaximum + maximum > selectedAnswer.marks + 0.01 ||
+                      rubricScores.some((item) => item.criterion.trim().toLowerCase() === rubricCriterion.trim().toLowerCase())
+                    ) {
+                      setError("Enter a unique rubric criterion with valid marks within the question maximum.");
+                      return;
+                    }
+                    const next = [
+                      ...rubricScores,
+                      {
+                        criterion: rubricCriterion.trim(),
+                        description: rubricDescription.trim() || null,
+                        max_marks: maximum,
+                        awarded_marks: awarded,
+                      },
+                    ];
+                    setRubricScores(next);
+                    setAwardedMarks(next.reduce((sum, item) => sum + item.awarded_marks, 0).toFixed(2));
+                    setRubricCriterion("");
+                    setRubricDescription("");
+                    setRubricMaximum("");
+                    setRubricAwarded("");
+                    setError("");
+                  }}
+                  className="mt-4 rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10"
+                >
+                  Add rubric criterion
+                </button>
+                {rubricScores.length > 0 && (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[500px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400">
+                          <th className="py-2">Criterion</th>
+                          <th className="py-2">Awarded</th>
+                          <th className="py-2">Maximum</th>
+                          <th className="py-2">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rubricScores.map((item, index) => (
+                          <tr key={`${item.criterion}-${index}`} className="border-b border-white/5">
+                            <td className="py-3">
+                              <p className="font-medium">{item.criterion}</p>
+                              {item.description && <p className="text-xs text-slate-400">{item.description}</p>}
+                            </td>
+                            <td className="py-3">{item.awarded_marks}</td>
+                            <td className="py-3">{item.max_marks}</td>
+                            <td className="py-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = rubricScores.filter((_, itemIndex) => itemIndex !== index);
+                                  setRubricScores(next);
+                                  setAwardedMarks(next.reduce((sum, row) => sum + row.awarded_marks, 0).toFixed(2));
+                                }}
+                                className="text-xs text-red-300 hover:text-red-200"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="font-semibold">
+                          <td className="py-3">Total</td>
+                          <td className="py-3">{rubricScores.reduce((sum, item) => sum + item.awarded_marks, 0)}</td>
+                          <td className="py-3">{rubricScores.reduce((sum, item) => sum + item.max_marks, 0)} / {selectedAnswer.marks}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="examinerFeedback"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Examiner feedback for the student
+                </label>
+                <textarea
+                  id="examinerFeedback"
+                  rows={4}
+                  maxLength={5000}
+                  value={examinerFeedback}
+                  onChange={(event) => setExaminerFeedback(event.target.value)}
+                  placeholder="Write feedback explaining the awarded marks..."
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {selectedAnswer.question_type === "image_upload" && (
+                <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                  <h3 className="font-semibold">Image answer annotations</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Add a comment or highlight marker using percentage coordinates on the submitted answer image.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm">
+                      Annotation type
+                      <select
+                        value={annotationType}
+                        onChange={(event) => setAnnotationType(event.target.value as "highlight" | "comment")}
+                        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                      >
+                        <option value="comment">Text comment</option>
+                        <option value="highlight">Highlight area</option>
+                      </select>
+                    </label>
+                    <label className="text-sm">
+                      X position (%)
+                      <input type="number" min="0" max="100" value={annotationX} onChange={(event) => setAnnotationX(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="text-sm">
+                      Y position (%)
+                      <input type="number" min="0" max="100" value={annotationY} onChange={(event) => setAnnotationY(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    {annotationType === "highlight" && (
+                      <>
+                        <label className="text-sm">
+                          Width (%)
+                          <input type="number" min="0" max="100" value={annotationWidth} onChange={(event) => setAnnotationWidth(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                        </label>
+                        <label className="text-sm">
+                          Height (%)
+                          <input type="number" min="0" max="100" value={annotationHeight} onChange={(event) => setAnnotationHeight(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <label className="mt-3 block text-sm">
+                    Annotation text
+                    <input
+                      type="text"
+                      maxLength={500}
+                      value={annotationText}
+                      onChange={(event) => setAnnotationText(event.target.value)}
+                      placeholder="Explain this highlight or comment"
+                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const x = Number(annotationX);
+                      const y = Number(annotationY);
+                      const width = annotationType === "highlight" ? Number(annotationWidth) : 0;
+                      const height = annotationType === "highlight" ? Number(annotationHeight) : 0;
+                      if (
+                        !annotationText.trim() ||
+                        !Number.isFinite(x) || !Number.isFinite(y) ||
+                        x < 0 || x > 100 || y < 0 || y > 100 ||
+                        width < 0 || width > 100 || height < 0 || height > 100
+                      ) {
+                        setError("Enter valid annotation text and coordinates from 0 to 100.");
+                        return;
+                      }
+                      setImageAnnotations((current) => [
+                        ...current,
+                        {
+                          annotation_type: annotationType,
+                          x,
+                          y,
+                          width,
+                          height,
+                          text: annotationText.trim(),
+                        },
+                      ]);
+                      setAnnotationText("");
+                      setError("");
+                    }}
+                    className="mt-4 rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10"
+                  >
+                    Add annotation
+                  </button>
+                  {imageAnnotations.length > 0 && (
+                    <ul className="mt-4 space-y-2">
+                      {imageAnnotations.map((annotation, index) => (
+                        <li key={index} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-900 p-3 text-sm">
+                          <span className="text-slate-300">
+                            <strong className="capitalize">{annotation.annotation_type}</strong>
+                            {" · "}({annotation.x}%, {annotation.y}%): {annotation.text}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setImageAnnotations((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                            className="text-xs text-red-300 hover:text-red-200"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <button
                 type="button"

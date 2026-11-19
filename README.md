@@ -316,3 +316,8 @@ Development is organized around the agreed 102-file target architecture.
 Files are reviewed and integrated incrementally.
 
 A feature is considered complete only after its implementation and relevant tests have been checked.
+
+
+## Final acceptance testing
+
+The deployment and manual verification checklist is available in [docs/FINAL_ACCEPTANCE_TEST_PLAN.md](docs/FINAL_ACCEPTANCE_TEST_PLAN.md). It covers Admin bootstrap, role permissions, examination lifecycle, grading, result publication, proctoring privacy, and browser/device checks.
