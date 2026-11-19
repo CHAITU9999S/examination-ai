@@ -1,12 +1,14 @@
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.auth import hash_password
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models import User
+from app.models import AdminActivityLog, User
 from app.schemas import (
     AdminUserCreate,
     MessageResponse,
@@ -14,12 +16,25 @@ from app.schemas import (
     UserRole,
     UserStatusUpdate,
 )
+from app.services.admin_service import (
+    get_dashboard_statistics,
+    record_admin_activity,
+)
 
 
 router = APIRouter(
     prefix="/admin",
     tags=["Admin Management"]
 )
+
+
+@router.get("/dashboard")
+def admin_dashboard(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return platform statistics to authenticated Admins."""
+    return get_dashboard_statistics(db)
 
 
 @router.post(
@@ -34,17 +49,16 @@ def create_staff_account(
 ):
     """Allow Admins to create Admin and Examiner accounts."""
 
-    if user_data.role not in (
-        UserRole.ADMIN,
-        UserRole.EXAMINER
-    ):
+    if user_data.role not in (UserRole.ADMIN, UserRole.EXAMINER):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admins can create only Admin or Examiner accounts."
         )
 
+    normalized_email = str(user_data.email).strip().lower()
+
     existing_user = db.query(User).filter(
-        User.email == user_data.email
+        func.lower(User.email) == normalized_email
     ).first()
 
     if existing_user:
@@ -54,15 +68,38 @@ def create_staff_account(
         )
 
     new_user = User(
-        full_name=user_data.full_name,
-        email=user_data.email,
-        hashed_password=hash_password(user_data.password),
-        role=user_data.role,
+        full_name=user_data.full_name.strip(),
+        email=normalized_email,
+        department=(
+            user_data.department.strip()
+            if user_data.department and user_data.department.strip()
+            else None
+        ),
+        password_hash=hash_password(user_data.password),
+        role=user_data.role.value,
         is_active=True
     )
 
     try:
         db.add(new_user)
+        db.flush()
+
+        record_admin_activity(
+            db=db,
+            actor_user_id=current_admin.id,
+            target_user_id=new_user.id,
+            action=(
+                "examiner_created"
+                if user_data.role == UserRole.EXAMINER
+                else "admin_created"
+            ),
+            details={
+                "email": normalized_email,
+                "role": user_data.role.value,
+                "department": new_user.department,
+            },
+        )
+
         db.commit()
         db.refresh(new_user)
     except IntegrityError:
@@ -84,8 +121,45 @@ def list_users(
     db: Session = Depends(get_db)
 ):
     """Allow Admins to view all user accounts."""
-
     return db.query(User).order_by(User.id).all()
+
+
+@router.get("/activity-logs")
+def list_admin_activity_logs(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return the latest 100 Admin audit events."""
+
+    actor = aliased(User)
+    target = aliased(User)
+
+    rows = (
+        db.query(AdminActivityLog, actor, target)
+        .join(actor, AdminActivityLog.actor_user_id == actor.id)
+        .outerjoin(target, AdminActivityLog.target_user_id == target.id)
+        .order_by(AdminActivityLog.created_at.desc(), AdminActivityLog.id.desc())
+        .limit(100)
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "actor_user_id": log.actor_user_id,
+            "actor_name": actor_user.full_name,
+            "target_user_id": log.target_user_id,
+            "target_name": target_user.full_name if target_user else None,
+            "action": log.action,
+            "details": log.details or {},
+            "created_at": (
+                log.created_at.isoformat()
+                if isinstance(log.created_at, datetime)
+                else None
+            ),
+        }
+        for log, actor_user, target_user in rows
+    ]
 
 
 @router.delete(
@@ -97,11 +171,9 @@ def delete_user(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Allow Admins to delete Student, Examiner and Admin accounts."""
+    """Allow Admins to delete accounts when no records depend on them."""
 
-    target_user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+    target_user = db.query(User).filter(User.id == user_id).first()
 
     if target_user is None:
         raise HTTPException(
@@ -116,18 +188,18 @@ def delete_user(
         )
 
     if target_user.role not in (
-        UserRole.STUDENT,
-        UserRole.EXAMINER,
-        UserRole.ADMIN
+        UserRole.STUDENT.value,
+        UserRole.EXAMINER.value,
+        UserRole.ADMIN.value
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This account type cannot be deleted."
         )
 
-    if target_user.role == UserRole.ADMIN and target_user.is_active:
+    if target_user.role == UserRole.ADMIN.value and target_user.is_active:
         active_admin_count = db.query(User).filter(
-            User.role == UserRole.ADMIN,
+            User.role == UserRole.ADMIN.value,
             User.is_active.is_(True)
         ).count()
 
@@ -137,7 +209,25 @@ def delete_user(
                 detail="The last active Admin account cannot be deleted."
             )
 
+    deleted_user_details = {
+        "email": target_user.email,
+        "full_name": target_user.full_name,
+        "role": target_user.role,
+    }
+
     try:
+        # Keep the audit record even though the target account is deleted.
+        # target_user_id is intentionally NULL to avoid a dangling FK.
+        record_admin_activity(
+            db=db,
+            actor_user_id=current_admin.id,
+            target_user_id=None,
+            action="user_deleted",
+            details={
+                "target_user_id": target_user.id,
+                **deleted_user_details,
+            },
+        )
         db.delete(target_user)
         db.commit()
     except IntegrityError:
@@ -145,15 +235,13 @@ def delete_user(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "This account is linked to existing examination records. "
-                "It cannot be permanently deleted until those references "
-                "are handled safely."
+                "This account is linked to existing examination or audit "
+                "records and cannot be permanently deleted. Deactivate it "
+                "instead."
             )
         )
 
-    return MessageResponse(
-        message="User account deleted successfully."
-    )
+    return MessageResponse(message="User account deleted successfully.")
 
 
 @router.patch(
@@ -168,9 +256,7 @@ def update_user_status(
 ):
     """Allow Admins to activate or deactivate user accounts."""
 
-    target_user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+    target_user = db.query(User).filter(User.id == user_id).first()
 
     if target_user is None:
         raise HTTPException(
@@ -185,12 +271,12 @@ def update_user_status(
         )
 
     if (
-        target_user.role == UserRole.ADMIN
+        target_user.role == UserRole.ADMIN.value
         and target_user.is_active
         and not status_data.is_active
     ):
         active_admin_count = db.query(User).filter(
-            User.role == UserRole.ADMIN,
+            User.role == UserRole.ADMIN.value,
             User.is_active.is_(True)
         ).count()
 
@@ -200,10 +286,35 @@ def update_user_status(
                 detail="The last active Admin cannot be deactivated."
             )
 
+    previous_status = bool(target_user.is_active)
     target_user.is_active = status_data.is_active
 
-    db.commit()
-    db.refresh(target_user)
+    try:
+        if previous_status != status_data.is_active:
+            record_admin_activity(
+                db=db,
+                actor_user_id=current_admin.id,
+                target_user_id=target_user.id,
+                action=(
+                    "user_activated"
+                    if status_data.is_active
+                    else "user_deactivated"
+                ),
+                details={
+                    "email": target_user.email,
+                    "role": target_user.role,
+                    "previous_status": previous_status,
+                    "new_status": status_data.is_active,
+                },
+            )
+
+        db.commit()
+        db.refresh(target_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Unable to update account status."
+        )
 
     return target_user
-    
