@@ -706,6 +706,7 @@ def get_exam_paper(
             ),
             "marks": question.marks,
             "negative_marks": question.negative_marks,
+            "question_image_available": bool(question.question_image_path),
             "options": [
                 {
                     "id": option.id,
