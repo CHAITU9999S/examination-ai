@@ -57,6 +57,50 @@ def _get_percentile(db: Session, exam_id: int, obtained_marks: float):
     return round((at_or_below / cohort_size) * 100, 2)
 
 
+def _get_cohort_distribution(db: Session, exam_id: int, current_result_id: int):
+    """Return anonymized score-band counts for published results only."""
+    rows = db.query(Result).join(
+        ExamSession,
+        Result.session_id == ExamSession.id,
+    ).filter(
+        ExamSession.exam_id == exam_id,
+        Result.is_published.is_(True),
+    ).all()
+
+    buckets = [
+        {"label": f"{index * 10}-{(index + 1) * 10}%", "count": 0}
+        for index in range(10)
+    ]
+
+    current_percentage = None
+    for row in rows:
+        total = float(row.total_marks or 0)
+        obtained = float(row.obtained_marks or 0)
+        percentage = (
+            max(0.0, min(100.0, obtained / total * 100))
+            if total > 0
+            else 0.0
+        )
+        bucket_index = min(9, int(percentage // 10))
+        buckets[bucket_index]["count"] += 1
+        if row.id == current_result_id:
+            current_percentage = round(percentage, 2)
+
+    cohort_size = len(rows)
+    for bucket in buckets:
+        bucket["share_percentage"] = (
+            round(bucket["count"] / cohort_size * 100, 2)
+            if cohort_size
+            else 0.0
+        )
+
+    return {
+        "cohort_size": cohort_size,
+        "current_student_percentage": current_percentage,
+        "score_bands": buckets,
+    }
+
+
 @router.get("/me")
 def get_my_published_results(
     current_user: User = Depends(get_current_user),
@@ -204,5 +248,10 @@ def get_my_result_details(
         "obtained_marks": result.obtained_marks,
         "percentage": result.percentage,
         "percentile": percentile,
+        "cohort_distribution": _get_cohort_distribution(
+            db,
+            session.exam_id,
+            result.id,
+        ),
         "question_results": question_results,
     }
