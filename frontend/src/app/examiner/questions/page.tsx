@@ -35,6 +35,7 @@ interface Question {
   model_answer_text?: string | null;
   expected_answer?: string | null;
   options?: QuestionOption[];
+  question_image_available?: boolean;
 }
 
 export default function ExaminerQuestionsPage() {
@@ -53,6 +54,7 @@ export default function ExaminerQuestionsPage() {
   const [marks, setMarks] = useState("1");
   const [negativeMarks, setNegativeMarks] = useState("0");
   const [modelAnswer, setModelAnswer] = useState("");
+  const [questionImageFile, setQuestionImageFile] = useState<File | null>(null);
 
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctOption, setCorrectOption] = useState("0");
@@ -150,6 +152,7 @@ export default function ExaminerQuestionsPage() {
     setMarks("1");
     setNegativeMarks("0");
     setModelAnswer("");
+    setQuestionImageFile(null);
     setOptions(["", "", "", ""]);
     setCorrectOption("0");
     setCorrectOptions([0]);
@@ -259,7 +262,33 @@ export default function ExaminerQuestionsPage() {
         );
       }
 
-      setMessage("Question created successfully.");
+      if (questionImageFile) {
+        const imageForm = new FormData();
+        imageForm.append("file", questionImageFile);
+        const imageResponse = await fetch(
+          `${API_URL}/questions/${data.question_id}/image`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("examguard_access_token") || ""}`,
+            },
+            body: imageForm,
+          }
+        );
+        const imageData = await imageResponse.json().catch(() => ({}));
+        if (!imageResponse.ok) {
+          throw new Error(
+            imageData.detail ||
+            "The question was created, but its image could not be uploaded. Please retry by creating a new question with the image."
+          );
+        }
+      }
+
+      setMessage(
+        questionImageFile
+          ? "Question and prompt image created successfully."
+          : "Question created successfully."
+      );
       resetForm();
       await loadQuestions();
     } catch (err) {
@@ -455,6 +484,39 @@ export default function ExaminerQuestionsPage() {
               </div>
             </div>
 
+            {questionType === "image_upload" && (
+              <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <label htmlFor="questionImage" className="block font-semibold">
+                  Question Image (Optional)
+                </label>
+                <p className="mt-1 text-sm text-slate-400">
+                  Attach a diagram, photograph or scanned image for students to view with this question. Maximum size: 10 MB.
+                </p>
+                <input
+                  id="questionImage"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/tiff,image/bmp"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    if (file && file.size > 10 * 1024 * 1024) {
+                      setError("Question image must not exceed 10 MB.");
+                      event.target.value = "";
+                      setQuestionImageFile(null);
+                      return;
+                    }
+                    setError("");
+                    setQuestionImageFile(file);
+                  }}
+                  className="mt-4 block w-full cursor-pointer rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-blue-500"
+                />
+                {questionImageFile && (
+                  <p className="mt-2 break-all text-sm text-green-300">
+                    Selected: {questionImageFile.name}
+                  </p>
+                )}
+              </div>
+            )}
+
             {(questionType === "MCQ" ||
               questionType === "multi_select") && (
               <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
@@ -591,6 +653,11 @@ export default function ExaminerQuestionsPage() {
                       <h3 className="mt-2 font-semibold">
                         {question.question_text}
                       </h3>
+                      {question.question_image_available && (
+                        <p className="mt-2 text-xs text-green-300">
+                          Question image attached
+                        </p>
+                      )}
                     </div>
 
                     <span className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
