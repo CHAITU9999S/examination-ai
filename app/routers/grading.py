@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -386,10 +386,33 @@ def get_subjective_answer_image(
             detail="No image is attached to this answer.",
         )
 
+    if answer.image_data:
+        image_bytes = (
+            answer.thumbnail_data
+            if thumbnail and answer.thumbnail_data
+            else answer.image_data
+        )
+        media_type = (
+            "image/webp"
+            if thumbnail and answer.thumbnail_data
+            else answer.image_mime_type or "application/octet-stream"
+        )
+        return Response(
+            content=image_bytes,
+            media_type=media_type,
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    if answer.image_path.startswith("neon:"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored answer image data is unavailable.",
+        )
+
+    # Backward compatibility for answer images saved on the old local filesystem.
     upload_root = Path(
         os.getenv("ANSWER_UPLOAD_DIR") or os.getenv("UPLOAD_DIRECTORY", "uploads")
     ).resolve()
-
     relative_path = Path(answer.image_path)
 
     if relative_path.is_absolute() or ".." in relative_path.parts:
@@ -415,24 +438,20 @@ def get_subjective_answer_image(
         )
 
     media_type, _ = mimetypes.guess_type(image_file.name)
-
     if media_type not in {
         "image/jpeg",
         "image/png",
         "image/webp",
         "image/tiff",
         "image/bmp",
-        "image/webp",
     }:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Stored answer image has an unsupported format.",
         )
 
-    return FileResponse(
-        path=image_file,
-        media_type=media_type,
-    )
+    return FileResponse(path=image_file, media_type=media_type)
+
 
 
 @router.post("/sessions/{session_id}/evaluate-objective")
