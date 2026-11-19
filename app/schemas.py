@@ -101,6 +101,7 @@ class UserResponse(BaseSchema):
     id: int
     full_name: str
     email: EmailStr
+    department: str | None = None
     role: UserRole
     is_active: bool | None = True
 
@@ -112,6 +113,7 @@ class UserResponse(BaseSchema):
 class AdminUserCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
     email: EmailStr
+    department: str | None = Field(default=None, max_length=100)
     password: str = Field(min_length=8, max_length=128)
     role: UserRole
 
