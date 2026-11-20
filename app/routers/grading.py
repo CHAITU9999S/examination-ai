@@ -308,6 +308,7 @@ def get_all_pending_subjective_answers(
                 "marks": question.marks,
                 "maximum_marks": question.marks,
                 "awarded_marks": answer.awarded_marks,
+                "result_published": bool(result and result.is_published),
                 "ai_suggested_marks": answer.ai_suggested_marks,
                 "ai_justification": answer.ai_justification,
                 "ai_matched_points": answer.ai_matched_points or [],
@@ -1119,7 +1120,7 @@ def get_previously_graded_subjective_answers(
     """List previously graded subjective answers so staff can use allowed revisions."""
     require_examiner_or_admin(current_user)
     query = db.query(
-        Answer, ExamSession, QuestionBank, Exam, User
+        Answer, ExamSession, QuestionBank, Exam, User, Result
     ).join(
         ExamSession, Answer.session_id == ExamSession.id
     ).join(
@@ -1128,6 +1129,8 @@ def get_previously_graded_subjective_answers(
         Exam, Exam.id == ExamSession.exam_id
     ).join(
         User, User.id == ExamSession.student_id
+    ).outerjoin(
+        Result, Result.session_id == ExamSession.id
     ).filter(
         ExamSession.status == "submitted",
         QuestionBank.question_type.in_(["short_answer", "long_answer", "image_upload"]),
