@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import QuestionBank, Option, ExamQuestion, Exam, ExamSession
+from app.models import QuestionBank, Option, ExamQuestion, ExamSession
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
 from app.services.question_validation import validate_question
