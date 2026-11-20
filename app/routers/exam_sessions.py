@@ -28,6 +28,7 @@ from app.dependencies import get_current_user
 from app.models import (
     Exam,
     ExamAssignment,
+    ExamQuestion,
     ExamSession,
     Option,
     QuestionBank,
@@ -520,12 +521,74 @@ def get_exam_remaining_time(
         "session_id": session.id,
         "exam_id": session.exam_id,
         "status": session.status,
+        "is_paused": bool(session.is_paused),
         "started_at": session.started_at,
         "expires_at": session.expires_at,
         "remaining_seconds": get_remaining_seconds(
             session,
             now,
         ),
+    }
+
+
+# ==========================================
+# PAUSE AND RESUME EXAM SESSION
+# ==========================================
+
+@router.post("/pause/{session_id}")
+def pause_exam_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can pause an exam.")
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.student_id == current_user.id,
+    ).with_for_update().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
+    now = get_current_utc_time()
+    if session.status != "in_progress" or expire_session_if_needed(session, db, now):
+        raise HTTPException(status_code=409, detail="The exam session is no longer active.")
+    if not session.is_paused:
+        session.is_paused = True
+        session.paused_at = now
+        db.commit()
+    return {
+        "session_id": session.id,
+        "is_paused": True,
+        "remaining_seconds": get_remaining_seconds(session, now),
+        "message": "Exam paused. The official exam deadline continues to run.",
+    }
+
+
+@router.post("/resume/{session_id}")
+def resume_exam_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can resume an exam.")
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.student_id == current_user.id,
+    ).with_for_update().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
+    now = get_current_utc_time()
+    if session.status != "in_progress" or expire_session_if_needed(session, db, now):
+        raise HTTPException(status_code=409, detail="The exam session is no longer active.")
+    session.is_paused = False
+    session.paused_at = None
+    db.commit()
+    return {
+        "session_id": session.id,
+        "is_paused": False,
+        "remaining_seconds": get_remaining_seconds(session, now),
+        "message": "Exam resumed.",
     }
 
 
@@ -707,6 +770,11 @@ def get_exam_paper(
             Option.id
         ).all()
 
+        exam_question = db.query(ExamQuestion).filter(
+            ExamQuestion.exam_id == exam_id,
+            ExamQuestion.question_id == question_id,
+        ).first()
+
         paper.append({
             "id": question.id,
             "question_id": question.id,
@@ -718,6 +786,10 @@ def get_exam_paper(
             ),
             "marks": question.marks,
             "negative_marks": question.negative_marks,
+            "question_time_limit_seconds": (
+                exam_question.question_time_limit_seconds
+                if exam_question else None
+            ),
             "question_image_available": bool(question.question_image_path),
             "options": [
                 {
@@ -739,6 +811,7 @@ def get_exam_paper(
             session,
             get_current_utc_time(),
         ),
+        "is_paused": bool(session.is_paused),
         "total_questions": len(paper),
         "proctoring_enabled": bool(exam.proctoring_enabled),
         "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
