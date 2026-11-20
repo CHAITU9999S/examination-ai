@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.auth import hash_password
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models import AdminActivityLog, User
+from app.models import AdminActivityLog, Exam, ExamSession, Result, User
 from app.schemas import (
     AdminUserCreate,
     MessageResponse,
@@ -318,3 +318,94 @@ def update_user_status(
         )
 
     return target_user
+
+
+@router.get("/examiners", response_model=list[UserResponse])
+def list_examiners(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return all Examiner accounts, including inactive accounts."""
+    return db.query(User).filter(
+        User.role == UserRole.EXAMINER.value
+    ).order_by(User.full_name.asc()).all()
+
+
+@router.get("/students", response_model=list[UserResponse])
+def list_students(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return all Student accounts, including inactive accounts."""
+    return db.query(User).filter(
+        User.role == UserRole.STUDENT.value
+    ).order_by(User.full_name.asc()).all()
+
+
+@router.get("/exams")
+def list_all_examinations(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return all exams with creator and session counts for Admin oversight."""
+    rows = db.query(Exam, User).outerjoin(
+        User, User.id == Exam.created_by
+    ).order_by(Exam.id.desc()).all()
+    return {
+        "total": len(rows),
+        "exams": [
+            {
+                "exam_id": exam.id,
+                "title": exam.title,
+                "subject": exam.subject,
+                "created_by": exam.created_by,
+                "creator_name": creator.full_name if creator else None,
+                "duration_minutes": exam.duration_minutes,
+                "total_questions": exam.total_questions,
+                "start_time": exam.start_time,
+                "end_time": exam.end_time,
+                "session_count": db.query(ExamSession.id).filter(
+                    ExamSession.exam_id == exam.id
+                ).count(),
+            }
+            for exam, creator in rows
+        ],
+    }
+
+
+@router.get("/performance")
+def get_historical_student_performance(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return published historical performance across all examinations."""
+    rows = db.query(Result, ExamSession, Exam, User).join(
+        ExamSession, Result.session_id == ExamSession.id
+    ).join(
+        Exam, Exam.id == ExamSession.exam_id
+    ).join(
+        User, User.id == ExamSession.student_id
+    ).filter(
+        Result.is_published.is_(True)
+    ).order_by(
+        Result.published_at.desc(),
+        Result.id.desc(),
+    ).limit(2000).all()
+
+    return {
+        "total_published_results": len(rows),
+        "performance": [
+            {
+                "result_id": result.id,
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "obtained_marks": result.obtained_marks,
+                "total_marks": result.total_marks,
+                "percentage": result.percentage,
+                "published_at": result.published_at,
+            }
+            for result, session, exam, student in rows
+        ],
+    }
