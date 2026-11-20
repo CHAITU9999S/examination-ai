@@ -85,6 +85,7 @@ export default function ExaminerGradingPage() {
       new_marks: number;
       previous_feedback?: string | null;
       new_feedback?: string | null;
+      revised_by: number;
       created_at: string;
     }>;
   } | null>(null);
@@ -894,7 +895,7 @@ export default function ExaminerGradingPage() {
                     {markRevisionInfo.history.map((revision) => (
                       <div key={revision.revision_number} className="rounded-lg bg-slate-900 p-3 text-xs text-slate-300">
                         <p className="font-semibold">Revision {revision.revision_number}: {revision.previous_marks ?? "—"} → {revision.new_marks} marks</p>
-                        <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")}</p>
+                        <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")} · Staff account #{revision.revised_by}</p>
                         {revision.new_feedback && <p className="mt-1">{revision.new_feedback}</p>}
                       </div>
                     ))}
