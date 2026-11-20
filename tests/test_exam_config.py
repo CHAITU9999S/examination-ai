@@ -1,6 +1,7 @@
 
 import pytest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.services.exam_config import validate_exam_config
 
@@ -47,11 +48,10 @@ def test_rejects_past_end_time():
 def test_accepts_mixed_timezone_representations():
     start = datetime.now(timezone.utc) + timedelta(hours=1)
 
-    # Naive datetime values are interpreted as UTC
-    # by the application.
+    # Naive schedule values are interpreted as India Standard Time.
     end = (
         datetime.now(timezone.utc) + timedelta(hours=2)
-    ).replace(tzinfo=None)
+    ).astimezone(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
 
     assert validate_exam_config(60, start, end) is True
 
