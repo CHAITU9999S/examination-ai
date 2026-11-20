@@ -639,7 +639,7 @@ def list_reusable_question_banks(
     ).join(
         QuestionBank, QuestionBank.id == ExamQuestion.question_id
     ).filter(
-        Exam.id != exam_id,
+        Exam.id < target.id,
         Exam.created_by == current_user.id,
     )
     if current_user.role == UserRole.ADMIN.value:
@@ -647,7 +647,7 @@ def list_reusable_question_banks(
             ExamQuestion, ExamQuestion.exam_id == Exam.id
         ).join(
             QuestionBank, QuestionBank.id == ExamQuestion.question_id
-        ).filter(Exam.id != exam_id)
+        ).filter(Exam.id < target.id)
 
     rows = query.order_by(Exam.id.desc(), ExamQuestion.question_order.asc()).all()
     banks = {}
