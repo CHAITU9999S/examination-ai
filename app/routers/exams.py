@@ -700,6 +700,20 @@ def reuse_questions_from_previous_banks(
     if len(source_rows) != len(data.question_ids):
         raise HTTPException(status_code=404, detail="One or more source questions do not exist.")
 
+    already_reused = {
+        row[0] for row in db.query(QuestionBank.source_question_id).join(
+            ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+        ).filter(
+            ExamQuestion.exam_id == exam_id,
+            QuestionBank.source_question_id.isnot(None),
+        ).all()
+    }
+    if set(data.question_ids).intersection(already_reused):
+        raise HTTPException(
+            status_code=409,
+            detail="One or more selected source questions are already copied into this examination bank.",
+        )
+
     source_ids = {question.id for question in source_rows}
     source_assignments = db.query(ExamQuestion, Exam).join(
         Exam, Exam.id == ExamQuestion.exam_id
