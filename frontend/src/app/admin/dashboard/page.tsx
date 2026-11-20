@@ -65,6 +65,11 @@ const navigation = [
     href: "/examiner/results",
   },
   {
+    title: "Student Schedules",
+    description: "View active student assignments and examination opening and closing times.",
+    href: "/admin/schedules",
+  },
+  {
     title: "Historical Performance",
     description: "Review published results and long-term student performance.",
     href: "/admin/performance",
