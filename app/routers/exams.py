@@ -1026,9 +1026,20 @@ def update_exam_configuration(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
-    assigned_count = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).count()
+    assigned_questions = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam_id).all()
+    assigned_count = len(assigned_questions)
     if assigned_count < data.total_questions:
         raise HTTPException(status_code=400, detail="The question bank does not contain enough questions for the updated configuration.")
+    if data.subject and any(
+        (question.subject or "").casefold() != data.subject.casefold()
+        for question in assigned_questions
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="The updated examination subject must match every question in its bank.",
+        )
 
     snapshot = {
         "title": data.title,
