@@ -113,8 +113,14 @@ def list_exams(
     # Examiners can access only their own exams.
     # Admins can view all exams.
     if current_user.role == UserRole.EXAMINER.value:
-        query = query.filter(
-            Exam.created_by == current_user.id
+        query = query.filter(Exam.created_by == current_user.id)
+    elif current_user.role == UserRole.STUDENT.value:
+        query = query.join(
+            ExamAssignment,
+            ExamAssignment.exam_id == Exam.id,
+        ).filter(
+            ExamAssignment.student_id == current_user.id,
+            ExamAssignment.is_active.is_(True),
         )
 
     exams = query.order_by(
