@@ -334,15 +334,32 @@ Required JSON format:
         client = OpenAI(**client_options)
 
         user_content = [{"type": "text", "text": user_prompt}]
+        if question.question_image_data:
+            prompt_mime = question.question_image_mime_type or "image/png"
+            prompt_image = base64.b64encode(
+                question.question_image_data
+            ).decode("ascii")
+            user_content.extend([
+                {"type": "text", "text": "Question prompt image:"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{prompt_mime};base64,{prompt_image}",
+                    },
+                },
+            ])
         if question_type == "image_upload":
             mime_type = answer.image_mime_type or "image/png"
             encoded_image = base64.b64encode(answer.image_data).decode("ascii")
-            user_content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{mime_type};base64,{encoded_image}",
+            user_content.extend([
+                {"type": "text", "text": "Student's uploaded answer image:"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{encoded_image}",
+                    },
                 },
-            })
+            ])
 
         response = client.chat.completions.create(
             model=model,
