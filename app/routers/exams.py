@@ -6,8 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Exam, ExamQuestion, ExamSession, QuestionBank
-from app.schemas import ExamCreate, UserRole
+from app.models import Exam, ExamQuestion, ExamSession, QuestionBank, Option
+from app.schemas import ExamCreate, QuestionCreate, UserRole
+from app.services.question_validation import validate_question
 from app.dependencies import require_role
 from app.services.exam_config import (
     validate_exam_config,
@@ -146,6 +147,195 @@ def list_exams(
     ]
     
 
+
+
+# ==========================================
+# ADD A QUESTION TO AN EXAMINATION BANK
+# ==========================================
+
+@router.post("/{exam_id}/questions", status_code=status.HTTP_201_CREATED)
+def add_exam_question(
+    exam_id: int,
+    data: QuestionCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Create a question owned by this exam's creator and add it to its bank."""
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exam not found.",
+        )
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the examination creator can add questions.",
+        )
+    if db.query(ExamSession.id).filter(
+        ExamSession.exam_id == exam_id
+    ).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questions cannot be added after an exam session has been created.",
+        )
+    if exam.subject and data.subject.casefold() != exam.subject.casefold():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The question subject must match the examination subject.",
+        )
+
+    question_type = getattr(data.question_type, "value", data.question_type)
+    options = data.options or []
+    try:
+        validate_question(
+            question_type,
+            data.question_text,
+            data.marks,
+            options,
+            data.negative_marks,
+            data.correct_option_index,
+            data.correct_option_indices,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )
+
+    # All questions of the same type and difficulty in an exam share
+    # one maximum-mark value.
+    existing_group = db.query(QuestionBank).join(
+        ExamQuestion,
+        ExamQuestion.question_id == QuestionBank.id,
+    ).filter(
+        ExamQuestion.exam_id == exam_id,
+        QuestionBank.question_type == question_type,
+        QuestionBank.difficulty == data.difficulty.value,
+    ).first()
+    if existing_group and float(existing_group.marks or 0) != float(data.marks):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum marks must be equal for the same question type and difficulty.",
+        )
+
+    tags = list(data.tags or [])
+    if data.topic and data.topic not in tags:
+        tags.append(data.topic)
+
+    question = QuestionBank(
+        question_text=data.question_text,
+        question_type=question_type,
+        subject=data.subject,
+        difficulty=data.difficulty.value,
+        expected_answer=data.expected_answer,
+        model_answer_text=data.model_answer_text,
+        marks=data.marks,
+        negative_marks=data.negative_marks,
+        tags=tags,
+        created_by=current_user.id,
+    )
+    try:
+        db.add(question)
+        db.flush()
+        for index, option_text in enumerate(options):
+            is_correct = (
+                question_type == "MCQ"
+                and index == data.correct_option_index
+            ) or (
+                question_type == "multi_select"
+                and index in (data.correct_option_indices or [])
+            )
+            db.add(Option(
+                question_id=question.id,
+                option_text=option_text,
+                is_correct=is_correct,
+            ))
+        db.add(ExamQuestion(
+            exam_id=exam_id,
+            question_id=question.id,
+            question_order=(
+                db.query(ExamQuestion)
+                .filter(ExamQuestion.exam_id == exam_id)
+                .count() + 1
+            ),
+        ))
+        db.commit()
+        db.refresh(question)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The question could not be added to this examination bank.",
+        )
+
+    return {
+        "message": "Question added to the examination question bank.",
+        "exam_id": exam_id,
+        "question_id": question.id,
+    }
+
+
+# ==========================================
+# REMOVE A QUESTION FROM AN EXAMINATION BANK
+# ==========================================
+
+@router.delete("/{exam_id}/questions/{question_id}")
+def remove_exam_question(
+    exam_id: int,
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Remove only this exam's link; keep the original question intact."""
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exam not found.",
+        )
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the examination creator can remove questions.",
+        )
+    if db.query(ExamSession.id).filter(
+        ExamSession.exam_id == exam_id
+    ).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questions cannot be removed after an exam session has been created.",
+        )
+
+    assignment = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam_id,
+        ExamQuestion.question_id == question_id,
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question is not part of this examination bank.",
+        )
+
+    remaining = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam_id,
+        ExamQuestion.id != assignment.id,
+    ).count()
+    if remaining < (exam.total_questions or 0):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Removing this question would leave fewer questions than the examination requires.",
+        )
+
+    db.delete(assignment)
+    db.commit()
+    return {
+        "message": "Question removed from this examination bank. The original question was preserved.",
+        "exam_id": exam_id,
+        "question_id": question_id,
+    }
 
 
 # ==========================================
