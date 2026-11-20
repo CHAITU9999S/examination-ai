@@ -83,6 +83,7 @@ def upgrade():
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.UniqueConstraint("exam_id", "student_id", name="uq_exam_assignment_student"),
     )
+    op.create_index("ix_exam_assignments_id", "exam_assignments", ["id"])
     op.create_index(
         "ix_exam_assignments_student_active",
         "exam_assignments",
@@ -100,6 +101,8 @@ def upgrade():
         sa.UniqueConstraint("exam_id", "revision_number", name="uq_exam_config_revision"),
     )
 
+    op.create_index("ix_exam_configuration_revisions_id", "exam_configuration_revisions", ["id"])
+
     op.create_table(
         "answer_mark_revisions",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -113,12 +116,16 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.UniqueConstraint("answer_id", "revision_number", name="uq_answer_mark_revision"),
     )
+    op.create_index("ix_answer_mark_revisions_id", "answer_mark_revisions", ["id"])
 
 
 def downgrade():
+    op.drop_index("ix_answer_mark_revisions_id", table_name="answer_mark_revisions")
     op.drop_table("answer_mark_revisions")
+    op.drop_index("ix_exam_configuration_revisions_id", table_name="exam_configuration_revisions")
     op.drop_table("exam_configuration_revisions")
     op.drop_index("ix_exam_assignments_student_active", table_name="exam_assignments")
+    op.drop_index("ix_exam_assignments_id", table_name="exam_assignments")
     op.drop_table("exam_assignments")
     op.drop_column("answers", "is_locked")
     op.drop_column("answers", "question_elapsed_seconds")
