@@ -18,6 +18,7 @@ interface PublishedResult {
   total_marks: number;
   obtained_marks: number;
   percentage: number;
+  grade: string;
   percentile: number;
 }
 
@@ -132,6 +133,7 @@ export default function StudentResultsPage() {
                     <th className="px-4 py-3">Examination</th>
                     <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Percentage</th>
+                    <th className="px-4 py-3">Grade</th>
                     <th className="px-4 py-3">Cohort percentile</th>
                     <th className="px-4 py-3">Published</th>
                     <th className="px-4 py-3">Details</th>
@@ -148,6 +150,7 @@ export default function StudentResultsPage() {
                         {result.obtained_marks} / {result.total_marks}
                       </td>
                       <td className="px-4 py-4 tabular-nums">{Number(result.percentage).toFixed(2)}%</td>
+                      <td className="px-4 py-4 font-semibold text-cyan-300">{result.grade || "—"}</td>
                       <td className="px-4 py-4 tabular-nums">{Number(result.percentile).toFixed(1)}</td>
                       <td className="px-4 py-4 text-slate-400">{formatDate(result.published_at)}</td>
                       <td className="px-4 py-4">
