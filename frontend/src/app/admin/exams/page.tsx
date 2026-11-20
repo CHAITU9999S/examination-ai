@@ -66,7 +66,6 @@ export default function AdminExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -99,7 +98,6 @@ export default function AdminExamsPage() {
       });
       if (profileResponse.ok) {
         const profile = await profileResponse.json();
-        setCurrentUserId(Number(profile.id));
       }
 
       const response = await fetch(`${API_URL}/exams`, {
