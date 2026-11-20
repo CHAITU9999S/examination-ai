@@ -1,4 +1,5 @@
 
+import base64
 import json
 import math
 import os
@@ -26,6 +27,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 SUPPORTED_QUESTION_TYPES = {
     "short_answer",
     "long_answer",
+    "image_upload",
 }
 
 
@@ -207,7 +209,13 @@ def generate_ai_grading_suggestion(
             detail="AI grading is currently supported only for short and long answers.",
         )
 
-    if not answer.answer_text or not answer.answer_text.strip():
+    if question_type == "image_upload":
+        if not answer.image_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="There is no uploaded answer image to evaluate.",
+            )
+    elif not answer.answer_text or not answer.answer_text.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="There is no written answer to evaluate.",
@@ -235,12 +243,15 @@ def generate_ai_grading_suggestion(
             detail="AI grading is disabled until it is explicitly enabled by the application administrator.",
         )
 
-    api_key = os.getenv("OPENAI_API_KEY")
+    # Keep provider credentials exclusively in backend environment variables.
+    # AI_API_KEY supports OpenAI-compatible providers; OPENAI_API_KEY remains
+    # a backward-compatible fallback for existing deployments.
+    api_key = os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI grading is unavailable because OPENAI_API_KEY is not configured.",
+            detail="AI grading is unavailable because the backend AI provider key is not configured.",
         )
 
     model = (
@@ -269,10 +280,15 @@ def generate_ai_grading_suggestion(
 
     prompt_data = {
         "question": question.question_text,
-        "student_answer": answer.answer_text,
+        "student_answer_text_or_ocr": answer.answer_text or (
+            "The student's response is attached as an image."
+            if question_type == "image_upload"
+            else ""
+        ),
         "reference_answer": reference_answer,
         "maximum_marks": maximum_marks,
         "question_type": question_type,
+        "difficulty": question.difficulty,
     }
 
     system_prompt = """
@@ -307,11 +323,26 @@ Required JSON format:
     )
 
     try:
-        client = OpenAI(
-            api_key=api_key,
-            timeout=30.0,
-            max_retries=1,
-        )
+        client_options = {
+            "api_key": api_key,
+            "timeout": 30.0,
+            "max_retries": 1,
+        }
+        provider_base_url = os.getenv("AI_API_BASE_URL")
+        if provider_base_url:
+            client_options["base_url"] = provider_base_url
+        client = OpenAI(**client_options)
+
+        user_content = [{"type": "text", "text": user_prompt}]
+        if question_type == "image_upload":
+            mime_type = answer.image_mime_type or "image/png"
+            encoded_image = base64.b64encode(answer.image_data).decode("ascii")
+            user_content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{encoded_image}",
+                },
+            })
 
         response = client.chat.completions.create(
             model=model,
@@ -326,7 +357,7 @@ Required JSON format:
                 },
                 {
                     "role": "user",
-                    "content": user_prompt,
+                    "content": user_content,
                 },
             ],
         )
@@ -400,9 +431,9 @@ def auto_generate_ai_suggestions(
         QuestionBank.id == Answer.question_id,
     ).filter(
         Answer.session_id == session_id,
-        QuestionBank.question_type.in_(["short_answer", "long_answer"]),
-        Answer.answer_text.isnot(None),
+        QuestionBank.question_type.in_(["short_answer", "long_answer", "image_upload"]),
         Answer.ai_suggested_marks.is_(None),
+        (Answer.answer_text.isnot(None) | Answer.image_data.isnot(None)),
     ).order_by(Answer.id.asc()).all()
 
     generated = 0
