@@ -15,6 +15,7 @@ interface HistoricalResult {
   obtained_marks: number;
   total_marks: number;
   percentage: number;
+  grade: string;
   published: boolean;
   submitted_at?: string | null;
 }
@@ -233,8 +234,8 @@ export default function ExaminerResultsPage() {
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Student</th><th className="p-3">Score</th><th className="p-3">Percentage</th><th className="p-3">Status</th></tr></thead>
-                <tbody>{history.map((item) => <tr key={item.result_id} className="border-b border-white/5"><td className="p-3">{item.exam_title}</td><td className="p-3">{item.student_name}</td><td className="p-3 tabular-nums">{item.obtained_marks} / {item.total_marks}</td><td className="p-3 tabular-nums">{Number(item.percentage).toFixed(2)}%</td><td className="p-3">{item.published ? "Published" : "Awaiting publication"}</td></tr>)}</tbody>
+                <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Student</th><th className="p-3">Score</th><th className="p-3">Percentage</th><th className="p-3">Grade</th><th className="p-3">Status</th></tr></thead>
+                <tbody>{history.map((item) => <tr key={item.result_id} className="border-b border-white/5"><td className="p-3">{item.exam_title}</td><td className="p-3">{item.student_name}</td><td className="p-3 tabular-nums">{item.obtained_marks} / {item.total_marks}</td><td className="p-3 tabular-nums">{Number(item.percentage).toFixed(2)}%</td><td className="p-3 font-semibold text-cyan-300">{item.grade || "—"}</td><td className="p-3">{item.published ? "Published" : "Awaiting publication"}</td></tr>)}</tbody>
               </table>
             </div>
           )}
