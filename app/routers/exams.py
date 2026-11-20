@@ -873,10 +873,20 @@ def delete_exam_question_bank(
             db.delete(question)
             removed_question_ids.append(question_id)
 
+    active_assignments = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.is_active.is_(True),
+    ).all()
+    for student_assignment in active_assignments:
+        student_assignment.is_active = False
+
     _audit_exam_action(db, current_user.id, "exam_question_bank_deleted", {
         "exam_id": exam_id,
         "removed_bank_entries": len(assignments),
         "removed_question_records": removed_question_ids,
+        "deactivated_student_assignments": [
+            item.student_id for item in active_assignments
+        ],
     })
     db.commit()
     return {
