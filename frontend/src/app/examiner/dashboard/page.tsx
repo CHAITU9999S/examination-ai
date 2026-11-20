@@ -49,6 +49,11 @@ const navigation = [
     href: "/examiner/results",
   },
   {
+    title: "Account Security",
+    description: "Change your account password.",
+    href: "/account/security",
+  },
+  {
     title: "Proctoring Review",
     description: "Review flagged sessions and recorded proctoring events.",
     href: "/staff/proctoring",
