@@ -233,6 +233,7 @@ def generate_session_question_ids(
         }
 
         selected_ids = None
+        group_counts = rules.get("group_counts")
         for seed_salt in range(1000):
             candidate = generate_paper(
                 question_ids=question_ids,
@@ -242,7 +243,7 @@ def generate_session_question_ids(
                 question_details=question_details,
                 difficulty_counts=difficulty_counts,
                 question_type_counts=question_type_counts,
-                group_counts=rules.get("group_counts"),
+                group_counts=group_counts,
                 randomize=True,
                 seed_salt=seed_salt,
             )
@@ -252,11 +253,56 @@ def generate_session_question_ids(
                 break
 
         if selected_ids is None:
-            raise ValueError(
-                "A unique question paper is not available for this student. "
-                "Increase the number of assigned questions or reduce the "
-                "number of questions per paper."
-            )
+            # If the combinatorial space is exhausted, a repeated paper is
+            # preferable to blocking a legitimately assigned student. If
+            # combinations remain, search additional seeds before fallback.
+            total_combinations = math.comb(len(question_ids), question_count)
+            if group_counts:
+                available_by_group = {}
+                for question_id in question_ids:
+                    details = question_details.get(question_id) or {}
+                    difficulty = _enum_value(details.get("difficulty"))
+                    question_type = _enum_value(details.get("question_type"))
+                    key = f"{difficulty}|{question_type}"
+                    available_by_group[key] = available_by_group.get(key, 0) + 1
+                total_combinations = 1
+                for group, required in group_counts.items():
+                    total_combinations *= math.comb(
+                        available_by_group.get(group, 0),
+                        required,
+                    )
+
+            if total_combinations > len(used_papers):
+                for seed_salt in range(1000, 10000):
+                    candidate = generate_paper(
+                        question_ids=question_ids,
+                        student_id=student_id,
+                        exam_id=exam.id,
+                        number_of_questions=question_count,
+                        question_details=question_details,
+                        difficulty_counts=difficulty_counts,
+                        question_type_counts=question_type_counts,
+                        group_counts=group_counts,
+                        randomize=True,
+                        seed_salt=seed_salt,
+                    )
+                    if frozenset(candidate) not in used_papers:
+                        selected_ids = candidate
+                        break
+
+            if selected_ids is None:
+                selected_ids = generate_paper(
+                    question_ids=question_ids,
+                    student_id=student_id,
+                    exam_id=exam.id,
+                    number_of_questions=question_count,
+                    question_details=question_details,
+                    difficulty_counts=difficulty_counts,
+                    question_type_counts=question_type_counts,
+                    group_counts=group_counts,
+                    randomize=True,
+                    seed_salt=10000,
+                )
 
     if len(selected_ids) != question_count:
         raise ValueError(
