@@ -164,7 +164,7 @@ def evaluate_objective_answer(
             "automatically evaluated."
         )
 
-    if answer is None:
+    if answer is None or not (answer.answer_text and answer.answer_text.strip()):
         return 0.0
 
     session = db.query(ExamSession).filter(
