@@ -82,6 +82,26 @@ def create_exam(
 
     try:
         db.add(exam)
+        db.flush()
+        db.add(ExamConfigurationRevision(
+            exam_id=exam.id,
+            revision_number=0,
+            configuration_snapshot={
+                "title": exam.title,
+                "subject": exam.subject,
+                "duration_minutes": exam.duration_minutes,
+                "total_questions": exam.total_questions,
+                "randomize_questions": exam.randomize_questions,
+                "selection_rules": exam.selection_rules,
+                "start_time": exam.start_time.isoformat() if exam.start_time else None,
+                "end_time": exam.end_time.isoformat() if exam.end_time else None,
+                "negative_marking": exam.negative_marking,
+                "proctoring_enabled": exam.proctoring_enabled,
+                "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
+                "max_tab_switch_warnings": exam.max_tab_switch_warnings,
+            },
+            changed_by=current_user.id,
+        ))
         db.commit()
         db.refresh(exam)
 
@@ -961,7 +981,8 @@ def update_exam_configuration(
         raise HTTPException(status_code=409, detail="Exam configuration is locked after a student session is created.")
 
     revision_count = db.query(ExamConfigurationRevision).filter(
-        ExamConfigurationRevision.exam_id == exam_id
+        ExamConfigurationRevision.exam_id == exam_id,
+        ExamConfigurationRevision.revision_number > 0,
     ).count()
     if revision_count >= 3:
         raise HTTPException(status_code=409, detail="The three allowed examination configuration revisions have been used.")
@@ -1048,10 +1069,11 @@ def list_exam_configuration_revisions(
     rows = db.query(ExamConfigurationRevision).filter(
         ExamConfigurationRevision.exam_id == exam_id
     ).order_by(ExamConfigurationRevision.revision_number.asc()).all()
+    revisions_used = sum(1 for row in rows if row.revision_number > 0)
     return {
         "exam_id": exam_id,
         "revision_limit": 3,
-        "revisions_used": len(rows),
+        "revisions_used": revisions_used,
         "revisions": [
             {"revision_number": row.revision_number, "configuration": row.configuration_snapshot, "changed_by": row.changed_by, "created_at": row.created_at}
             for row in rows
