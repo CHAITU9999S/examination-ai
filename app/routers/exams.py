@@ -1000,7 +1000,21 @@ def update_exam_configuration(
         exam.proctoring_enabled = data.proctoring_enabled
         exam.gaze_tracking_sensitivity = data.gaze_tracking_sensitivity
         exam.max_tab_switch_warnings = data.max_tab_switch_warnings
+        try:
+            generate_session_question_ids(
+                exam=exam,
+                student_id=2147483647,
+                db=db,
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Updated configuration cannot generate a valid paper: {error}",
+            )
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise
