@@ -171,13 +171,12 @@ def assign_exam_questions(
             detail="Exam not found.",
         )
 
-    if (
-        current_user.role == UserRole.EXAMINER.value
-        and exam.created_by != current_user.id
-    ):
+    # Ownership applies equally to Admins and Examiners. Admins may
+    # inspect every examination, but must not edit another creator's exam.
+    if exam.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only assign questions to your own examinations.",
+            detail="Only the examination creator can change its question assignments.",
         )
 
     if any(
