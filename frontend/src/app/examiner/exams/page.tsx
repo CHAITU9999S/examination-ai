@@ -29,6 +29,15 @@ interface Exam {
   created_by?: number | null;
 }
 
+const INDIA_TIME_ZONE = "Asia/Kolkata";
+
+function istDateTimeToIso(value: string) {
+  const withSeconds = value.length === 16 ? `${value}:00` : value;
+  const date = new Date(`${withSeconds}+05:30`);
+  if (Number.isNaN(date.getTime())) throw new Error("Enter a valid IST schedule time.");
+  return date.toISOString();
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "Not scheduled";
 
@@ -39,6 +48,7 @@ function formatDate(value?: string | null) {
   return date.toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: INDIA_TIME_ZONE,
   });
 }
 
@@ -197,8 +207,17 @@ export default function ExaminerExamsPage() {
       return;
     }
 
-    const startDate = new Date(startTime);
-    const endDate = new Date(endTime);
+    let startIso: string;
+    let endIso: string;
+    try {
+      startIso = istDateTimeToIso(startTime);
+      endIso = istDateTimeToIso(endTime);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Enter valid IST schedule times.");
+      return;
+    }
+    const startDate = new Date(startIso);
+    const endDate = new Date(endIso);
 
     if (
       Number.isNaN(startDate.getTime()) ||
@@ -254,8 +273,8 @@ export default function ExaminerExamsPage() {
         subject: subject.trim(),
         duration_minutes: durationValue,
         total_questions: questionCount,
-        start_time: startDate.toISOString(),
-        end_time: endDate.toISOString(),
+        start_time: startIso,
+        end_time: endIso,
         randomize_questions: randomizeQuestions,
         selection_rules: selectionRules,
         negative_marking: negativeMarking,
@@ -421,7 +440,7 @@ export default function ExaminerExamsPage() {
 
               <div>
                 <label htmlFor="startTime" className="mb-2 block text-sm font-medium">
-                  Examination start
+                  Examination start (IST)
                 </label>
 
                 <input
@@ -436,7 +455,7 @@ export default function ExaminerExamsPage() {
 
               <div>
                 <label htmlFor="endTime" className="mb-2 block text-sm font-medium">
-                  Examination end
+                  Examination end (IST)
                 </label>
 
                 <input
