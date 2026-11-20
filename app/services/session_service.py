@@ -144,6 +144,23 @@ def generate_session_question_ids(
         db,
     )
 
+    # Enforce one maximum-mark value for each type/difficulty group
+    # at paper-generation time, not only in the creator interface.
+    marks_by_group = {}
+    for question in questions:
+        group = (
+            _enum_value(question.question_type),
+            _enum_value(question.difficulty),
+        )
+        marks = float(question.marks or 0)
+        if group in marks_by_group and not math.isclose(
+            marks_by_group[group], marks, rel_tol=0, abs_tol=0.0001
+        ):
+            raise ValueError(
+                "Maximum marks must be equal within each question type and difficulty group."
+            )
+        marks_by_group[group] = marks
+
     rules = exam.selection_rules or {}
 
     if not isinstance(rules, dict):
