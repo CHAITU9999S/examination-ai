@@ -700,10 +700,10 @@ export default function StudentExamPage() {
   }, [questionRemainingSeconds === null || questionRemainingSeconds <= 0]);
 
   useEffect(() => {
-    if (questionRemainingSeconds !== 0 || questionTimerLocked || !currentQuestionId) return;
+    if (questionRemainingSeconds !== 0 || questionTimerLocked || !currentQuestionId || isPaused) return;
     setQuestionTimerLocked(true);
     void loadQuestionTimer(currentQuestionId);
-  }, [questionRemainingSeconds, questionTimerLocked, currentQuestionId, loadQuestionTimer]);
+  }, [questionRemainingSeconds, questionTimerLocked, currentQuestionId, isPaused, loadQuestionTimer]);
 
   useEffect(() => {
     if (!questionTimerLocked || isPaused || !paper) return;
