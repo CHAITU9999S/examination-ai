@@ -1066,3 +1066,43 @@ def approve_ai_grading_suggestion(
         "result": result,
         "result_ready": result.get("status") == "evaluated",
     }
+
+
+@router.get("/answers/{answer_id}/mark-revisions")
+def get_answer_mark_revisions(
+    answer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current final mark and its human revision audit trail."""
+    require_examiner_or_admin(current_user)
+    answer, session, exam, question = _get_submitted_answer_context(
+        answer_id,
+        current_user,
+        db,
+    )
+    revisions = db.query(AnswerMarkRevision).filter(
+        AnswerMarkRevision.answer_id == answer_id
+    ).order_by(AnswerMarkRevision.revision_number.asc()).all()
+    return {
+        "answer_id": answer.id,
+        "exam_id": exam.id,
+        "question_id": question.id,
+        "maximum_marks": question.marks,
+        "current_final_marks": answer.awarded_marks,
+        "revision_limit": 3,
+        "revisions_used": len(revisions),
+        "revisions_remaining": max(0, 3 - len(revisions)),
+        "history": [
+            {
+                "revision_number": item.revision_number,
+                "previous_marks": item.previous_marks,
+                "new_marks": item.new_marks,
+                "previous_feedback": item.previous_feedback,
+                "new_feedback": item.new_feedback,
+                "revised_by": item.revised_by,
+                "created_at": item.created_at,
+            }
+            for item in revisions
+        ],
+    }
