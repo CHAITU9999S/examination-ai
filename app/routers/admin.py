@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -26,6 +26,17 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin Management"]
 )
+
+def _utc_iso(value):
+    """Serialize database UTC timestamps with an explicit UTC offset."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat()
+
 
 def _performance_grade(percentage):
     value = float(percentage or 0)
@@ -371,8 +382,8 @@ def list_all_examinations(
                 "creator_name": creator.full_name if creator else None,
                 "duration_minutes": exam.duration_minutes,
                 "total_questions": exam.total_questions,
-                "start_time": exam.start_time,
-                "end_time": exam.end_time,
+                "start_time": _utc_iso(exam.start_time),
+                "end_time": _utc_iso(exam.end_time),
                 "session_count": db.query(ExamSession.id).filter(
                     ExamSession.exam_id == exam.id
                 ).count(),
@@ -456,10 +467,10 @@ def list_all_exam_schedules(
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "student_email": student.email,
-                "start_time": exam.start_time,
-                "end_time": exam.end_time,
+                "start_time": _utc_iso(exam.start_time),
+                "end_time": _utc_iso(exam.end_time),
                 "duration_minutes": exam.duration_minutes,
-                "assigned_at": assignment.assigned_at,
+                "assigned_at": _utc_iso(assignment.assigned_at),
                 "assigned_by": assignment.assigned_by,
             }
             for assignment, exam, student, creator in rows
