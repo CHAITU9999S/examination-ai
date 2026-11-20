@@ -74,6 +74,7 @@ export default function ExamQuestionBankPage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [validationMessage, setValidationMessage] = useState("");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -241,6 +242,16 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
+  async function validatePaperConfiguration() {
+    setWorking(true); setError(""); setValidationMessage("");
+    try {
+      const data = await request(`/exams/${examId}/validate-configuration`);
+      setValidationMessage(data.message || "Question paper configuration is valid.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Question paper configuration is invalid.");
+    } finally { setWorking(false); }
+  }
+
   async function deleteEntireBank() {
     if (!window.confirm("Delete the entire question bank for this examination? Shared source questions and questions used by other exams will be preserved. This cannot be undone.")) return;
     setWorking(true); setError(""); setMessage("");
@@ -404,6 +415,17 @@ export default function ExamQuestionBankPage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className={cardClass}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Validate Examination Paper</h2>
+              <p className="mt-1 text-sm text-slate-400">Check that the bank has enough questions for every configured type/difficulty group and that marks are consistent.</p>
+            </div>
+            <button onClick={validatePaperConfiguration} disabled={working} className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50">Validate Paper Configuration</button>
+          </div>
+          {validationMessage && <p role="status" className="mt-3 text-sm text-emerald-300">{validationMessage}</p>}
         </section>
 
         <section className={cardClass}>
