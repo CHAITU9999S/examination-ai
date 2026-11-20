@@ -504,7 +504,7 @@ def approve_subjective_marks(
         exam,
     )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination answers can be graded.",
