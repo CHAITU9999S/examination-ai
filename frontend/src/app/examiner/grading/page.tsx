@@ -63,6 +63,7 @@ export default function ExaminerGradingPage() {
 
   const [answers, setAnswers] = useState<PendingAnswer[]>([]);
   const [gradedAnswers, setGradedAnswers] = useState<PendingAnswer[]>([]);
+  const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -127,26 +128,29 @@ export default function ExaminerGradingPage() {
       const headers = getHeaders();
       if (!headers) return;
 
-      const [pendingResponse, gradedResponse] = await Promise.all([
+      const [pendingResponse, gradedResponse, profileResponse] = await Promise.all([
         fetch(`${API_URL}/grading/pending`, { method: "GET", headers, cache: "no-store" }),
         fetch(`${API_URL}/grading/graded`, { method: "GET", headers, cache: "no-store" }),
+        fetch(`${API_URL}/users/me`, { method: "GET", headers, cache: "no-store" }),
       ]);
 
-      if (pendingResponse.status === 401 || pendingResponse.status === 403 || gradedResponse.status === 401 || gradedResponse.status === 403) {
+      if ([pendingResponse, gradedResponse, profileResponse].some((response) => response.status === 401 || response.status === 403)) {
         router.replace("/login");
         return;
       }
-      if (!pendingResponse.ok || !gradedResponse.ok) {
+      if (!pendingResponse.ok || !gradedResponse.ok || !profileResponse.ok) {
         throw new Error("Unable to load pending and previously graded answers.");
       }
 
-      const pendingData = await pendingResponse.json();
-      const gradedData = await gradedResponse.json();
+      const [pendingData, gradedData, profile] = await Promise.all([
+        pendingResponse.json(), gradedResponse.json(), profileResponse.json(),
+      ]);
       const pendingList = Array.isArray(pendingData) ? pendingData : pendingData.answers;
       const gradedList = Array.isArray(gradedData) ? gradedData : gradedData.answers;
       if (!Array.isArray(pendingList) || !Array.isArray(gradedList)) {
         throw new Error("Unexpected grading data returned by the server.");
       }
+      setStaffRole(profile.role === "admin" ? "admin" : "examiner");
       setAnswers(pendingList);
       setGradedAnswers(gradedList);
     } catch (err) {
@@ -473,7 +477,7 @@ export default function ExaminerGradingPage() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
             <Link
-              href="/examiner/dashboard"
+              href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"}
               className="text-2xl font-bold"
             >
               ExamGuard <span className="text-blue-400">AI</span>
@@ -485,7 +489,7 @@ export default function ExaminerGradingPage() {
           </div>
 
           <Link
-            href="/examiner/dashboard"
+            href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"}
             className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
           >
             ← Dashboard
