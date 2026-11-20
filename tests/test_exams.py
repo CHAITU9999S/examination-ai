@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.auth import create_access_token
-from app.models import User, Exam, QuestionBank, ExamQuestion
+from app.models import User, Exam, ExamAssignment, QuestionBank, ExamQuestion
 
 
 def create_user(db, role, email):
@@ -257,6 +257,13 @@ def test_student_can_list_available_exams(client, db_session):
         created_by=examiner.id,
     )
     db_session.add(exam)
+    db_session.commit()
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=examiner.id,
+        is_active=True,
+    ))
     db_session.commit()
 
     response = client.get(
