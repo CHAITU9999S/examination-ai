@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
+    AdminActivityLog, Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
     ExamAssignment, ExamConfigurationRevision, User,
 )
 from app.schemas import ExamCreate, QuestionCreate, UserRole
@@ -26,6 +26,14 @@ router = APIRouter(
     prefix="/exams",
     tags=["Exam Configuration"]
 )
+
+def _audit_exam_action(db: Session, actor_id: int, action: str, details: dict):
+    """Record examination-management actions for platform audit history."""
+    db.add(AdminActivityLog(
+        actor_user_id=actor_id,
+        action=action,
+        details=details,
+    ))
 
 
 # ==========================================
@@ -779,6 +787,11 @@ def reuse_questions_from_previous_banks(
                 question_id=copied.id,
                 question_order=existing_count + offset,
             ))
+        _audit_exam_action(db, current_user.id, "exam_questions_reused", {
+            "exam_id": exam_id,
+            "source_question_ids": data.question_ids,
+            "copied_question_ids": [question.id for question in new_questions],
+        })
         db.commit()
     except HTTPException:
         db.rollback()
@@ -844,6 +857,11 @@ def delete_exam_question_bank(
             db.delete(question)
             removed_question_ids.append(question_id)
 
+    _audit_exam_action(db, current_user.id, "exam_question_bank_deleted", {
+        "exam_id": exam_id,
+        "removed_bank_entries": len(assignments),
+        "removed_question_records": removed_question_ids,
+    })
     db.commit()
     return {
         "message": "The examination question bank was deleted. Shared source questions and questions used by other exams were preserved.",
@@ -897,6 +915,10 @@ def assign_exam_to_students(
             else:
                 assignment.is_active = True
                 assignment.assigned_by = current_user.id
+        _audit_exam_action(db, current_user.id, "exam_assigned_to_students", {
+            "exam_id": exam_id,
+            "student_ids": data.student_ids,
+        })
         db.commit()
     except Exception:
         db.rollback()
@@ -1021,6 +1043,10 @@ def update_exam_configuration(
             configuration_snapshot=snapshot,
             changed_by=current_user.id,
         ))
+        _audit_exam_action(db, current_user.id, "exam_configuration_updated", {
+            "exam_id": exam_id,
+            "revision_number": revision_count + 1,
+        })
         exam.title = data.title
         exam.subject = data.subject
         exam.duration_minutes = data.duration_minutes
@@ -1128,6 +1154,10 @@ def remove_exam_assignment(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Active student assignment not found.")
     assignment.is_active = False
+    _audit_exam_action(db, current_user.id, "exam_student_assignment_removed", {
+        "exam_id": exam_id,
+        "student_id": student_id,
+    })
     db.commit()
     return {"message": "Student assignment removed.", "exam_id": exam_id, "student_id": student_id}
 
