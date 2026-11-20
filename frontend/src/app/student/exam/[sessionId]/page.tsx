@@ -579,7 +579,7 @@ export default function StudentExamPage() {
       void saveAnswer(questionId, answerText).catch(() => {
         // The visible error state is set by saveAnswer.
       });
-    }, 700);
+    }, 300);
   }
 
   useEffect(() => {
