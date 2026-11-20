@@ -46,6 +46,7 @@ interface ResultDetails {
   total_marks: number;
   obtained_marks: number;
   percentage: number;
+  grade: string;
   percentile: number;
   cohort_distribution?: CohortDistribution;
   published_at?: string | null;
@@ -123,7 +124,7 @@ export default function StudentResultDetailPage() {
         ) : result ? (
           <>
             <h1 className="text-3xl font-bold">{result.exam_title}</h1>
-            <section className="mt-8 grid gap-5 sm:grid-cols-3">
+            <section className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
                 <p className="text-sm text-slate-400">Overall score</p>
                 <p className="mt-3 text-3xl font-bold tabular-nums">
@@ -136,6 +137,10 @@ export default function StudentResultDetailPage() {
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-700">
                   <div className="h-full rounded-full bg-blue-500" style={{ width: `${percentage}%` }} />
                 </div>
+              </article>
+              <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <p className="text-sm text-slate-400">Grade</p>
+                <p className="mt-3 text-3xl font-bold text-cyan-300">{result.grade || "—"}</p>
               </article>
               <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
                 <p className="text-sm text-slate-400">Cohort percentile</p>
