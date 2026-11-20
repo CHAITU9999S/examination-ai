@@ -296,14 +296,17 @@ def add_exam_question(
                 option_text=option_text,
                 is_correct=is_correct,
             ))
+        last_assignment = db.query(ExamQuestion).filter(
+            ExamQuestion.exam_id == exam_id
+        ).order_by(
+            ExamQuestion.question_order.desc(),
+            ExamQuestion.id.desc(),
+        ).first()
+        next_order = (last_assignment.question_order or 0) + 1 if last_assignment else 1
         db.add(ExamQuestion(
             exam_id=exam_id,
             question_id=question.id,
-            question_order=(
-                db.query(ExamQuestion)
-                .filter(ExamQuestion.exam_id == exam_id)
-                .count() + 1
-            ),
+            question_order=next_order,
         ))
         _audit_exam_action(db, current_user.id, "exam_question_added", {
             "exam_id": exam_id,
