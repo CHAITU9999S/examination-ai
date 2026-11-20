@@ -985,3 +985,54 @@ def list_exam_configuration_revisions(
             for row in rows
         ],
     }
+
+
+@router.get("/{exam_id}/eligible-students")
+def list_eligible_students_for_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """List active Student accounts that the exam creator may assign."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can assign students.")
+    students = db.query(User).filter(
+        User.role == UserRole.STUDENT.value,
+        User.is_active.is_(True),
+    ).order_by(User.full_name.asc()).all()
+    return {
+        "students": [
+            {"id": student.id, "full_name": student.full_name, "email": student.email}
+            for student in students
+        ]
+    }
+
+
+@router.delete("/{exam_id}/assignments/{student_id}")
+def remove_exam_assignment(
+    exam_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Deactivate a student assignment before any session is created."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can manage assignments.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Assignments cannot change after an exam session is created.")
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Active student assignment not found.")
+    assignment.is_active = False
+    db.commit()
+    return {"message": "Student assignment removed.", "exam_id": exam_id, "student_id": student_id}
