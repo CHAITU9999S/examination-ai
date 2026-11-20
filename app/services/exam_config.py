@@ -186,7 +186,8 @@ def validate_exam_config(
         allowed_keys = {
             "difficulty",
             "difficulty_counts",
-            "question_type_counts"
+            "question_type_counts",
+            "group_counts",
         }
 
         if not set(selection_rules).issubset(allowed_keys):
@@ -201,6 +202,28 @@ def validate_exam_config(
         has_type_counts = (
             "question_type_counts" in selection_rules
         )
+        has_group_counts = "group_counts" in selection_rules
+
+        if has_group_counts:
+            if has_difficulty_counts or has_type_counts or "difficulty" in selection_rules:
+                raise ValueError(
+                    "Use group_counts alone for exact type-by-difficulty selection."
+                )
+            group_counts = selection_rules["group_counts"]
+            if not isinstance(group_counts, dict) or not group_counts:
+                raise ValueError("group_counts must be a non-empty dictionary.")
+            allowed_groups = {
+                f"{difficulty}|{question_type}"
+                for difficulty in VALID_DIFFICULTIES
+                for question_type in VALID_QUESTION_TYPES
+            }
+            for group, count in group_counts.items():
+                if group not in allowed_groups:
+                    raise ValueError(f"Invalid question type/difficulty group: {group}")
+                if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                    raise ValueError("group_counts values must be non-negative integers.")
+            if sum(group_counts.values()) != total_questions:
+                raise ValueError("group_counts must add up to total_questions.")
 
         # Both distributions must be configured together.
         if has_difficulty_counts != has_type_counts:
