@@ -43,6 +43,7 @@ interface ExamPaper {
   gaze_tracking_sensitivity?: number | null;
   max_tab_switch_warnings?: number | null;
   is_paused?: boolean;
+  current_question_index?: number;
 }
 
 interface SavedAnswer {
@@ -262,6 +263,10 @@ export default function StudentExamPage() {
       };
 
       setPaper(normalizedPaper);
+      setCurrentIndex(Math.max(0, Math.min(
+        Number(normalizedPaper.current_question_index || 0),
+        Math.max(0, questions.length - 1)
+      )));
       setIsPaused(Boolean(normalizedPaper.is_paused));
     } catch (err) {
       setError(
@@ -662,6 +667,20 @@ export default function StudentExamPage() {
   }, [remainingSeconds, submitExam]);
 
   const currentQuestionId = paper?.questions[currentIndex]?.id ?? null;
+
+  useEffect(() => {
+    if (!paper || !examAccessToken || isPaused) return;
+    const headers = getHeaders();
+    if (!headers) return;
+    fetch(`${API_URL}/exam-sessions/progress/${sessionId}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ current_question_index: currentIndex }),
+      cache: "no-store",
+    }).catch(() => {
+      setError("The current question position could not be saved. Your answers remain saved separately.");
+    });
+  }, [currentIndex, paper, examAccessToken, isPaused, getHeaders, sessionId]);
 
   useEffect(() => {
     if (!currentQuestionId || !examAccessToken) return;
