@@ -18,6 +18,9 @@ interface PendingAnswer {
   exam_title?: string;
   question_text: string;
   question_type: string;
+  difficulty?: string | null;
+  expected_answer?: string | null;
+  model_answer_text?: string | null;
   answer_text?: string | null;
   image_path?: string | null;
   marks: number;
@@ -70,6 +73,18 @@ export default function ExaminerGradingPage() {
     useState<GradingSuggestion | null>(null);
 
   const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [markRevisionInfo, setMarkRevisionInfo] = useState<{
+    revisions_used: number;
+    revisions_remaining: number;
+    history: Array<{
+      revision_number: number;
+      previous_marks: number | null;
+      new_marks: number;
+      previous_feedback?: string | null;
+      new_feedback?: string | null;
+      created_at: string;
+    }>;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [awardedMarks, setAwardedMarks] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
@@ -195,6 +210,27 @@ export default function ExaminerGradingPage() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [selectedAnswer?.answer_id, selectedAnswer?.image_path]);
+
+  useEffect(() => {
+    if (!selectedAnswer) {
+      setMarkRevisionInfo(null);
+      return;
+    }
+    let cancelled = false;
+    const headers = getHeaders();
+    if (!headers) return;
+    fetch(`${API_URL}/grading/answers/${selectedAnswer.answer_id}/mark-revisions`, {
+      headers,
+      cache: "no-store",
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to load mark revision history.");
+      if (!cancelled) setMarkRevisionInfo(data);
+    }).catch((err) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load mark revision history.");
+    });
+    return () => { cancelled = true; };
+  }, [selectedAnswer?.answer_id, getHeaders]);
 
   function openAnswer(answer: PendingAnswer) {
     setSelectedAnswer(answer);
@@ -661,6 +697,18 @@ export default function ExaminerGradingPage() {
                 </p>
               </div>
 
+              {selectedAnswer.expected_answer && (
+                <div>
+                  <p className="text-sm font-semibold text-slate-400">Expected Answer</p>
+                  <p className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">{selectedAnswer.expected_answer}</p>
+                </div>
+              )}
+              {selectedAnswer.model_answer_text && (
+                <div>
+                  <p className="text-sm font-semibold text-slate-400">Model Answer</p>
+                  <p className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">{selectedAnswer.model_answer_text}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-semibold text-slate-400">
                   Student Answer
@@ -808,6 +856,28 @@ export default function ExaminerGradingPage() {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-white/10 bg-slate-800/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="font-semibold">Mark Revision History</h3>
+                  <span className="text-xs text-cyan-300">
+                    {markRevisionInfo ? `${markRevisionInfo.revisions_used}/3 revisions used` : "Loading history..."}
+                  </span>
+                </div>
+                {markRevisionInfo?.history?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {markRevisionInfo.history.map((revision) => (
+                      <div key={revision.revision_number} className="rounded-lg bg-slate-900 p-3 text-xs text-slate-300">
+                        <p className="font-semibold">Revision {revision.revision_number}: {revision.previous_marks ?? "—"} → {revision.new_marks} marks</p>
+                        <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")}</p>
+                        {revision.new_feedback && <p className="mt-1">{revision.new_feedback}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-400">No mark revisions have been recorded for this answer.</p>
+                )}
+              </div>
 
               <div>
                 <label
