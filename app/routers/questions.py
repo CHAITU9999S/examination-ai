@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import QuestionBank, Option, ExamQuestion, ExamSession
+from app.models import QuestionBank, Option, ExamQuestion, ExamSession, Answer
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
 from app.services.question_validation import validate_question
@@ -368,6 +368,26 @@ def delete_question(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the question creator can delete this question.",
+        )
+
+    if db.query(ExamQuestion.id).filter(
+        ExamQuestion.question_id == question_id
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Remove this question from its examination banks before deleting the source question.",
+        )
+    if db.query(Answer.id).filter(Answer.question_id == question_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A question used in a student answer cannot be deleted.",
+        )
+    if db.query(QuestionBank.id).filter(
+        QuestionBank.source_question_id == question_id
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This question is the source of a reused question snapshot and cannot be deleted.",
         )
 
     try:
