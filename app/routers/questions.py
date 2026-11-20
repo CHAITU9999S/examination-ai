@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import QuestionBank, Option
+from app.models import QuestionBank, Option, ExamQuestion, Exam, ExamSession
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
 from app.services.question_validation import validate_question
@@ -208,6 +208,19 @@ async def upload_question_image(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the question creator can change its prompt image.",
+        )
+
+    linked_exam_ids = [
+        row[0] for row in db.query(ExamQuestion.exam_id).filter(
+            ExamQuestion.question_id == question_id
+        ).all()
+    ]
+    if linked_exam_ids and db.query(ExamSession.id).filter(
+        ExamSession.exam_id.in_(linked_exam_ids)
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A question prompt image cannot be changed after a linked examination session has been created.",
         )
 
     image_bytes = await file.read(10 * 1024 * 1024 + 1)
