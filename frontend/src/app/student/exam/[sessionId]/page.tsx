@@ -683,11 +683,11 @@ export default function StudentExamPage() {
   }, [currentIndex, paper, examAccessToken, isPaused, getHeaders, sessionId]);
 
   useEffect(() => {
-    if (!currentQuestionId || !examAccessToken) return;
+    if (!currentQuestionId || !examAccessToken || isPaused) return;
     setQuestionRemainingSeconds(null);
     setQuestionTimerLocked(false);
     void loadQuestionTimer(currentQuestionId);
-  }, [currentQuestionId, examAccessToken, loadQuestionTimer]);
+  }, [currentQuestionId, examAccessToken, isPaused, loadQuestionTimer]);
 
   useEffect(() => {
     if (questionRemainingSeconds === null || questionRemainingSeconds <= 0) return;
