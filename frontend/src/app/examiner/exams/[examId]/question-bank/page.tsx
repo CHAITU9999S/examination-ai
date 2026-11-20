@@ -80,17 +80,6 @@ function istDateTimeToIso(value: string) {
   return date.toISOString();
 }
 
-function formatISTDate(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Invalid date";
-  return date.toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: INDIA_TIME_ZONE,
-  }) + " IST";
-}
-
 const configDifficulties = ["easy", "medium", "hard"] as const;
 const configQuestionTypes = ["MCQ", "multi_select", "short_answer", "long_answer", "image_upload"] as const;
 const defaultConfigGroupCounts: Record<string, string> = Object.fromEntries(
