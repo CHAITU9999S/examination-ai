@@ -144,6 +144,14 @@ def generate_session_question_ids(
         db,
     )
 
+    if exam.subject and any(
+        (question.subject or "").casefold() != exam.subject.casefold()
+        for question in questions
+    ):
+        raise ValueError(
+            "Every question in the examination bank must match the examination subject."
+        )
+
     # Enforce one maximum-mark value for each type/difficulty group
     # at paper-generation time, not only in the creator interface.
     marks_by_group = {}
