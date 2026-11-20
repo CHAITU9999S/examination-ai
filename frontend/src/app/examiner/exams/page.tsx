@@ -46,6 +46,8 @@ export default function ExaminerExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [currentRole, setCurrentRole] = useState<"admin" | "examiner" | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -88,6 +90,16 @@ export default function ExaminerExamsPage() {
       const headers = getHeaders();
       if (!headers) return;
 
+      const profileResponse = await fetch(`${API_URL}/users/me`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
+      const profile = await profileResponse.json();
+      setCurrentUserId(Number(profile.id));
+      setCurrentRole(profile.role === "admin" ? "admin" : "examiner");
+
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
         headers,
@@ -114,7 +126,11 @@ export default function ExaminerExamsPage() {
         throw new Error("Unexpected examination data returned by the server.");
       }
 
-      setExams(examList);
+      setExams(
+        profile.role === "admin"
+          ? examList.filter((exam: Exam) => exam.created_by === Number(profile.id))
+          : examList
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -267,6 +283,9 @@ export default function ExaminerExamsPage() {
       setMessage("Examination created successfully.");
       resetForm();
       await loadExams();
+      if (data.exam_id) {
+        router.push(`/examiner/exams/${data.exam_id}/question-bank`);
+      }
     } catch (err) {
       setError(
         err instanceof Error
