@@ -408,8 +408,18 @@ def calculate_session_result(
             elif question_type in SUBJECTIVE_QUESTION_TYPES:
                 answer = answer_map.get(question_id)
 
-                # Unanswered subjective questions receive zero.
-                if answer is not None and answer.awarded_marks is None:
+                # Timer-only answer rows are still unanswered. They must
+                # receive zero rather than blocking result publication.
+                has_response = bool(
+                    answer is not None
+                    and (
+                        (answer.answer_text and answer.answer_text.strip())
+                        or answer.image_data
+                    )
+                )
+                if answer is not None and not has_response:
+                    answer.awarded_marks = 0.0
+                elif has_response and answer.awarded_marks is None:
                     pending_subjective.append(question_id)
 
             else:
