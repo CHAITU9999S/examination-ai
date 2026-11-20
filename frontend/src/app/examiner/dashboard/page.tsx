@@ -72,7 +72,8 @@ function formatDate(value?: string | null) {
   return date.toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
-  });
+    timeZone: "Asia/Kolkata",
+  }) + " IST";
 }
 
 export default function ExaminerDashboardPage() {
