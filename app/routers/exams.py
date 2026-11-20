@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    Exam, ExamQuestion, ExamSession, QuestionBank, Option,
+    Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
     ExamAssignment, ExamConfigurationRevision, User,
 )
 from app.schemas import ExamCreate, QuestionCreate, UserRole
