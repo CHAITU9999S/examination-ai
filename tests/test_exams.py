@@ -356,4 +356,44 @@ def test_admin_can_list_exams_created_by_examiners(
     ]
 
     assert exam.id in returned_ids
-    
+
+def test_admin_and_other_examiner_cannot_edit_an_exam_they_do_not_own(
+    client,
+    db_session,
+):
+    owner = create_user(
+        db_session,
+        "examiner",
+        "assignment_owner@test.com",
+    )
+    admin = create_user(
+        db_session,
+        "admin",
+        "assignment_admin@test.com",
+    )
+    other_examiner = create_user(
+        db_session,
+        "examiner",
+        "assignment_other@test.com",
+    )
+    exam = Exam(
+        title="Creator-Owned Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=owner.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    for user in (admin, other_examiner):
+        response = client.put(
+            f"/exams/{exam.id}/questions",
+            json=[1],
+            headers=get_auth_headers(user),
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == (
+            "Only the examination creator can change its question assignments."
+        )
