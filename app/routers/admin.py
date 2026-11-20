@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased, aliased
+from sqlalchemy.orm import Session, aliased
 
 from app.auth import hash_password
 from app.database import get_db
@@ -26,6 +26,15 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin Management"]
 )
+
+def _performance_grade(percentage):
+    value = float(percentage or 0)
+    if value >= 90: return "A+"
+    if value >= 80: return "A"
+    if value >= 70: return "B"
+    if value >= 60: return "C"
+    if value >= 50: return "D"
+    return "F"
 
 
 @router.get("/dashboard")
@@ -404,6 +413,7 @@ def get_historical_student_performance(
                 "obtained_marks": result.obtained_marks,
                 "total_marks": result.total_marks,
                 "percentage": result.percentage,
+                "grade": _performance_grade(result.percentage),
                 "published_at": result.published_at,
             }
             for result, session, exam, student in rows
