@@ -502,7 +502,7 @@ export default function ExamQuestionBankPage() {
                 {configRevisions.map((revision) => (
                   <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                     <span className="font-semibold">{revision.revision_number === 0 ? "Initial configuration" : `Revision ${revision.revision_number}`}</span>
-                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")}</span>
+                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")} · Staff account #{revision.changed_by}</span>
                   </div>
                 ))}
               </div>
