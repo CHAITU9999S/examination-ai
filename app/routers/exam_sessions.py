@@ -538,14 +538,13 @@ def get_exam_remaining_time(
 @router.post("/pause/{session_id}")
 def pause_exam_session(
     session_id: int,
-    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only students can pause an exam.")
+    _, validated_session = validate_exam_token(credentials, db)
     session = db.query(ExamSession).filter(
         ExamSession.id == session_id,
-        ExamSession.student_id == current_user.id,
+        ExamSession.student_id == validated_session.student_id,
     ).with_for_update().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
@@ -567,14 +566,13 @@ def pause_exam_session(
 @router.post("/resume/{session_id}")
 def resume_exam_session(
     session_id: int,
-    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only students can resume an exam.")
+    _, validated_session = validate_exam_token(credentials, db)
     session = db.query(ExamSession).filter(
         ExamSession.id == session_id,
-        ExamSession.student_id == current_user.id,
+        ExamSession.student_id == validated_session.student_id,
     ).with_for_update().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
