@@ -1006,7 +1006,7 @@ def update_exam_configuration(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin")),
 ):
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    exam = db.query(Exam).filter(Exam.id == exam_id).with_for_update().first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
