@@ -1194,3 +1194,34 @@ def validate_exam_question_configuration(
         "selection_rules": exam.selection_rules or {},
         "message": "The configured paper can be generated without reducing any question counts.",
     }
+
+
+@router.get("/{exam_id}")
+def get_exam_details(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Return examination configuration to authorized staff; Admin access is read-only unless owner."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if current_user.role == UserRole.EXAMINER.value and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can view only your own examination configuration.")
+    return {
+        "id": exam.id,
+        "title": exam.title,
+        "subject": exam.subject,
+        "duration_minutes": exam.duration_minutes,
+        "total_questions": exam.total_questions,
+        "randomize_questions": exam.randomize_questions,
+        "selection_rules": exam.selection_rules or {},
+        "start_time": exam.start_time,
+        "end_time": exam.end_time,
+        "negative_marking": exam.negative_marking,
+        "proctoring_enabled": exam.proctoring_enabled,
+        "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
+        "max_tab_switch_warnings": exam.max_tab_switch_warnings,
+        "created_by": exam.created_by,
+        "can_edit": exam.created_by == current_user.id,
+    }
