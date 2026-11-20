@@ -110,6 +110,10 @@ def create_exam(
             },
             changed_by=current_user.id,
         ))
+        _audit_exam_action(db, current_user.id, "examination_created", {
+            "exam_id": exam.id,
+            "title": exam.title,
+        })
         db.commit()
         db.refresh(exam)
 
