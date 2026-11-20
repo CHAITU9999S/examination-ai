@@ -419,7 +419,7 @@ def auto_generate_ai_suggestions(
         "false",
     ).strip().lower() in {"1", "true", "yes", "on"}
 
-    if not enabled or not os.getenv("OPENAI_API_KEY"):
+    if not enabled or not (os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY")):
         return {
             "generated": 0,
             "skipped": True,
@@ -498,7 +498,7 @@ def approve_subjective_marks(
     if question_type not in SUPPORTED_QUESTION_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This function is only for written subjective answers.",
+            detail="This function is only for subjective written or image answers.",
         )
 
     if (
