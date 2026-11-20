@@ -46,8 +46,6 @@ export default function ExaminerExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const [currentRole, setCurrentRole] = useState<"admin" | "examiner" | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -97,8 +95,6 @@ export default function ExaminerExamsPage() {
       });
       if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
       const profile = await profileResponse.json();
-      setCurrentUserId(Number(profile.id));
-      setCurrentRole(profile.role === "admin" ? "admin" : "examiner");
 
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
