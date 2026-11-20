@@ -46,6 +46,7 @@ export default function ExaminerExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -95,6 +96,7 @@ export default function ExaminerExamsPage() {
       });
       if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
       const profile = await profileResponse.json();
+      setStaffRole(profile.role === "admin" ? "admin" : "examiner");
 
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
@@ -299,14 +301,14 @@ export default function ExaminerExamsPage() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
             <Link
-              href="/examiner/dashboard"
+              href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"}
               className="text-2xl font-bold"
             >
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
 
             <p className="mt-1 text-sm text-slate-400">
-              Examiner / Examination Management
+              {staffRole === "admin" ? "Administrator" : "Examiner"} / Examination Management
             </p>
           </div>
 
