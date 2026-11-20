@@ -349,7 +349,7 @@ def calculate_session_result(
         session_id,
     )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="The examination must be submitted before result calculation.",
