@@ -30,6 +30,7 @@ from app.database import get_db
 from app.models import (
     Answer,
     ExamSession,
+    ExamQuestion,
     Option,
     QuestionBank,
     User,
@@ -192,6 +193,12 @@ def get_active_session_for_update(
             detail="This exam session is no longer active.",
         )
 
+    if session.is_paused:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The exam is paused. Resume it before changing answers.",
+        )
+
     now = datetime.utcnow()
 
     if (
@@ -256,6 +263,106 @@ def get_session_question_ids(session) -> set[int]:
         )
 
     return set(selected_ids)
+
+
+# ==========================================
+# SERVER-ENFORCED PER-QUESTION TIMER
+# ==========================================
+
+def get_or_start_question_timer(
+    session: ExamSession,
+    question_id: int,
+    db: Session,
+):
+    """Start a question timer once and enforce its persisted deadline."""
+
+    assignment = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == session.exam_id,
+        ExamQuestion.question_id == question_id,
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question is not assigned to the examination.",
+        )
+
+    answer = db.query(Answer).filter(
+        Answer.session_id == session.id,
+        Answer.question_id == question_id,
+    ).with_for_update().first()
+    limit_seconds = assignment.question_time_limit_seconds
+
+    if answer is None:
+        answer = Answer(
+            session_id=session.id,
+            question_id=question_id,
+            question_started_at=datetime.utcnow(),
+            question_elapsed_seconds=0,
+        )
+        db.add(answer)
+        db.flush()
+    elif answer.question_started_at is None:
+        answer.question_started_at = datetime.utcnow()
+
+    if limit_seconds is None:
+        db.commit()
+        return {
+            "question_time_limit_seconds": None,
+            "elapsed_seconds": 0,
+            "remaining_seconds": None,
+            "is_locked": bool(answer.is_locked),
+        }
+
+    now = datetime.utcnow()
+    started_at = answer.question_started_at or now
+    elapsed = max(
+        0,
+        int((now - started_at).total_seconds()),
+    )
+    remaining = max(0, int(limit_seconds) - elapsed)
+    if remaining == 0:
+        answer.is_locked = True
+        answer.question_elapsed_seconds = max(
+            int(answer.question_elapsed_seconds or 0),
+            int(limit_seconds),
+        )
+    db.commit()
+
+    return {
+        "question_time_limit_seconds": int(limit_seconds),
+        "elapsed_seconds": min(elapsed, int(limit_seconds)),
+        "remaining_seconds": remaining,
+        "is_locked": bool(answer.is_locked),
+    }
+
+
+@router.get("/{session_id}/question-timer/{question_id}")
+def get_question_timer(
+    session_id: int,
+    question_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    """Start or resume a question timer without resetting it on refresh."""
+
+    session = validate_student_exam_token(credentials, session_id, db)
+    session = get_active_session_for_update(
+        session_id=session_id,
+        exam_id=session.exam_id,
+        student_id=session.student_id,
+        db=db,
+    )
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This question does not belong to your examination paper.",
+        )
+    timer = get_or_start_question_timer(session, question_id, db)
+    return {
+        "session_id": session.id,
+        "question_id": question_id,
+        **timer,
+    }
 
 
 # ==========================================
@@ -539,6 +646,13 @@ def save_exam_answer(
             detail="Question not found.",
         )
 
+    timer_state = get_or_start_question_timer(session, question_id, db)
+    if timer_state["is_locked"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The time limit for this question has expired. The answer is locked.",
+        )
+
     answer_text = submission.answer_text.strip()
 
     if not answer_text:
@@ -812,6 +926,13 @@ async def upload_image_answer(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Image files can only be submitted for image-upload questions.",
+        )
+
+    timer_state = get_or_start_question_timer(session, question_id, db)
+    if timer_state["is_locked"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The time limit for this question has expired. The answer is locked.",
         )
 
     image_bytes = await file.read(10 * 1024 * 1024 + 1)
