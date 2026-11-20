@@ -27,6 +27,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import (
     Exam,
+    ExamAssignment,
     ExamSession,
     Option,
     QuestionBank,
@@ -214,6 +215,17 @@ def start_exam(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Exam not found.",
+        )
+
+    assignment = db.query(ExamAssignment.id).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == current_user.id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This examination has not been assigned to your account.",
         )
 
     now = get_current_utc_time()
