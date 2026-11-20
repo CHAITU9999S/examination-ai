@@ -57,6 +57,10 @@ class ExamTokenRefreshRequest(BaseModel):
     )
 
 
+class QuestionProgressRequest(BaseModel):
+    current_question_index: int = Field(ge=0)
+
+
 # ==========================================
 # TIME HELPERS
 # ==========================================
@@ -532,6 +536,41 @@ def get_exam_remaining_time(
 
 
 # ==========================================
+# PERSIST CURRENT QUESTION PROGRESS
+# ==========================================
+
+@router.put("/progress/{session_id}")
+def update_exam_question_progress(
+    session_id: int,
+    data: QuestionProgressRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, validated_session = validate_exam_token(credentials, db)
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+        ExamSession.student_id == validated_session.student_id,
+    ).with_for_update().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
+    now = get_current_utc_time()
+    if session.status != "in_progress" or expire_session_if_needed(session, db, now):
+        raise HTTPException(status_code=409, detail="The examination session is no longer active.")
+    if session.is_paused:
+        raise HTTPException(status_code=409, detail="Resume the examination before changing question progress.")
+    selected_ids = session.selected_question_ids or []
+    if data.current_question_index >= len(selected_ids):
+        raise HTTPException(status_code=400, detail="Question progress is outside the saved examination paper.")
+    session.current_question_index = data.current_question_index
+    db.commit()
+    return {
+        "session_id": session.id,
+        "current_question_index": session.current_question_index,
+        "saved": True,
+    }
+
+
+# ==========================================
 # PAUSE AND RESUME EXAM SESSION
 # ==========================================
 
@@ -810,6 +849,7 @@ def get_exam_paper(
             get_current_utc_time(),
         ),
         "is_paused": bool(session.is_paused),
+        "current_question_index": int(session.current_question_index or 0),
         "total_questions": len(paper),
         "proctoring_enabled": bool(exam.proctoring_enabled),
         "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
