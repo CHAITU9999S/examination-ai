@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Answer, Exam, ExamSession, QuestionBank, Result, User
+from app.models import Answer, AnswerMarkRevision, Exam, ExamSession, QuestionBank, Result, User
 from app.services.evaluation_service import (
     calculate_session_result,
     evaluate_objective_answers,
@@ -146,6 +146,39 @@ def _validate_rubric_scores(question, rubric_scores, awarded_marks):
         )
 
     return [item.model_dump() for item in rubric_scores]
+
+
+def _record_mark_revision(
+    db: Session,
+    answer: Answer,
+    new_marks: float,
+    new_feedback: str | None,
+    revised_by: int,
+):
+    """Record each post-initial human mark change; cap at three per answer."""
+
+    if answer.awarded_marks is None:
+        return 0
+
+    revision_count = db.query(AnswerMarkRevision).filter(
+        AnswerMarkRevision.answer_id == answer.id
+    ).count()
+    if revision_count >= 3:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The three allowed mark revisions for this answer have been used.",
+        )
+
+    db.add(AnswerMarkRevision(
+        answer_id=answer.id,
+        revision_number=revision_count + 1,
+        previous_marks=float(answer.awarded_marks),
+        new_marks=float(new_marks),
+        previous_feedback=answer.examiner_feedback,
+        new_feedback=new_feedback,
+        revised_by=revised_by,
+    ))
+    return revision_count + 1
 
 
 def _get_submitted_answer_context(
@@ -630,6 +663,13 @@ def grade_subjective_answer(
                 detail="Answer not found.",
             )
 
+        revision_number = _record_mark_revision(
+            db,
+            locked_answer,
+            submission.awarded_marks,
+            submission.examiner_feedback,
+            current_user.id,
+        )
         locked_answer.awarded_marks = float(
             submission.awarded_marks
         )
@@ -819,6 +859,13 @@ def bulk_grade_session_answers(
                     detail="Image annotations are allowed only for image answers.",
                 )
 
+            _record_mark_revision(
+                db,
+                answer,
+                item.awarded_marks,
+                item.examiner_feedback,
+                current_user.id,
+            )
             answer.awarded_marks = float(item.awarded_marks)
             answer.examiner_feedback = item.examiner_feedback
             answer.image_annotations = (
@@ -978,12 +1025,36 @@ def approve_ai_grading_suggestion(
             detail="AI-assisted approval requires written or OCR-extracted answer text.",
         )
 
+    locked_answer = db.query(Answer).filter(
+        Answer.id == answer_id,
+    ).with_for_update().first()
+    if locked_answer is None:
+        raise HTTPException(status_code=404, detail="Answer not found.")
+
+    revision_number = _record_mark_revision(
+        db,
+        locked_answer,
+        submission.awarded_marks,
+        submission.examiner_feedback,
+        current_user.id,
+    )
     approval = approve_subjective_marks(
         db=db,
         answer_id=answer_id,
         awarded_marks=submission.awarded_marks,
         current_user=current_user,
     )
+    locked_answer.examiner_feedback = submission.examiner_feedback
+    locked_answer.image_annotations = (
+        [annotation.model_dump() for annotation in submission.image_annotations]
+        if submission.image_annotations else None
+    )
+    locked_answer.rubric_scores = _validate_rubric_scores(
+        question,
+        submission.rubric_scores,
+        submission.awarded_marks,
+    )
+    db.commit()
 
     result = calculate_session_result(
         db,
