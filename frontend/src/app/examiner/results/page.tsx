@@ -7,6 +7,17 @@ import { useRouter } from "next/navigation";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+interface HistoricalResult {
+  result_id: number;
+  session_id: number;
+  exam_title: string;
+  student_name: string;
+  obtained_marks: number;
+  total_marks: number;
+  percentage: number;
+  published: boolean;
+  submitted_at?: string | null;
+}
 interface ReviewSession {
   session_id: number;
   exam_id: number;
@@ -35,6 +46,8 @@ function formatDate(value?: string | null) {
 export default function ExaminerResultsPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
+  const [history, setHistory] = useState<HistoricalResult[]>([]);
+  const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -50,19 +63,27 @@ export default function ExaminerResultsPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/grading/sessions`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (response.status === 401 || response.status === 403) {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [sessionsResponse, historyResponse, profileResponse] = await Promise.all([
+        fetch(`${API_URL}/grading/sessions`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/results/staff/history`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+      ]);
+      if ([sessionsResponse, historyResponse, profileResponse].some((response) => response.status === 401 || response.status === 403)) {
         router.replace("/login");
         return;
       }
-      if (!response.ok) {
-        throw new Error("Unable to load submitted examination sessions.");
+      const [sessionData, historyData, profile] = await Promise.all([
+        sessionsResponse.json().catch(() => ({})),
+        historyResponse.json().catch(() => ({})),
+        profileResponse.json().catch(() => ({})),
+      ]);
+      if (!sessionsResponse.ok || !historyResponse.ok || !profileResponse.ok) {
+        throw new Error("Unable to load examination result history.");
       }
-      const data = await response.json();
-      setSessions(Array.isArray(data.sessions) ? data.sessions : []);
+      setStaffRole(profile.role === "admin" ? "admin" : "examiner");
+      setSessions(Array.isArray(sessionData.sessions) ? sessionData.sessions : []);
+      setHistory(Array.isArray(historyData.results) ? historyData.results : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load sessions.");
     } finally {
@@ -113,7 +134,7 @@ export default function ExaminerResultsPage() {
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
-            <Link href="/examiner/dashboard" className="text-2xl font-bold">
+            <Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="text-2xl font-bold">
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
             <p className="mt-1 text-sm text-slate-400">Examiner / Result Publication</p>
@@ -194,6 +215,26 @@ export default function ExaminerResultsPage() {
                     </tr>
                   ))}
                 </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Historical Results</h2>
+              <p className="mt-1 text-sm text-slate-400">Previously calculated results visible to this examination creator.</p>
+            </div>
+            <span className="text-sm text-slate-400">{history.length} result(s)</span>
+          </div>
+          {history.length === 0 ? (
+            <p className="py-8 text-center text-slate-400">No historical results are available.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Student</th><th className="p-3">Score</th><th className="p-3">Percentage</th><th className="p-3">Status</th></tr></thead>
+                <tbody>{history.map((item) => <tr key={item.result_id} className="border-b border-white/5"><td className="p-3">{item.exam_title}</td><td className="p-3">{item.student_name}</td><td className="p-3 tabular-nums">{item.obtained_marks} / {item.total_marks}</td><td className="p-3 tabular-nums">{Number(item.percentage).toFixed(2)}%</td><td className="p-3">{item.published ? "Published" : "Awaiting publication"}</td></tr>)}</tbody>
               </table>
             </div>
           )}
