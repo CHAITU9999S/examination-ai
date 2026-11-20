@@ -12,9 +12,9 @@ def generate_paper(
     question_details=None,
     difficulty_counts=None,
     question_type_counts=None,
-    group_counts=None,
     randomize=True,
     seed_salt=0,
+    group_counts=None,
 ):
     """Generate a deterministic question paper for a student and exam."""
 
