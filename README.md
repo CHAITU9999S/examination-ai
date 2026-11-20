@@ -167,6 +167,16 @@ The first Admin account must be created through a secure backend bootstrap proce
 
 ---
 
+## Database Migration
+
+The examination workflow additions are included in Alembic migration `0019_exam_workflow_features`. It adds exam assignments, question source tracking, per-question timers, saved session progress, pause state, configuration revision history, and human mark revision history.
+
+The migration file is committed as source code only. It has **not** been executed against Neon. Apply database migrations through the backend deployment workflow only after reviewing the migration and taking the required database backup:
+
+```bash
+alembic upgrade head
+```
+
 ## AI Provider Configuration
 
 AI grading is optional and disabled by default. The backend accepts an AI key only through server-side environment variables:
