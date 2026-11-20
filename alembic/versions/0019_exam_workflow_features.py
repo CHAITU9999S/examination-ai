@@ -47,6 +47,10 @@ def upgrade():
         sa.Column("paused_at", sa.DateTime(), nullable=True),
     )
     op.add_column(
+        "exam_sessions",
+        sa.Column("current_question_index", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
         "answers",
         sa.Column("question_started_at", sa.DateTime(), nullable=True),
     )
@@ -119,6 +123,7 @@ def downgrade():
     op.drop_column("answers", "is_locked")
     op.drop_column("answers", "question_elapsed_seconds")
     op.drop_column("answers", "question_started_at")
+    op.drop_column("exam_sessions", "current_question_index")
     op.drop_column("exam_sessions", "paused_at")
     op.drop_column("exam_sessions", "is_paused")
     op.drop_column("exam_questions", "question_time_limit_seconds")
