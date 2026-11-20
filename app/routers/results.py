@@ -255,3 +255,115 @@ def get_my_result_details(
         ),
         "question_results": question_results,
     }
+
+
+def _letter_grade(percentage):
+    score = float(percentage or 0)
+    if score >= 90:
+        return "A+"
+    if score >= 80:
+        return "A"
+    if score >= 70:
+        return "B"
+    if score >= 60:
+        return "C"
+    if score >= 50:
+        return "D"
+    return "F"
+
+
+@router.get("/exams/{exam_id}")
+def get_exam_results_for_staff(
+    exam_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return student-by-student result status for the exam owner or Admin."""
+    role = getattr(current_user.role, "value", current_user.role)
+    if not current_user.is_active or role not in {"admin", "examiner"}:
+        raise HTTPException(status_code=403, detail="Only active exam staff can view examination results.")
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if role == "examiner" and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can view results only for examinations you created.")
+
+    rows = db.query(ExamSession, User, Result).join(
+        User, User.id == ExamSession.student_id
+    ).outerjoin(
+        Result, Result.session_id == ExamSession.id
+    ).filter(
+        ExamSession.exam_id == exam_id
+    ).order_by(
+        ExamSession.submitted_at.desc(),
+        ExamSession.id.desc(),
+    ).all()
+
+    return {
+        "exam_id": exam.id,
+        "exam_title": exam.title,
+        "total_students": len(rows),
+        "results": [
+            {
+                "session_id": session.id,
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "session_status": session.status,
+                "submitted_at": session.submitted_at,
+                "result_published": bool(result and result.is_published),
+                "total_marks": result.total_marks if result else None,
+                "obtained_marks": result.obtained_marks if result else None,
+                "percentage": result.percentage if result else None,
+                "grade": _letter_grade(result.percentage) if result and result.is_published else None,
+            }
+            for session, student, result in rows
+        ],
+    }
+
+
+@router.get("/staff/history")
+def get_staff_result_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return historical examination performance visible to this staff member."""
+    role = getattr(current_user.role, "value", current_user.role)
+    if not current_user.is_active or role not in {"admin", "examiner"}:
+        raise HTTPException(status_code=403, detail="Only active exam staff can view result history.")
+
+    query = db.query(Result, ExamSession, Exam, User).join(
+        ExamSession, Result.session_id == ExamSession.id
+    ).join(
+        Exam, Exam.id == ExamSession.exam_id
+    ).join(
+        User, User.id == ExamSession.student_id
+    )
+    if role == "examiner":
+        query = query.filter(Exam.created_by == current_user.id)
+
+    rows = query.order_by(
+        ExamSession.submitted_at.desc(),
+        Result.id.desc(),
+    ).limit(1000).all()
+
+    return {
+        "total": len(rows),
+        "results": [
+            {
+                "result_id": result.id,
+                "session_id": session.id,
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "submitted_at": session.submitted_at,
+                "published": bool(result.is_published),
+                "total_marks": result.total_marks,
+                "obtained_marks": result.obtained_marks,
+                "percentage": result.percentage,
+                "grade": _letter_grade(result.percentage) if result.is_published else None,
+            }
+            for result, session, exam, student in rows
+        ],
+    }
