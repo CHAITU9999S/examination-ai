@@ -62,6 +62,7 @@ export default function ExaminerGradingPage() {
   const router = useRouter();
 
   const [answers, setAnswers] = useState<PendingAnswer[]>([]);
+  const [gradedAnswers, setGradedAnswers] = useState<PendingAnswer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -126,36 +127,28 @@ export default function ExaminerGradingPage() {
       const headers = getHeaders();
       if (!headers) return;
 
-      const response = await fetch(
-        `${API_URL}/grading/pending`,
-        {
-          method: "GET",
-          headers,
-        }
-      );
+      const [pendingResponse, gradedResponse] = await Promise.all([
+        fetch(`${API_URL}/grading/pending`, { method: "GET", headers, cache: "no-store" }),
+        fetch(`${API_URL}/grading/graded`, { method: "GET", headers, cache: "no-store" }),
+      ]);
 
-      if (response.status === 401 || response.status === 403) {
+      if (pendingResponse.status === 401 || pendingResponse.status === 403 || gradedResponse.status === 401 || gradedResponse.status === 403) {
         router.replace("/login");
         return;
       }
-
-      if (!response.ok) {
-        throw new Error("Unable to load answers awaiting grading.");
+      if (!pendingResponse.ok || !gradedResponse.ok) {
+        throw new Error("Unable to load pending and previously graded answers.");
       }
 
-      const data = await response.json();
-
-      const list = Array.isArray(data)
-        ? data
-        : Array.isArray(data.answers)
-          ? data.answers
-          : null;
-
-      if (!list) {
+      const pendingData = await pendingResponse.json();
+      const gradedData = await gradedResponse.json();
+      const pendingList = Array.isArray(pendingData) ? pendingData : pendingData.answers;
+      const gradedList = Array.isArray(gradedData) ? gradedData : gradedData.answers;
+      if (!Array.isArray(pendingList) || !Array.isArray(gradedList)) {
         throw new Error("Unexpected grading data returned by the server.");
       }
-
-      setAnswers(list);
+      setAnswers(pendingList);
+      setGradedAnswers(gradedList);
     } catch (err) {
       setError(
         err instanceof Error
@@ -649,6 +642,32 @@ export default function ExaminerGradingPage() {
                   ))}
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Previously Graded Answers</h2>
+              <p className="mt-1 text-sm text-slate-400">Review existing marks, inspect revision history, and use the remaining permitted revisions before results are published.</p>
+            </div>
+            <span className="text-sm text-slate-400">{gradedAnswers.length} graded answer(s)</span>
+          </div>
+          {gradedAnswers.length === 0 ? (
+            <p className="py-8 text-center text-slate-400">No subjective answers have been graded yet.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {gradedAnswers.map((answer) => (
+                <article key={answer.answer_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-800/50 p-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-cyan-300">{answer.exam_title} · {answer.student_name || `Student #${answer.student_id}`}</p>
+                    <p className="mt-1 line-clamp-2 text-sm">{answer.question_text}</p>
+                    <p className="mt-2 text-xs text-slate-400">Final marks: {answer.awarded_marks} / {answer.marks}</p>
+                  </div>
+                  <button type="button" onClick={() => openAnswer(answer)} className="rounded-lg border border-cyan-500/40 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">Review / Revise</button>
+                </article>
               ))}
             </div>
           )}
