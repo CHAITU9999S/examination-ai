@@ -696,24 +696,36 @@ def reuse_questions_from_previous_banks(
         raise HTTPException(status_code=409, detail="One or more questions are already in this examination bank.")
 
     existing_count = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).count()
+    marks_by_group = {}
+    existing_groups = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam_id).all()
+    for existing in existing_groups:
+        group_key = (
+            getattr(existing.question_type, "value", existing.question_type),
+            existing.difficulty,
+        )
+        marks_by_group[group_key] = float(existing.marks or 0)
+
     new_questions = []
     try:
         for source in source_rows:
             if exam.subject and source.subject and source.subject.casefold() != exam.subject.casefold():
                 raise HTTPException(status_code=400, detail="Every reused question must match the examination subject.")
 
-            group_question = db.query(QuestionBank).join(
-                ExamQuestion, ExamQuestion.question_id == QuestionBank.id
-            ).filter(
-                ExamQuestion.exam_id == exam_id,
-                QuestionBank.question_type == source.question_type,
-                QuestionBank.difficulty == source.difficulty,
-            ).first()
-            if group_question and float(group_question.marks or 0) != float(source.marks or 0):
+            group_key = (
+                getattr(source.question_type, "value", source.question_type),
+                source.difficulty,
+            )
+            source_marks = float(source.marks or 0)
+            if group_key in marks_by_group and not math.isclose(
+                marks_by_group[group_key], source_marks, rel_tol=0, abs_tol=0.0001
+            ):
                 raise HTTPException(
                     status_code=400,
-                    detail="Maximum marks must match the existing type and difficulty group.",
+                    detail="Maximum marks must match every question in the same type and difficulty group.",
                 )
+            marks_by_group[group_key] = source_marks
 
             copied = QuestionBank(
                 question_text=source.question_text,
