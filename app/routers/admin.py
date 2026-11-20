@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, aliased
 
 from app.auth import hash_password
 from app.database import get_db
@@ -417,20 +417,22 @@ def list_all_exam_schedules(
     db: Session = Depends(get_db),
 ):
     """Return all active student assignments with examination schedules."""
+    StudentAccount = aliased(User)
+    CreatorAccount = aliased(User)
     rows = db.query(
-        ExamAssignment, Exam, User, User
+        ExamAssignment, Exam, StudentAccount, CreatorAccount
     ).join(
         Exam, Exam.id == ExamAssignment.exam_id
     ).join(
-        User, User.id == ExamAssignment.student_id
+        StudentAccount, StudentAccount.id == ExamAssignment.student_id
     ).outerjoin(
-        User, User.id == Exam.created_by
+        CreatorAccount, CreatorAccount.id == Exam.created_by
     ).filter(
         ExamAssignment.is_active.is_(True)
     ).order_by(
         Exam.start_time.asc(),
         Exam.title.asc(),
-        User.full_name.asc(),
+        StudentAccount.full_name.asc(),
     ).all()
 
     return {
@@ -440,6 +442,7 @@ def list_all_exam_schedules(
                 "exam_id": exam.id,
                 "exam_title": exam.title,
                 "creator_id": exam.created_by,
+                "creator_name": creator.full_name if creator else None,
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "student_email": student.email,
