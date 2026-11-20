@@ -658,7 +658,7 @@ def list_reusable_question_banks(
     rows = query.order_by(Exam.id.desc(), ExamQuestion.question_order.asc()).all()
     banks = {}
     for source_exam, assignment, question in rows:
-        if target.subject and question.subject and question.subject.casefold() != target.subject.casefold():
+        if target.subject and (question.subject or "").casefold() != target.subject.casefold():
             continue
         bank = banks.setdefault(source_exam.id, {
             "source_exam_id": source_exam.id,
@@ -746,7 +746,7 @@ def reuse_questions_from_previous_banks(
     new_questions = []
     try:
         for source in source_rows:
-            if exam.subject and source.subject and source.subject.casefold() != exam.subject.casefold():
+            if exam.subject and (source.subject or "").casefold() != exam.subject.casefold():
                 raise HTTPException(status_code=400, detail="Every reused question must match the examination subject.")
 
             group_key = (
