@@ -503,6 +503,7 @@ export default function ExamQuestionBankPage() {
                   <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                     <span className="font-semibold">{revision.revision_number === 0 ? "Initial configuration" : `Revision ${revision.revision_number}`}</span>
                     <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")} · Staff account #{revision.changed_by}</span>
+                    <p className="mt-2 text-slate-400">{String(revision.configuration.title || "Untitled")} · {String(revision.configuration.duration_minutes || "—")} minutes · {String(revision.configuration.total_questions || "—")} questions · Subject: {String(revision.configuration.subject || "—")}</p>
                   </div>
                 ))}
               </div>
