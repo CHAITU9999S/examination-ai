@@ -230,7 +230,7 @@ export default function ExaminerExamsPage() {
     if (useGroupCounts) {
       const parsedGroups = Object.fromEntries(
         Object.entries(groupCounts).map(([key, value]) => [key, Number(value || 0)])
-      );
+      ) as Record<string, number>;
       const configuredTotal = Object.values(parsedGroups).reduce((sum, value) => sum + value, 0);
       if (Object.values(parsedGroups).some((value) => !Number.isInteger(value) || value < 0)) {
         setError("Every type/difficulty count must be a non-negative whole number.");
