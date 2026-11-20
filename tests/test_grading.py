@@ -133,7 +133,7 @@ def test_ai_grading_is_disabled_without_explicit_opt_in(
     data = grading_data
 
     monkeypatch.setenv("AI_GRADING_ENABLED", "false")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-used")
+    monkeypatch.setenv("MENTORS_API_KEY", "test-key-not-used")
 
     response = client.post(
         f"/grading/answers/{data['answer'].id}/ai-suggestion",
@@ -260,7 +260,7 @@ def test_ai_grading_generates_and_persists_suggestion_without_awarding_marks(
 ):
     data = grading_data
     monkeypatch.setenv("AI_GRADING_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("MENTORS_API_KEY", "test-key")
     monkeypatch.setenv("AI_GRADING_MODEL", "test-model")
     _mock_openai_response(
         monkeypatch,
@@ -297,7 +297,7 @@ def test_ai_grading_rejects_score_above_question_maximum(
 ):
     data = grading_data
     monkeypatch.setenv("AI_GRADING_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("MENTORS_API_KEY", "test-key")
     _mock_openai_response(
         monkeypatch,
         {
@@ -349,7 +349,7 @@ def test_student_cannot_request_ai_grading(
 ):
     data = grading_data
     monkeypatch.setenv("AI_GRADING_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("MENTORS_API_KEY", "test-key")
 
     response = client.post(
         f"/grading/answers/{data['answer'].id}/ai-suggestion",
@@ -359,7 +359,7 @@ def test_student_cannot_request_ai_grading(
     assert response.status_code == 403
 
 
-def test_ai_grading_rejects_image_upload_answers(
+def test_ai_grading_requires_uploaded_image_for_image_upload_answers(
     client,
     db_session,
     grading_data,
@@ -369,7 +369,7 @@ def test_ai_grading_rejects_image_upload_answers(
     data["question"].question_type = "image_upload"
     db_session.commit()
     monkeypatch.setenv("AI_GRADING_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("MENTORS_API_KEY", "test-key")
 
     response = client.post(
         f"/grading/answers/{data['answer'].id}/ai-suggestion",
@@ -377,7 +377,7 @@ def test_ai_grading_rejects_image_upload_answers(
     )
 
     assert response.status_code == 400
-    assert "short and long" in response.json()["detail"].lower()
+    assert "no uploaded answer image" in response.json()["detail"].lower()
 
 
 def test_examiner_review_queue_groups_answers_by_question(
