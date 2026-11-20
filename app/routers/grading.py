@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Answer, AnswerMarkRevision, Exam, ExamSession, QuestionBank, Result, User
+from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamSession, QuestionBank, Result, User
 from app.services.evaluation_service import (
     calculate_session_result,
     evaluate_objective_answers,
@@ -177,6 +177,16 @@ def _record_mark_revision(
         previous_feedback=answer.examiner_feedback,
         new_feedback=new_feedback,
         revised_by=revised_by,
+    ))
+    db.add(AdminActivityLog(
+        actor_user_id=revised_by,
+        action="answer_mark_revised",
+        details={
+            "answer_id": answer.id,
+            "revision_number": revision_count + 1,
+            "previous_marks": float(answer.awarded_marks),
+            "new_marks": float(new_marks),
+        },
     ))
     return revision_count + 1
 
@@ -688,6 +698,17 @@ def grade_subjective_answer(
             submission.rubric_scores,
             submission.awarded_marks,
         )
+        db.add(AdminActivityLog(
+            actor_user_id=current_user.id,
+            action="subjective_answer_marked",
+            details={
+                "answer_id": answer_id,
+                "exam_id": exam.id,
+                "question_id": question.id,
+                "revision_number": revision_number,
+                "awarded_marks": float(submission.awarded_marks),
+            },
+        ))
         db.commit()
 
         result = calculate_session_result(
@@ -958,6 +979,15 @@ def publish_session_result(
     if not result.is_published:
         result.is_published = True
         result.published_at = datetime.utcnow()
+        db.add(AdminActivityLog(
+            actor_user_id=current_user.id,
+            action="examination_result_published",
+            details={
+                "session_id": session_id,
+                "exam_id": session.exam_id,
+                "result_id": result.id,
+            },
+        ))
         db.commit()
         db.refresh(result)
 
