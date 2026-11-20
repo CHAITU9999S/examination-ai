@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.auth import create_access_token
-from app.models import User, Exam
+from app.models import User, Exam, QuestionBank, ExamQuestion
 
 
 def create_user(db, role, email):
@@ -397,3 +397,137 @@ def test_admin_and_other_examiner_cannot_edit_an_exam_they_do_not_own(
         assert response.json()["detail"] == (
             "Only the examination creator can change its question assignments."
         )
+
+def test_exam_creator_can_add_question_to_own_exam_bank(
+    client,
+    db_session,
+):
+    creator = create_user(
+        db_session,
+        "examiner",
+        "bank_add_creator@test.com",
+    )
+    exam = Exam(
+        title="Bank Management Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    response = client.post(
+        f"/exams/{exam.id}/questions",
+        json={
+            "question_text": "Explain photosynthesis.",
+            "question_type": "short_answer",
+            "subject": "Science",
+            "difficulty": "easy",
+            "marks": 5,
+            "expected_answer": "Plants make food using light.",
+        },
+        headers=get_auth_headers(creator),
+    )
+
+    assert response.status_code == 201
+    question_id = response.json()["question_id"]
+    assert db_session.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first() is not None
+    assert db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam.id,
+        ExamQuestion.question_id == question_id,
+    ).first() is not None
+
+
+def test_exam_creator_can_remove_question_without_deleting_original(
+    client,
+    db_session,
+):
+    creator = create_user(
+        db_session,
+        "examiner",
+        "bank_remove_creator@test.com",
+    )
+    source_question = QuestionBank(
+        question_text="What is gravity?",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="easy",
+        marks=5,
+        created_by=creator.id,
+    )
+    db_session.add(source_question)
+    db_session.flush()
+    exam = Exam(
+        title="Question Removal Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=exam.id,
+        question_id=source_question.id,
+        question_order=1,
+    ))
+    db_session.commit()
+    db_session.refresh(exam)
+    db_session.refresh(source_question)
+
+    response = client.delete(
+        f"/exams/{exam.id}/questions/{source_question.id}",
+        headers=get_auth_headers(creator),
+    )
+
+    assert response.status_code == 200
+    assert db_session.query(QuestionBank).filter(
+        QuestionBank.id == source_question.id
+    ).first() is not None
+    assert db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam.id,
+        ExamQuestion.question_id == source_question.id,
+    ).first() is None
+
+
+def test_non_creator_cannot_add_question_to_exam_bank(
+    client,
+    db_session,
+):
+    creator = create_user(
+        db_session,
+        "examiner",
+        "bank_owner@test.com",
+    )
+    admin = create_user(
+        db_session,
+        "admin",
+        "bank_non_owner_admin@test.com",
+    )
+    exam = Exam(
+        title="Protected Question Bank",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    response = client.post(
+        f"/exams/{exam.id}/questions",
+        json={
+            "question_text": "Explain photosynthesis.",
+            "question_type": "short_answer",
+            "subject": "Science",
+            "difficulty": "easy",
+            "marks": 5,
+        },
+        headers=get_auth_headers(admin),
+    )
+    assert response.status_code == 403
