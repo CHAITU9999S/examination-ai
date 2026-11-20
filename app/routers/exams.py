@@ -19,6 +19,7 @@ from app.services.session_service import generate_session_question_ids
 from app.services.exam_config import (
     validate_exam_config,
     normalize_to_naive_utc,
+    normalize_schedule_input_to_naive_utc,
 )
 
 
@@ -73,11 +74,11 @@ def create_exam(
         randomize_questions=data.randomize_questions,
         selection_rules=data.selection_rules,
 
-        start_time=normalize_to_naive_utc(
+        start_time=normalize_schedule_input_to_naive_utc(
             data.start_time
         ),
 
-        end_time=normalize_to_naive_utc(
+        end_time=normalize_schedule_input_to_naive_utc(
             data.end_time
         ),
 
@@ -101,8 +102,8 @@ def create_exam(
                 "total_questions": exam.total_questions,
                 "randomize_questions": exam.randomize_questions,
                 "selection_rules": exam.selection_rules,
-                "start_time": normalize_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if exam.start_time else None,
-                "end_time": normalize_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat() if exam.end_time else None,
+                "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if exam.start_time else None,
+                "end_time": normalize_schedule_input_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat() if exam.end_time else None,
                 "negative_marking": exam.negative_marking,
                 "proctoring_enabled": exam.proctoring_enabled,
                 "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
@@ -1080,8 +1081,8 @@ def update_exam_configuration(
         "total_questions": data.total_questions,
         "randomize_questions": data.randomize_questions,
         "selection_rules": data.selection_rules,
-        "start_time": normalize_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat(),
-        "end_time": normalize_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat(),
+        "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat(),
+        "end_time": normalize_schedule_input_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat(),
         "negative_marking": data.negative_marking,
         "proctoring_enabled": data.proctoring_enabled,
         "gaze_tracking_sensitivity": data.gaze_tracking_sensitivity,
@@ -1104,8 +1105,8 @@ def update_exam_configuration(
         exam.total_questions = data.total_questions
         exam.randomize_questions = data.randomize_questions
         exam.selection_rules = data.selection_rules
-        exam.start_time = normalize_to_naive_utc(data.start_time)
-        exam.end_time = normalize_to_naive_utc(data.end_time)
+        exam.start_time = normalize_schedule_input_to_naive_utc(data.start_time)
+        exam.end_time = normalize_schedule_input_to_naive_utc(data.end_time)
         exam.negative_marking = data.negative_marking
         exam.proctoring_enabled = data.proctoring_enabled
         exam.gaze_tracking_sensitivity = data.gaze_tracking_sensitivity
