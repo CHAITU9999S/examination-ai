@@ -290,6 +290,9 @@ def get_all_pending_subjective_answers(
                     "value",
                     question.question_type,
                 ),
+                "difficulty": question.difficulty,
+                "expected_answer": question.expected_answer,
+                "model_answer_text": question.model_answer_text,
                 "answer_text": answer.answer_text,
                 "image_path": answer.image_path,
                 "image_url": (
