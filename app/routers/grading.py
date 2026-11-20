@@ -904,6 +904,14 @@ def bulk_grade_session_answers(
                 item.awarded_marks,
             )
 
+        db.add(AdminActivityLog(
+            actor_user_id=current_user.id,
+            action="subjective_answers_bulk_graded",
+            details={
+                "session_id": session_id,
+                "answer_ids": answer_ids,
+            },
+        ))
         db.commit()
         result = calculate_session_result(db, session_id)
     except HTTPException:
@@ -1088,6 +1096,16 @@ def approve_ai_grading_suggestion(
         submission.rubric_scores,
         submission.awarded_marks,
     )
+    db.add(AdminActivityLog(
+        actor_user_id=current_user.id,
+        action="ai_suggested_marks_human_approved",
+        details={
+            "answer_id": answer_id,
+            "exam_id": exam.id,
+            "approved_marks": float(submission.awarded_marks),
+            "revision_number": revision_number,
+        },
+    ))
     db.commit()
 
     result = calculate_session_result(
