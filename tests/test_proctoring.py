@@ -483,7 +483,7 @@ def test_event_history_is_available_to_examiner_or_admin(
     assert response.status_code == 200
 
 
-def test_student_can_access_own_proctoring_history(
+def test_student_cannot_access_own_proctoring_history(
     client,
     db_session,
     proctoring_data,
@@ -504,11 +504,8 @@ def test_student_can_access_own_proctoring_history(
         headers=proctoring_headers(data["token"]),
     )
 
-    assert response.status_code == 200
-    assert response.json()["session_id"] == data["session"].id
-    assert response.json()["last_heartbeat_at"] is not None
-    assert response.json()["last_heartbeat_signals"]["total_event_count"] == 3
-    assert response.json()["last_heartbeat_signals"]["event_counts"]["tab_switch"] == 2
+    assert response.status_code == 403
+    assert "staff only" in response.json()["detail"].lower()
 
 
 
