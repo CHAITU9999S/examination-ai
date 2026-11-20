@@ -187,6 +187,7 @@ def generate_session_question_ids(
             question_details=question_details,
             difficulty_counts=difficulty_counts,
             question_type_counts=question_type_counts,
+            group_counts=rules.get("group_counts"),
             randomize=False,
         )
     else:
@@ -216,6 +217,7 @@ def generate_session_question_ids(
                 question_details=question_details,
                 difficulty_counts=difficulty_counts,
                 question_type_counts=question_type_counts,
+                group_counts=rules.get("group_counts"),
                 randomize=True,
                 seed_salt=seed_salt,
             )
