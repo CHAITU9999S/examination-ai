@@ -243,20 +243,19 @@ def generate_ai_grading_suggestion(
             detail="AI grading is disabled until it is explicitly enabled by the application administrator.",
         )
 
-    # Keep provider credentials exclusively in backend environment variables.
-    # AI_API_KEY supports OpenAI-compatible providers; OPENAI_API_KEY remains
-    # a backward-compatible fallback for existing deployments.
-    api_key = os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    # All AI evaluation requests must authenticate with the mentor-provided
+    # credential. Do not fall back to OpenAI or any generic provider key.
+    api_key = os.getenv("MENTORS_API_KEY")
 
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI grading is unavailable because the backend AI provider key is not configured.",
+            detail="AI grading is unavailable because the backend MENTORS_API_KEY is not configured.",
         )
 
     model = (
-        os.getenv("AI_GRADING_MODEL")
-        or os.getenv("OPENAI_MODEL")
+        os.getenv("MENTORS_API_MODEL")
+        or os.getenv("AI_GRADING_MODEL")
         or DEFAULT_MODEL
     ).strip()
 
@@ -328,7 +327,7 @@ Required JSON format:
             "timeout": 30.0,
             "max_retries": 1,
         }
-        provider_base_url = os.getenv("AI_API_BASE_URL")
+        provider_base_url = os.getenv("MENTORS_API_BASE_URL")
         if provider_base_url:
             client_options["base_url"] = provider_base_url
         client = OpenAI(**client_options)
@@ -436,11 +435,11 @@ def auto_generate_ai_suggestions(
         "false",
     ).strip().lower() in {"1", "true", "yes", "on"}
 
-    if not enabled or not (os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY")):
+    if not enabled or not os.getenv("MENTORS_API_KEY"):
         return {
             "generated": 0,
             "skipped": True,
-            "reason": "AI grading is disabled or no API key is configured.",
+            "reason": "AI grading is disabled or MENTORS_API_KEY is not configured.",
         }
 
     answers = db.query(Answer).join(
