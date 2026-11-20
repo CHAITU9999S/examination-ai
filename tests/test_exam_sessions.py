@@ -433,7 +433,7 @@ def test_student_starts_exam_using_exam_id_path(
     question = QuestionBank(
         question_text="A sample question",
         question_type="MCQ",
-        subject="General",
+        subject="General Knowledge",
         difficulty="easy",
         marks=1,
         negative_marks=0,
@@ -486,7 +486,7 @@ def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
     question = QuestionBank(
         question_text="A token refresh question",
         question_type="MCQ",
-        subject="General",
+        subject="General Knowledge",
         difficulty="easy",
         marks=1,
         negative_marks=0,
@@ -571,7 +571,7 @@ def test_exam_refresh_rejects_inactive_student(
     question = QuestionBank(
         question_text="A refresh authorization question",
         question_type="MCQ",
-        subject="General",
+        subject="General Knowledge",
         difficulty="easy",
         marks=1,
         negative_marks=0,
