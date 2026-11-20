@@ -363,7 +363,7 @@ def get_pending_subjective_answers(
         Answer.question_id == QuestionBank.id,
     ).filter(
         ExamSession.exam_id == exam.id,
-        ExamSession.status == "submitted",
+        ExamSession.status.in_(("submitted", "auto_submitted")),
         QuestionBank.question_type.in_([
             "short_answer",
             "long_answer",
@@ -527,7 +527,7 @@ def evaluate_session_objective_answers(
         db,
     )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination sessions can be evaluated.",
@@ -762,7 +762,7 @@ def list_submitted_sessions_for_review(
         Result,
         Result.session_id == ExamSession.id,
     ).filter(
-        ExamSession.status == "submitted",
+        ExamSession.status.in_(("submitted", "auto_submitted")),
     )
 
     role = getattr(current_user.role, "value", current_user.role)
@@ -814,7 +814,7 @@ def bulk_grade_session_answers(
         )
     get_authorized_exam(session.exam_id, current_user, db)
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination sessions can be graded.",
@@ -952,7 +952,7 @@ def publish_session_result(
         )
     get_authorized_exam(session.exam_id, current_user, db)
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination sessions can be published.",
@@ -1180,7 +1180,7 @@ def get_previously_graded_subjective_answers(
     ).outerjoin(
         Result, Result.session_id == ExamSession.id
     ).filter(
-        ExamSession.status == "submitted",
+        ExamSession.status.in_(("submitted", "auto_submitted")),
         QuestionBank.question_type.in_(["short_answer", "long_answer", "image_upload"]),
         Answer.awarded_marks.isnot(None),
     )
