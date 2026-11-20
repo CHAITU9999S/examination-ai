@@ -40,6 +40,27 @@ interface Student {
 interface AssignedStudent extends Student {
   student_id: number;
 }
+interface ExamConfiguration {
+  title: string;
+  subject: string;
+  duration_minutes: number;
+  total_questions: number;
+  randomize_questions: boolean;
+  selection_rules: Record<string, unknown>;
+  start_time: string;
+  end_time: string;
+  negative_marking: boolean;
+  proctoring_enabled: boolean;
+  gaze_tracking_sensitivity: number | null;
+  max_tab_switch_warnings: number | null;
+  can_edit: boolean;
+}
+interface ConfigRevision {
+  revision_number: number;
+  configuration: Record<string, unknown>;
+  changed_by: number;
+  created_at: string;
+}
 
 const fieldClass = "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500";
 const cardClass = "rounded-2xl border border-white/10 bg-slate-900 p-5";
@@ -50,6 +71,9 @@ export default function ExamQuestionBankPage() {
   const examId = String(params.examId || "");
 
   const [questions, setQuestions] = useState<BankQuestion[]>([]);
+  const [examConfig, setExamConfig] = useState<ExamConfiguration | null>(null);
+  const [configRevisions, setConfigRevisions] = useState<ConfigRevision[]>([]);
+  const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [sourceBanks, setSourceBanks] = useState<SourceBank[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -110,14 +134,23 @@ export default function ExamQuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      const [profile, bank, sources, eligible, assigned] = await Promise.all([
+      const [profile, bank, sources, eligible, assigned, config, revisions] = await Promise.all([
         request("/users/me"),
         request(`/exams/${examId}/questions`),
         request(`/exams/${examId}/question-bank/sources`),
         request(`/exams/${examId}/eligible-students`),
         request(`/exams/${examId}/assignments`),
+        request(`/exams/${examId}`),
+        request(`/exams/${examId}/configuration-revisions`),
       ]);
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
+      setExamConfig({
+        ...config,
+        start_time: config.start_time ? new Date(config.start_time).toISOString().slice(0, 16) : "",
+        end_time: config.end_time ? new Date(config.end_time).toISOString().slice(0, 16) : "",
+      });
+      setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
+      setRevisionsUsed(Number(revisions.revisions_used || 0));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
       setSourceBanks(Array.isArray(sources.banks) ? sources.banks : []);
       setStudents(Array.isArray(eligible.students) ? eligible.students : []);
@@ -242,6 +275,28 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
+  async function updateExamConfiguration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!examConfig) return;
+    setWorking(true); setError(""); setMessage("");
+    try {
+      await request(`/exams/${examId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...examConfig,
+          duration_minutes: Number(examConfig.duration_minutes),
+          total_questions: Number(examConfig.total_questions),
+          start_time: new Date(examConfig.start_time).toISOString(),
+          end_time: new Date(examConfig.end_time).toISOString(),
+        }),
+      });
+      setMessage("Examination configuration updated and revision history saved.");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update examination configuration.");
+    } finally { setWorking(false); }
+  }
+
   async function validatePaperConfiguration() {
     setWorking(true); setError(""); setValidationMessage("");
     try {
@@ -333,6 +388,59 @@ export default function ExamQuestionBankPage() {
 
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
         {message && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{message}</div>}
+
+        {examConfig && (
+          <section className={cardClass}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Examination Configuration</h2>
+                <p className="mt-1 text-sm text-slate-400">Configuration changes are limited to three revisions before the first student session.</p>
+              </div>
+              <span className="text-xs text-cyan-300">{revisionsUsed}/3 revisions used</span>
+            </div>
+            <form onSubmit={updateExamConfiguration} className="mt-5 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="text-sm text-slate-300">Exam title
+                  <input required maxLength={200} value={examConfig.title} onChange={(e) => setExamConfig((v) => v ? { ...v, title: e.target.value } : v)} className={fieldClass} />
+                </label>
+                <label className="text-sm text-slate-300">Subject
+                  <input required maxLength={100} value={examConfig.subject} onChange={(e) => setExamConfig((v) => v ? { ...v, subject: e.target.value } : v)} className={fieldClass} />
+                </label>
+                <label className="text-sm text-slate-300">Duration (minutes)
+                  <input required type="number" min="1" value={examConfig.duration_minutes} onChange={(e) => setExamConfig((v) => v ? { ...v, duration_minutes: Number(e.target.value) } : v)} className={fieldClass} />
+                </label>
+                <label className="text-sm text-slate-300">Total questions
+                  <input required type="number" min="1" value={examConfig.total_questions} onChange={(e) => setExamConfig((v) => v ? { ...v, total_questions: Number(e.target.value) } : v)} className={fieldClass} />
+                </label>
+                <label className="text-sm text-slate-300">Opening time
+                  <input required type="datetime-local" value={examConfig.start_time} onChange={(e) => setExamConfig((v) => v ? { ...v, start_time: e.target.value } : v)} className={fieldClass} />
+                </label>
+                <label className="text-sm text-slate-300">Closing time
+                  <input required type="datetime-local" value={examConfig.end_time} onChange={(e) => setExamConfig((v) => v ? { ...v, end_time: e.target.value } : v)} className={fieldClass} />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-5 text-sm text-slate-300">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={examConfig.randomize_questions} onChange={(e) => setExamConfig((v) => v ? { ...v, randomize_questions: e.target.checked } : v)} /> Randomize papers</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={examConfig.negative_marking} onChange={(e) => setExamConfig((v) => v ? { ...v, negative_marking: e.target.checked } : v)} /> Negative marking</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={examConfig.proctoring_enabled} onChange={(e) => setExamConfig((v) => v ? { ...v, proctoring_enabled: e.target.checked } : v)} /> Proctoring</label>
+              </div>
+              <button type="submit" disabled={working || !examConfig.can_edit || revisionsUsed >= 3} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500 disabled:opacity-40">
+                {revisionsUsed >= 3 ? "Revision Limit Reached" : "Save Configuration Revision"}
+              </button>
+            </form>
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <h3 className="font-semibold">Configuration History</h3>
+              <div className="mt-3 space-y-2">
+                {configRevisions.map((revision) => (
+                  <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
+                    <span className="font-semibold">{revision.revision_number === 0 ? "Initial configuration" : `Revision ${revision.revision_number}`}</span>
+                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className={cardClass}>
           <h2 className="text-xl font-semibold">Add a New Question</h2>
