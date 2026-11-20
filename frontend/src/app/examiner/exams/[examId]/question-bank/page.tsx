@@ -545,7 +545,10 @@ export default function ExamQuestionBankPage() {
                 <div key={bank.source_exam_id} className="rounded-xl border border-white/10 p-4">
                   <h3 className="font-semibold">{bank.source_exam_title}</h3>
                   <div className="mt-3 grid gap-2 md:grid-cols-2">
-                    {bank.questions.map((question) => (
+                    {bank.questions.filter((question) =>
+                      (filterType === "all" || question.question_type === filterType) &&
+                      (filterDifficulty === "all" || question.difficulty === filterDifficulty)
+                    ).map((question) => (
                       <label key={question.question_id} className="flex items-start gap-3 rounded-lg bg-slate-800/60 p-3 text-sm">
                         <input type="checkbox" checked={selectedSources.includes(question.question_id)} onChange={() => toggleSource(question.question_id)} className="mt-1" />
                         <span><span className="block">{question.question_text}</span><span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · {question.marks} marks</span></span>
