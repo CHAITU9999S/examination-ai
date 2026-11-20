@@ -101,8 +101,8 @@ def create_exam(
                 "total_questions": exam.total_questions,
                 "randomize_questions": exam.randomize_questions,
                 "selection_rules": exam.selection_rules,
-                "start_time": exam.start_time.isoformat() if exam.start_time else None,
-                "end_time": exam.end_time.isoformat() if exam.end_time else None,
+                "start_time": normalize_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if exam.start_time else None,
+                "end_time": normalize_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat() if exam.end_time else None,
                 "negative_marking": exam.negative_marking,
                 "proctoring_enabled": exam.proctoring_enabled,
                 "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
@@ -1080,8 +1080,8 @@ def update_exam_configuration(
         "total_questions": data.total_questions,
         "randomize_questions": data.randomize_questions,
         "selection_rules": data.selection_rules,
-        "start_time": data.start_time.isoformat(),
-        "end_time": data.end_time.isoformat(),
+        "start_time": normalize_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat(),
+        "end_time": normalize_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat(),
         "negative_marking": data.negative_marking,
         "proctoring_enabled": data.proctoring_enabled,
         "gaze_tracking_sensitivity": data.gaze_tracking_sensitivity,
@@ -1152,7 +1152,7 @@ def list_exam_configuration_revisions(
         "revision_limit": 3,
         "revisions_used": revisions_used,
         "revisions": [
-            {"revision_number": row.revision_number, "configuration": row.configuration_snapshot, "changed_by": row.changed_by, "created_at": row.created_at}
+            {"revision_number": row.revision_number, "configuration": row.configuration_snapshot, "changed_by": row.changed_by, "created_at": row.created_at.replace(tzinfo=timezone.utc) if row.created_at and row.created_at.tzinfo is None else row.created_at}
             for row in rows
         ],
     }
@@ -1297,8 +1297,8 @@ def get_exam_details(
         "total_questions": exam.total_questions,
         "randomize_questions": exam.randomize_questions,
         "selection_rules": exam.selection_rules or {},
-        "start_time": exam.start_time,
-        "end_time": exam.end_time,
+        "start_time": exam.start_time.replace(tzinfo=timezone.utc) if exam.start_time and exam.start_time.tzinfo is None else exam.start_time,
+        "end_time": exam.end_time.replace(tzinfo=timezone.utc) if exam.end_time and exam.end_time.tzinfo is None else exam.end_time,
         "negative_marking": exam.negative_marking,
         "proctoring_enabled": exam.proctoring_enabled,
         "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
