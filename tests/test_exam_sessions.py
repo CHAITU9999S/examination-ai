@@ -11,6 +11,7 @@ from app.models import (
     User,
     Exam,
     ExamSession,
+    ExamAssignment,
     ExamQuestion,
     QuestionBank,
     Option,
@@ -422,6 +423,13 @@ def test_student_starts_exam_using_exam_id_path(
         email="start-exam-contract@test.com",
     )
     exam = create_exam(db_session, title="Start Contract Exam")
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
     question = QuestionBank(
         question_text="A sample question",
         question_type="MCQ",
@@ -468,6 +476,13 @@ def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
         db_session,
         title="Rotating Token Exam",
     )
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
     question = QuestionBank(
         question_text="A token refresh question",
         question_type="MCQ",
@@ -546,6 +561,13 @@ def test_exam_refresh_rejects_inactive_student(
         db_session,
         title="Inactive Refresh Exam",
     )
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
     question = QuestionBank(
         question_text="A refresh authorization question",
         question_type="MCQ",
