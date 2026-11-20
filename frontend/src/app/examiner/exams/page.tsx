@@ -8,6 +8,14 @@ import { useRouter } from "next/navigation";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const difficultyLevels = ["easy", "medium", "hard"] as const;
+const questionTypes = ["MCQ", "multi_select", "short_answer", "long_answer", "image_upload"] as const;
+const defaultGroupCounts: Record<string, string> = Object.fromEntries(
+  difficultyLevels.flatMap((difficulty) =>
+    questionTypes.map((type) => [`${difficulty}|${type}`, "0"])
+  )
+);
+
 interface Exam {
   id: number;
   title: string;
@@ -52,6 +60,8 @@ export default function ExaminerExamsPage() {
   const [gazeSensitivity, setGazeSensitivity] = useState("0.5");
   const [maxTabWarnings, setMaxTabWarnings] = useState("3");
   const [randomizeQuestions, setRandomizeQuestions] = useState(true);
+  const [useGroupCounts, setUseGroupCounts] = useState(false);
+  const [groupCounts, setGroupCounts] = useState<Record<string, string>>(defaultGroupCounts);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -132,6 +142,8 @@ export default function ExaminerExamsPage() {
     setGazeSensitivity("0.5");
     setMaxTabWarnings("3");
     setRandomizeQuestions(true);
+    setUseGroupCounts(false);
+    setGroupCounts(defaultGroupCounts);
   }
 
   async function createExam(event: FormEvent<HTMLFormElement>) {
@@ -200,6 +212,23 @@ export default function ExaminerExamsPage() {
       return;
     }
 
+    let selectionRules: Record<string, unknown> = {};
+    if (useGroupCounts) {
+      const parsedGroups = Object.fromEntries(
+        Object.entries(groupCounts).map(([key, value]) => [key, Number(value || 0)])
+      );
+      const configuredTotal = Object.values(parsedGroups).reduce((sum, value) => sum + value, 0);
+      if (Object.values(parsedGroups).some((value) => !Number.isInteger(value) || value < 0)) {
+        setError("Every type/difficulty count must be a non-negative whole number.");
+        return;
+      }
+      if (configuredTotal !== questionCount) {
+        setError(`The type/difficulty counts must add up to ${questionCount} questions. Current total: ${configuredTotal}.`);
+        return;
+      }
+      selectionRules = { group_counts: parsedGroups };
+    }
+
     setCreating(true);
 
     try {
@@ -214,7 +243,7 @@ export default function ExaminerExamsPage() {
         start_time: startDate.toISOString(),
         end_time: endDate.toISOString(),
         randomize_questions: randomizeQuestions,
-        selection_rules: {},
+        selection_rules: selectionRules,
         negative_marking: negativeMarking,
         proctoring_enabled: proctoringEnabled,
         gaze_tracking_sensitivity: sensitivity,
@@ -444,6 +473,60 @@ export default function ExaminerExamsPage() {
                   Enable AI-assisted proctoring
                 </label>
               </div>
+            </div>
+
+
+            <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={useGroupCounts}
+                  onChange={(event) => setUseGroupCounts(event.target.checked)}
+                  className="h-4 w-4"
+                />
+                Configure exact question counts by difficulty and question type
+              </label>
+              {useGroupCounts && (
+                <div className="mt-4 overflow-x-auto">
+                  <p className="mb-3 text-xs text-slate-400">
+                    Enter how many questions the system must select from each group. All cells together must equal the total question count.
+                  </p>
+                  <table className="w-full min-w-[720px] text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400">
+                        <th className="p-2">Difficulty</th>
+                        {questionTypes.map((type) => <th key={type} className="p-2">{type}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {difficultyLevels.map((level) => (
+                        <tr key={level} className="border-b border-white/5">
+                          <th className="p-2 capitalize text-slate-300">{level}</th>
+                          {questionTypes.map((type) => {
+                            const key = `${level}|${type}`;
+                            return (
+                              <td key={key} className="p-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={groupCounts[key] ?? "0"}
+                                  onChange={(event) => setGroupCounts((current) => ({ ...current, [key]: event.target.value }))}
+                                  className="w-20 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-white"
+                                  aria-label={`${level} ${type} question count`}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-3 text-xs text-cyan-300">
+                    Configured: {Object.values(groupCounts).reduce((sum, value) => sum + (Number(value) || 0), 0)} / {totalQuestions || 0}
+                  </p>
+                </div>
+              )}
             </div>
 
             {proctoringEnabled && (
