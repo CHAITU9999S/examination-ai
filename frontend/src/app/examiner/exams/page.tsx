@@ -49,7 +49,7 @@ function formatDate(value?: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: INDIA_TIME_ZONE,
-  });
+  }) + " IST";
 }
 
 export default function ExaminerExamsPage() {
