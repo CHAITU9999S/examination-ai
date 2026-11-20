@@ -1,12 +1,16 @@
 
-from datetime import timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Exam, ExamQuestion, ExamSession, QuestionBank, Option
+from app.models import (
+    Exam, ExamQuestion, ExamSession, QuestionBank, Option,
+    ExamAssignment, ExamConfigurationRevision, User,
+)
 from app.schemas import ExamCreate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
 from app.dependencies import require_role
@@ -513,5 +517,465 @@ def list_exam_questions(
                 "marks": question.marks,
             }
             for assignment, question in assignments
+        ],
+    }
+
+
+# ==========================================
+# QUESTION BANK AND EXAM WORKFLOW REQUESTS
+# ==========================================
+
+class ReuseQuestionsRequest(BaseModel):
+    question_ids: list[int] = Field(min_length=1, max_length=500)
+
+
+class AssignStudentsRequest(BaseModel):
+    student_ids: list[int] = Field(min_length=1, max_length=2000)
+
+
+class QuestionTimerRequest(BaseModel):
+    seconds: int | None = Field(default=None, ge=1, le=7200)
+
+
+# ==========================================
+# LIST PREVIOUS QUESTION BANKS AVAILABLE FOR REUSE
+# ==========================================
+
+@router.get("/{exam_id}/question-bank/sources")
+def list_reusable_question_banks(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """List completed/previous exam banks the current creator may reuse."""
+
+    target = db.query(Exam).filter(Exam.id == exam_id).first()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if target.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can manage this question bank.")
+
+    query = db.query(Exam, ExamQuestion, QuestionBank).join(
+        ExamQuestion, ExamQuestion.exam_id == Exam.id
+    ).join(
+        QuestionBank, QuestionBank.id == ExamQuestion.question_id
+    ).filter(
+        Exam.id != exam_id,
+        Exam.created_by == current_user.id,
+    )
+    if current_user.role == UserRole.ADMIN.value:
+        query = db.query(Exam, ExamQuestion, QuestionBank).join(
+            ExamQuestion, ExamQuestion.exam_id == Exam.id
+        ).join(
+            QuestionBank, QuestionBank.id == ExamQuestion.question_id
+        ).filter(Exam.id != exam_id)
+
+    rows = query.order_by(Exam.id.desc(), ExamQuestion.question_order.asc()).all()
+    banks = {}
+    for source_exam, assignment, question in rows:
+        if target.subject and question.subject and question.subject.casefold() != target.subject.casefold():
+            continue
+        bank = banks.setdefault(source_exam.id, {
+            "source_exam_id": source_exam.id,
+            "source_exam_title": source_exam.title,
+            "subject": source_exam.subject,
+            "questions": [],
+        })
+        bank["questions"].append({
+            "question_id": question.id,
+            "question_text": question.question_text,
+            "question_type": getattr(question.question_type, "value", question.question_type),
+            "difficulty": question.difficulty,
+            "marks": question.marks,
+            "source_question_id": question.source_question_id,
+        })
+    return {"exam_id": exam_id, "banks": list(banks.values())}
+
+
+# ==========================================
+# COPY QUESTIONS INTO THE NEW EXAMINATION BANK
+# ==========================================
+
+@router.post("/{exam_id}/question-bank/reuse", status_code=status.HTTP_201_CREATED)
+def reuse_questions_from_previous_banks(
+    exam_id: int,
+    data: ReuseQuestionsRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Copy selected previous-bank questions as independent exam snapshots."""
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can add questions.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="The question bank is locked after an exam session is created.")
+    if len(data.question_ids) != len(set(data.question_ids)):
+        raise HTTPException(status_code=400, detail="Duplicate question IDs are not allowed.")
+
+    source_rows = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(data.question_ids)
+    ).all()
+    if len(source_rows) != len(data.question_ids):
+        raise HTTPException(status_code=404, detail="One or more source questions do not exist.")
+
+    source_ids = {question.id for question in source_rows}
+    source_assignments = db.query(ExamQuestion, Exam).join(
+        Exam, Exam.id == ExamQuestion.exam_id
+    ).filter(ExamQuestion.question_id.in_(source_ids)).all()
+    allowed_source_ids = set()
+    for assignment, source_exam in source_assignments:
+        if source_exam.id == exam_id:
+            continue
+        if current_user.role == UserRole.ADMIN.value or source_exam.created_by == current_user.id:
+            allowed_source_ids.add(assignment.question_id)
+    if allowed_source_ids != source_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="You may reuse only questions from question banks you are authorized to access.",
+        )
+
+    existing_ids = {
+        row[0] for row in db.query(ExamQuestion.question_id).filter(
+            ExamQuestion.exam_id == exam_id,
+            ExamQuestion.question_id.in_(data.question_ids),
+        ).all()
+    }
+    if existing_ids:
+        raise HTTPException(status_code=409, detail="One or more questions are already in this examination bank.")
+
+    existing_count = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).count()
+    new_questions = []
+    try:
+        for source in source_rows:
+            if exam.subject and source.subject and source.subject.casefold() != exam.subject.casefold():
+                raise HTTPException(status_code=400, detail="Every reused question must match the examination subject.")
+
+            group_question = db.query(QuestionBank).join(
+                ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+            ).filter(
+                ExamQuestion.exam_id == exam_id,
+                QuestionBank.question_type == source.question_type,
+                QuestionBank.difficulty == source.difficulty,
+            ).first()
+            if group_question and float(group_question.marks or 0) != float(source.marks or 0):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Maximum marks must match the existing type and difficulty group.",
+                )
+
+            copied = QuestionBank(
+                question_text=source.question_text,
+                question_type=source.question_type,
+                subject=source.subject,
+                difficulty=source.difficulty,
+                expected_answer=source.expected_answer,
+                model_answer_text=source.model_answer_text,
+                question_image_path=source.question_image_path,
+                question_image_data=source.question_image_data,
+                question_image_mime_type=source.question_image_mime_type,
+                marks=source.marks,
+                negative_marks=source.negative_marks,
+                tags=list(source.tags or []),
+                created_by=current_user.id,
+                source_question_id=source.id,
+            )
+            db.add(copied)
+            db.flush()
+            for option in source.options:
+                db.add(Option(
+                    question_id=copied.id,
+                    option_text=option.option_text,
+                    is_correct=option.is_correct,
+                ))
+            new_questions.append(copied)
+
+        for offset, copied in enumerate(new_questions, start=1):
+            db.add(ExamQuestion(
+                exam_id=exam_id,
+                question_id=copied.id,
+                question_order=existing_count + offset,
+            ))
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "message": "Questions copied into this examination as independent snapshots.",
+        "exam_id": exam_id,
+        "copied_question_ids": [question.id for question in new_questions],
+        "source_question_ids": [question.source_question_id for question in new_questions],
+    }
+
+
+# ==========================================
+# DELETE THE COMPLETE EXAMINATION QUESTION BANK
+# ==========================================
+
+@router.delete("/{exam_id}/question-bank")
+def delete_exam_question_bank(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Delete one exam's bank links without deleting reused/original records."""
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the examination creator can delete this question bank.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(
+            status_code=409,
+            detail="A question bank cannot be deleted after an exam session has been created.",
+        )
+
+    assignments = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).all()
+    question_ids = [item.question_id for item in assignments]
+    for assignment in assignments:
+        db.delete(assignment)
+    db.flush()
+
+    # Remove only unused, locally-created snapshots. A source question or
+    # any question referenced by another exam or answer is always preserved.
+    removed_question_ids = []
+    for question_id in question_ids:
+        question = db.query(QuestionBank).filter(QuestionBank.id == question_id).first()
+        if question is None or question.created_by != current_user.id:
+            continue
+        still_assigned = db.query(ExamQuestion.id).filter(
+            ExamQuestion.question_id == question_id
+        ).first()
+        has_answers = db.query(Answer.id).filter(
+            Answer.question_id == question_id
+        ).first()
+        if still_assigned is None and has_answers is None:
+            db.delete(question)
+            removed_question_ids.append(question_id)
+
+    db.commit()
+    return {
+        "message": "The examination question bank was deleted. Shared source questions and questions used by other exams were preserved.",
+        "exam_id": exam_id,
+        "removed_question_records": removed_question_ids,
+        "removed_bank_entries": len(assignments),
+    }
+
+
+# ==========================================
+# ASSIGN EXAM TO SELECTED STUDENTS
+# ==========================================
+
+@router.post("/{exam_id}/assignments")
+def assign_exam_to_students(
+    exam_id: int,
+    data: AssignStudentsRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can assign students.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Assignments cannot change after an exam session has been created.")
+    if len(data.student_ids) != len(set(data.student_ids)):
+        raise HTTPException(status_code=400, detail="Duplicate student IDs are not allowed.")
+
+    students = db.query(User).filter(User.id.in_(data.student_ids)).all()
+    if len(students) != len(data.student_ids) or any(
+        student.role != UserRole.STUDENT.value or not student.is_active
+        for student in students
+    ):
+        raise HTTPException(status_code=400, detail="Every assigned account must be an active Student.")
+
+    try:
+        for student in students:
+            assignment = db.query(ExamAssignment).filter(
+                ExamAssignment.exam_id == exam_id,
+                ExamAssignment.student_id == student.id,
+            ).first()
+            if assignment is None:
+                db.add(ExamAssignment(
+                    exam_id=exam_id,
+                    student_id=student.id,
+                    assigned_by=current_user.id,
+                    is_active=True,
+                ))
+            else:
+                assignment.is_active = True
+                assignment.assigned_by = current_user.id
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"message": "Examination assigned successfully.", "exam_id": exam_id, "student_ids": data.student_ids}
+
+
+@router.get("/{exam_id}/assignments")
+def list_exam_assignments(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can view its assignments.")
+    rows = db.query(ExamAssignment, User).join(
+        User, User.id == ExamAssignment.student_id
+    ).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.is_active.is_(True),
+    ).order_by(User.full_name.asc()).all()
+    return {
+        "exam_id": exam_id,
+        "students": [
+            {"student_id": user.id, "full_name": user.full_name, "email": user.email, "assigned_at": assignment.assigned_at}
+            for assignment, user in rows
+        ],
+    }
+
+
+# ==========================================
+# CONFIGURE A PER-QUESTION TIMER
+# ==========================================
+
+@router.patch("/{exam_id}/questions/{question_id}/timer")
+def configure_question_timer(
+    exam_id: int,
+    question_id: int,
+    data: QuestionTimerRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can configure question timers.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Question timers cannot change after an exam session is created.")
+    assignment = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam_id,
+        ExamQuestion.question_id == question_id,
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Question is not in this examination bank.")
+    assignment.question_time_limit_seconds = data.seconds
+    db.commit()
+    return {"exam_id": exam_id, "question_id": question_id, "question_time_limit_seconds": assignment.question_time_limit_seconds}
+
+
+# ==========================================
+# UPDATE EXAM CONFIGURATION WITH THREE-REVISION HISTORY
+# ==========================================
+
+@router.put("/{exam_id}")
+def update_exam_configuration(
+    exam_id: int,
+    data: ExamCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the examination creator can edit this exam.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Exam configuration is locked after a student session is created.")
+
+    revision_count = db.query(ExamConfigurationRevision).filter(
+        ExamConfigurationRevision.exam_id == exam_id
+    ).count()
+    if revision_count >= 3:
+        raise HTTPException(status_code=409, detail="The three allowed examination configuration revisions have been used.")
+
+    try:
+        validate_exam_config(
+            data.duration_minutes, data.start_time, data.end_time,
+            data.selection_rules, data.total_questions,
+            data.gaze_tracking_sensitivity, data.max_tab_switch_warnings,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    assigned_count = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).count()
+    if assigned_count < data.total_questions:
+        raise HTTPException(status_code=400, detail="The question bank does not contain enough questions for the updated configuration.")
+
+    snapshot = {
+        "title": data.title,
+        "subject": data.subject,
+        "duration_minutes": data.duration_minutes,
+        "total_questions": data.total_questions,
+        "randomize_questions": data.randomize_questions,
+        "selection_rules": data.selection_rules,
+        "start_time": data.start_time.isoformat(),
+        "end_time": data.end_time.isoformat(),
+        "negative_marking": data.negative_marking,
+        "proctoring_enabled": data.proctoring_enabled,
+        "gaze_tracking_sensitivity": data.gaze_tracking_sensitivity,
+        "max_tab_switch_warnings": data.max_tab_switch_warnings,
+    }
+    try:
+        db.add(ExamConfigurationRevision(
+            exam_id=exam_id,
+            revision_number=revision_count + 1,
+            configuration_snapshot=snapshot,
+            changed_by=current_user.id,
+        ))
+        exam.title = data.title
+        exam.subject = data.subject
+        exam.duration_minutes = data.duration_minutes
+        exam.total_questions = data.total_questions
+        exam.randomize_questions = data.randomize_questions
+        exam.selection_rules = data.selection_rules
+        exam.start_time = normalize_to_naive_utc(data.start_time)
+        exam.end_time = normalize_to_naive_utc(data.end_time)
+        exam.negative_marking = data.negative_marking
+        exam.proctoring_enabled = data.proctoring_enabled
+        exam.gaze_tracking_sensitivity = data.gaze_tracking_sensitivity
+        exam.max_tab_switch_warnings = data.max_tab_switch_warnings
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"message": "Exam configuration updated.", "exam_id": exam_id, "revision_number": revision_count + 1, "revisions_remaining": 2 - revision_count}
+
+
+@router.get("/{exam_id}/configuration-revisions")
+def list_exam_configuration_revisions(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can view configuration history.")
+    rows = db.query(ExamConfigurationRevision).filter(
+        ExamConfigurationRevision.exam_id == exam_id
+    ).order_by(ExamConfigurationRevision.revision_number.asc()).all()
+    return {
+        "exam_id": exam_id,
+        "revision_limit": 3,
+        "revisions_used": len(rows),
+        "revisions": [
+            {"revision_number": row.revision_number, "configuration": row.configuration_snapshot, "changed_by": row.changed_by, "created_at": row.created_at}
+            for row in rows
         ],
     }
