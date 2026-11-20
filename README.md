@@ -123,7 +123,7 @@ Face and gaze inference runs locally in the candidate's browser. Camera frames a
 - Role-based access control
 
 ### AI and Image Processing
-- OpenAI API
+- Optional OpenAI-compatible AI provider API (server-side only)
 - MediaPipe Tasks Vision (browser-side face landmarks)
 - Pillow
 - Tesseract OCR
