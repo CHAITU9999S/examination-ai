@@ -301,6 +301,10 @@ def add_exam_question(
                 .count() + 1
             ),
         ))
+        _audit_exam_action(db, current_user.id, "exam_question_added", {
+            "exam_id": exam_id,
+            "question_id": question.id,
+        })
         db.commit()
         db.refresh(question)
     except IntegrityError:
@@ -370,6 +374,10 @@ def remove_exam_question(
         )
 
     db.delete(assignment)
+    _audit_exam_action(db, current_user.id, "exam_question_removed_from_bank", {
+        "exam_id": exam_id,
+        "question_id": question_id,
+    })
     db.commit()
     return {
         "message": "Question removed from this examination bank. The original question was preserved.",
