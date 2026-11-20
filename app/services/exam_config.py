@@ -1,6 +1,9 @@
 
 import math
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+INDIA_TIME_ZONE = ZoneInfo("Asia/Kolkata")
 
 
 # -----------------------------------------
@@ -28,10 +31,11 @@ VALID_QUESTION_TYPES = {
 
 def normalize_to_naive_utc(value):
     """
-    Convert a datetime to naive UTC.
+    Convert an examination schedule value to naive UTC for database storage.
 
-    Naive datetime values are interpreted as UTC.
-    Timezone-aware values are converted to UTC first.
+    Timezone-aware values retain their supplied instant. A timezone-naive
+    value is interpreted as India Standard Time (Asia/Kolkata), never as
+    the server's local timezone.
     """
 
     if value is None:
@@ -41,11 +45,9 @@ def normalize_to_naive_utc(value):
         raise ValueError("Schedule values must be valid datetimes")
 
     if value.tzinfo is None:
-        return value
+        value = value.replace(tzinfo=INDIA_TIME_ZONE)
 
-    return value.astimezone(
-        timezone.utc
-    ).replace(tzinfo=None)
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 # -----------------------------------------
