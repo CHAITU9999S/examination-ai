@@ -630,8 +630,8 @@ def test_image_answer_upload_stores_image_and_ocr_text(
 
     assert saved_answer is not None
     assert saved_answer.answer_text == "A handwritten database answer."
-    assert saved_answer.image_path.startswith("answers/")
-    assert (tmp_path / saved_answer.image_path).is_file()
+    assert saved_answer.image_path == "neon:image/png"
+    assert saved_answer.image_data == image_bytes
 
 def test_student_can_clear_saved_answer(
     client,
