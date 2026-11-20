@@ -50,6 +50,16 @@ const navigation = [
     href: "/admin/exams",
   },
   {
+    title: "Historical Performance",
+    description: "Review published results and long-term student performance.",
+    href: "/admin/performance",
+  },
+  {
+    title: "Account Security",
+    description: "Change your account password.",
+    href: "/account/security",
+  },
+  {
     title: "Admin Activity Logs",
     description: "Review administrator actions and account changes.",
     href: "/admin/activity-logs",
