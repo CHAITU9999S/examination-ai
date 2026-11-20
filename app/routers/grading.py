@@ -224,7 +224,7 @@ def _get_submitted_answer_context(
         db,
     )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination answers can be graded.",
@@ -266,7 +266,7 @@ def get_all_pending_subjective_answers(
         Exam,
         ExamSession.exam_id == Exam.id,
     ).filter(
-        ExamSession.status == "submitted",
+        ExamSession.status.in_(("submitted", "auto_submitted")),
         QuestionBank.question_type.in_([
             "short_answer",
             "long_answer",
