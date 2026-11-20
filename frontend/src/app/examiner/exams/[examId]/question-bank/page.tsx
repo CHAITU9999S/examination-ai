@@ -50,6 +50,7 @@ export default function ExamQuestionBankPage() {
   const examId = String(params.examId || "");
 
   const [questions, setQuestions] = useState<BankQuestion[]>([]);
+  const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [sourceBanks, setSourceBanks] = useState<SourceBank[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [assignedStudents, setAssignedStudents] = useState<AssignedStudent[]>([]);
@@ -108,12 +109,14 @@ export default function ExamQuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      const [bank, sources, eligible, assigned] = await Promise.all([
+      const [profile, bank, sources, eligible, assigned] = await Promise.all([
+        request("/users/me"),
         request(`/exams/${examId}/questions`),
         request(`/exams/${examId}/question-bank/sources`),
         request(`/exams/${examId}/eligible-students`),
         request(`/exams/${examId}/assignments`),
       ]);
+      setStaffRole(profile.role === "admin" ? "admin" : "examiner");
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
       setSourceBanks(Array.isArray(sources.banks) ? sources.banks : []);
       setStudents(Array.isArray(eligible.students) ? eligible.students : []);
@@ -301,10 +304,10 @@ export default function ExamQuestionBankPage() {
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5">
           <div>
-            <Link href="/examiner/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-cyan-400">AI</span></Link>
+            <Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="text-2xl font-bold">ExamGuard <span className="text-cyan-400">AI</span></Link>
             <p className="mt-1 text-sm text-slate-400">Examination / Question Bank</p>
           </div>
-          <Link href="/examiner/exams" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Examinations</Link>
+          <Link href={staffRole === "admin" ? "/admin/exams" : "/examiner/exams"} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Examinations</Link>
         </div>
       </header>
 
