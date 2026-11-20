@@ -66,6 +66,7 @@ export default function AdminExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -91,6 +92,15 @@ export default function AdminExamsPage() {
       const headers = getHeaders();
 
       if (!headers) return;
+
+      const profileResponse = await fetch(`${API_URL}/users/me`, {
+        method: "GET",
+        headers,
+      });
+      if (profileResponse.ok) {
+        const profile = await profileResponse.json();
+        setCurrentUserId(Number(profile.id));
+      }
 
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
@@ -150,6 +160,12 @@ export default function AdminExamsPage() {
               Administrator / Examination Management
             </p>
           </div>
+          <Link
+            href="/examiner/exams"
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
+          >
+            Create Examination
+          </Link>
 
           <Link
             href="/admin/dashboard"
@@ -231,6 +247,7 @@ export default function AdminExamsPage() {
                     <th className="px-4 py-3">End Time</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Settings</th>
+                    <th className="px-4 py-3">Question Bank</th>
                   </tr>
                 </thead>
 
@@ -285,6 +302,14 @@ export default function AdminExamsPage() {
                             {exam.negative_marking ? "Enabled" : "Disabled"}
                           </p>
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Link
+                          href={`/admin/exams/${exam.id}/question-bank`}
+                          className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
+                        >
+                          View Questions
+                        </Link>
                       </td>
                     </tr>
                   ))}
