@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone
+import math
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -14,6 +15,7 @@ from app.models import (
 from app.schemas import ExamCreate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
 from app.dependencies import require_role
+from app.services.session_service import generate_session_question_ids
 from app.services.exam_config import (
     validate_exam_config,
     normalize_to_naive_utc,
@@ -426,13 +428,27 @@ def assign_exam_questions(
         mismatched = [
             question.id
             for question in questions
-            if question.subject.casefold() != exam.subject.casefold()
+            if (question.subject or "").casefold() != exam.subject.casefold()
         ]
         if mismatched:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Every assigned question must match the exam subject.",
-        )
+            )
+
+    marks_by_group = {}
+    for question in questions:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        group = (question_type, question.difficulty)
+        configured_marks = float(question.marks or 0)
+        if group in marks_by_group and not math.isclose(
+            marks_by_group[group], configured_marks, rel_tol=0, abs_tol=0.0001
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum marks must be equal within each question type and difficulty group.",
+            )
+        marks_by_group[group] = configured_marks
 
     try:
         db.query(ExamQuestion).filter(
@@ -1051,3 +1067,67 @@ def remove_exam_assignment(
     assignment.is_active = False
     db.commit()
     return {"message": "Student assignment removed.", "exam_id": exam_id, "student_id": student_id}
+
+
+@router.get("/{exam_id}/validate-configuration")
+def validate_exam_question_configuration(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Check question availability, exact group counts and mark consistency before launch."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can validate this configuration.")
+
+    rows = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam_id).all()
+    counts = {}
+    marks_by_group = {}
+    mark_errors = []
+    for question in rows:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        key = f"{question.difficulty}|{question_type}"
+        counts[key] = counts.get(key, 0) + 1
+        group = (question.difficulty, question_type)
+        marks = float(question.marks or 0)
+        if group in marks_by_group and not math.isclose(marks_by_group[group], marks, rel_tol=0, abs_tol=0.0001):
+            mark_errors.append({
+                "group": key,
+                "expected_marks": marks_by_group[group],
+                "found_marks": marks,
+                "question_id": question.id,
+            })
+        else:
+            marks_by_group[group] = marks
+
+    try:
+        generate_session_question_ids(
+            exam=exam,
+            student_id=2147483647,
+            db=db,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail=str(error),
+        )
+
+    if mark_errors:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "Question marks are inconsistent within a type/difficulty group.", "errors": mark_errors},
+        )
+
+    return {
+        "valid": True,
+        "exam_id": exam_id,
+        "required_questions": exam.total_questions,
+        "available_questions": len(rows),
+        "available_by_group": counts,
+        "selection_rules": exam.selection_rules or {},
+        "message": "The configured paper can be generated without reducing any question counts.",
+    }
