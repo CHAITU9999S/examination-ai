@@ -652,7 +652,7 @@ def submit_exam(
             detail="Token does not belong to this exam session.",
         )
 
-    if session.status == "submitted":
+    if session.status in {"submitted", "auto_submitted"}:
         try:
             evaluation = evaluate_exam_session(
                 db,
