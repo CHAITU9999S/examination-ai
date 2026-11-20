@@ -256,7 +256,7 @@ def evaluate_objective_answers(
         session_id,
     )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only submitted examination sessions can be evaluated.",
