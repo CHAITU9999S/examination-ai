@@ -146,9 +146,11 @@ export default function ExamQuestionBankPage() {
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
       setExamConfig({
         ...config,
+        subject: config.subject || "",
         start_time: config.start_time ? new Date(config.start_time).toISOString().slice(0, 16) : "",
         end_time: config.end_time ? new Date(config.end_time).toISOString().slice(0, 16) : "",
       });
+      setSubject(config.subject || "");
       setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
       setRevisionsUsed(Number(revisions.revisions_used || 0));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
