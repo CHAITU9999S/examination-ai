@@ -40,6 +40,11 @@ const navigation = [
     href: "/admin/admins",
   },
   {
+    title: "Student Management",
+    description: "View registered students and their account status.",
+    href: "/admin/students",
+  },
+  {
     title: "Examiner Management",
     description: "Manage examiner accounts and access.",
     href: "/admin/examiners",
