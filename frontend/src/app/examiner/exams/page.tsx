@@ -542,6 +542,7 @@ export default function ExaminerExamsPage() {
                     <th className="px-4 py-3">Questions</th>
                     <th className="px-4 py-3">Start Time</th>
                     <th className="px-4 py-3">End Time</th>
+                    <th className="px-4 py-3">Manage</th>
                   </tr>
                 </thead>
 
@@ -573,6 +574,14 @@ export default function ExaminerExamsPage() {
 
                       <td className="px-4 py-4 text-slate-300">
                         {formatDate(exam.end_time)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <Link
+                          href={`/examiner/exams/${exam.id}/question-bank`}
+                          className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30"
+                        >
+                          Manage Bank & Students
+                        </Link>
                       </td>
                     </tr>
                   ))}
