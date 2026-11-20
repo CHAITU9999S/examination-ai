@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.auth import hash_password
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models import AdminActivityLog, Exam, ExamSession, Result, User
+from app.models import AdminActivityLog, Exam, ExamAssignment, ExamSession, Result, User
 from app.schemas import (
     AdminUserCreate,
     MessageResponse,
@@ -407,5 +407,48 @@ def get_historical_student_performance(
                 "published_at": result.published_at,
             }
             for result, session, exam, student in rows
+        ],
+    }
+
+
+@router.get("/schedules")
+def list_all_exam_schedules(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return all active student assignments with examination schedules."""
+    rows = db.query(
+        ExamAssignment, Exam, User, User
+    ).join(
+        Exam, Exam.id == ExamAssignment.exam_id
+    ).join(
+        User, User.id == ExamAssignment.student_id
+    ).outerjoin(
+        User, User.id == Exam.created_by
+    ).filter(
+        ExamAssignment.is_active.is_(True)
+    ).order_by(
+        Exam.start_time.asc(),
+        Exam.title.asc(),
+        User.full_name.asc(),
+    ).all()
+
+    return {
+        "total_assignments": len(rows),
+        "schedules": [
+            {
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "creator_id": exam.created_by,
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "student_email": student.email,
+                "start_time": exam.start_time,
+                "end_time": exam.end_time,
+                "duration_minutes": exam.duration_minutes,
+                "assigned_at": assignment.assigned_at,
+                "assigned_by": assignment.assigned_by,
+            }
+            for assignment, exam, student, creator in rows
         ],
     }
