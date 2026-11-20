@@ -31,11 +31,30 @@ VALID_QUESTION_TYPES = {
 
 def normalize_to_naive_utc(value):
     """
-    Convert an examination schedule value to naive UTC for database storage.
+    Normalize a datetime already stored or represented as UTC.
 
-    Timezone-aware values retain their supplied instant. A timezone-naive
-    value is interpreted as India Standard Time (Asia/Kolkata), never as
-    the server's local timezone.
+    Database DateTime columns use naive UTC values. Treating those values as
+    IST would shift deadlines by 5 hours 30 minutes and expire active sessions.
+    """
+
+    if value is None:
+        return None
+
+    if not isinstance(value, datetime):
+        raise ValueError("Schedule values must be valid datetimes")
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def normalize_schedule_input_to_naive_utc(value):
+    """
+    Convert an API schedule input to naive UTC for database storage.
+
+    Explicit offsets are preserved. Timezone-naive schedule inputs are
+    interpreted as India Standard Time (Asia/Kolkata).
     """
 
     if value is None:
@@ -138,8 +157,8 @@ def validate_exam_config(
     # EXAM SCHEDULE
     # -------------------------------------
 
-    normalized_start = normalize_to_naive_utc(start_time)
-    normalized_end = normalize_to_naive_utc(end_time)
+    normalized_start = normalize_schedule_input_to_naive_utc(start_time)
+    normalized_end = normalize_schedule_input_to_naive_utc(end_time)
 
     if normalized_start and normalized_end:
         if normalized_end <= normalized_start:
