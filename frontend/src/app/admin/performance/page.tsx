@@ -15,6 +15,7 @@ interface PerformanceRow {
   obtained_marks: number;
   total_marks: number;
   percentage: number;
+  grade: string;
   published_at?: string | null;
 }
 
@@ -55,8 +56,8 @@ export default function AdminPerformancePage() {
           {loading ? <p className="py-10 text-center text-slate-400">Loading performance...</p> : rows.length === 0 ? <p className="py-10 text-center text-slate-400">No published results yet.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-left text-sm">
-                <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Student</th><th className="p-3">Examination</th><th className="p-3">Marks</th><th className="p-3">Percentage</th><th className="p-3">Published</th></tr></thead>
-                <tbody>{rows.map((row) => <tr key={row.result_id} className="border-b border-white/5"><td className="p-3">{row.student_name}<span className="block text-xs text-slate-500">ID {row.student_id}</span></td><td className="p-3">{row.exam_title}</td><td className="p-3 tabular-nums">{row.obtained_marks} / {row.total_marks}</td><td className="p-3 tabular-nums">{Number(row.percentage).toFixed(2)}%</td><td className="p-3 text-slate-400">{row.published_at ? new Date(row.published_at).toLocaleString("en-IN") : "—"}</td></tr>)}</tbody>
+                <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Student</th><th className="p-3">Examination</th><th className="p-3">Marks</th><th className="p-3">Percentage</th><th className="p-3">Grade</th><th className="p-3">Published</th></tr></thead>
+                <tbody>{rows.map((row) => <tr key={row.result_id} className="border-b border-white/5"><td className="p-3">{row.student_name}<span className="block text-xs text-slate-500">ID {row.student_id}</span></td><td className="p-3">{row.exam_title}</td><td className="p-3 tabular-nums">{row.obtained_marks} / {row.total_marks}</td><td className="p-3 tabular-nums">{Number(row.percentage).toFixed(2)}%</td><td className="p-3 font-semibold text-cyan-300">{row.grade || "—"}</td><td className="p-3 text-slate-400">{row.published_at ? new Date(row.published_at).toLocaleString("en-IN") : "—"}</td></tr>)}</tbody>
               </table>
             </div>
           )}
