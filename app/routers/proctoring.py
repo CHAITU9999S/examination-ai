@@ -28,7 +28,6 @@ from app.models import (
 )
 from app.services.proctoring_service import (
     get_proctoring_summary as get_staff_proctoring_summary,
-    get_student_proctoring_history,
     record_proctor_event,
 )
 
@@ -414,16 +413,9 @@ def get_proctoring_summary(
         )
 
     if payload.get("token_type") == "exam":
-        session = validate_proctoring_token(
-            token=credentials.credentials,
-            session_id=session_id,
-            db=db,
-        )
-
-        return get_student_proctoring_history(
-            db=db,
-            session_id=session_id,
-            current_user=session.student,
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Proctoring history is available to authorized staff only.",
         )
 
     if payload.get("token_type") != "access":
