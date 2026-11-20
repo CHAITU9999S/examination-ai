@@ -25,6 +25,7 @@ interface PendingAnswer {
   image_path?: string | null;
   marks: number;
   awarded_marks?: number | null;
+  result_published?: boolean;
   ai_suggested_marks?: number | null;
   ai_justification?: string | null;
   ai_matched_points?: string[] | null;
@@ -231,6 +232,7 @@ export default function ExaminerGradingPage() {
 
   function openAnswer(answer: PendingAnswer) {
     setSelectedAnswer(answer);
+    setMarkRevisionInfo(null);
 
     const hasSavedAISuggestion =
       answer.ai_suggested_marks !== null &&
@@ -541,7 +543,7 @@ export default function ExaminerGradingPage() {
               <button
                 type="button"
                 onClick={submitBulkGrades}
-                disabled={saving}
+                disabled={saving || Boolean(selectedAnswer.result_published) || (selectedAnswer.awarded_marks !== null && selectedAnswer.awarded_marks !== undefined && markRevisionInfo?.revisions_remaining === 0)}
                 className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
               >
                 {saving ? "Saving..." : `Submit ${selectedForBulk.length} selected grades`}
