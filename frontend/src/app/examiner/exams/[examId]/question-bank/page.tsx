@@ -62,6 +62,14 @@ interface ConfigRevision {
   created_at: string;
 }
 
+function toLocalDateTime(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const fieldClass = "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500";
 const cardClass = "rounded-2xl border border-white/10 bg-slate-900 p-5";
 
@@ -147,8 +155,8 @@ export default function ExamQuestionBankPage() {
       setExamConfig({
         ...config,
         subject: config.subject || "",
-        start_time: config.start_time ? new Date(config.start_time).toISOString().slice(0, 16) : "",
-        end_time: config.end_time ? new Date(config.end_time).toISOString().slice(0, 16) : "",
+        start_time: toLocalDateTime(config.start_time),
+        end_time: toLocalDateTime(config.end_time),
       });
       setSubject(config.subject || "");
       setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
