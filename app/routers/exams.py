@@ -521,6 +521,21 @@ def list_exam_questions(
                 "subject": question.subject,
                 "difficulty": question.difficulty,
                 "marks": question.marks,
+                "question_time_limit_seconds": assignment.question_time_limit_seconds,
+                "source_question_id": question.source_question_id,
+                "expected_answer": question.expected_answer,
+                "model_answer_text": question.model_answer_text,
+                "options": [
+                    {
+                        "id": option.id,
+                        "option_text": option.option_text,
+                        "is_correct": bool(option.is_correct),
+                    }
+                    for option in question.options
+                ],
+                "question_image_available": bool(
+                    question.question_image_path or question.question_image_data
+                ),
             }
             for assignment, question in assignments
         ],
