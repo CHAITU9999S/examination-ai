@@ -62,12 +62,33 @@ interface ConfigRevision {
   created_at: string;
 }
 
-function toLocalDateTime(value?: string | null) {
+const INDIA_TIME_ZONE = "Asia/Kolkata";
+
+function toISTDateTimeLocal(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  const istDate = new Date(date.getTime() + 330 * 60 * 1000);
   const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${istDate.getUTCFullYear()}-${pad(istDate.getUTCMonth() + 1)}-${pad(istDate.getUTCDate())}T${pad(istDate.getUTCHours())}:${pad(istDate.getUTCMinutes())}`;
+}
+
+function istDateTimeToIso(value: string) {
+  const withSeconds = value.length === 16 ? `${value}:00` : value;
+  const date = new Date(`${withSeconds}+05:30`);
+  if (Number.isNaN(date.getTime())) throw new Error("Enter a valid IST schedule time.");
+  return date.toISOString();
+}
+
+function formatISTDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Invalid date";
+  return date.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: INDIA_TIME_ZONE,
+  }) + " IST";
 }
 
 const configDifficulties = ["easy", "medium", "hard"] as const;
@@ -164,8 +185,8 @@ export default function ExamQuestionBankPage() {
       setExamConfig({
         ...config,
         subject: config.subject || "",
-        start_time: toLocalDateTime(config.start_time),
-        end_time: toLocalDateTime(config.end_time),
+        start_time: toISTDateTimeLocal(config.start_time),
+        end_time: toISTDateTimeLocal(config.end_time),
       });
       setSubject(config.subject || "");
       const savedGroupCounts = config.selection_rules?.group_counts as Record<string, number> | undefined;
@@ -331,8 +352,8 @@ export default function ExamQuestionBankPage() {
           selection_rules: selectionRules,
           duration_minutes: Number(examConfig.duration_minutes),
           total_questions: Number(examConfig.total_questions),
-          start_time: new Date(examConfig.start_time).toISOString(),
-          end_time: new Date(examConfig.end_time).toISOString(),
+          start_time: istDateTimeToIso(examConfig.start_time),
+          end_time: istDateTimeToIso(examConfig.end_time),
         }),
       });
       setMessage("Examination configuration updated and revision history saved.");
@@ -457,10 +478,10 @@ export default function ExamQuestionBankPage() {
                 <label className="text-sm text-slate-300">Total questions
                   <input required type="number" min="1" value={examConfig.total_questions} onChange={(e) => setExamConfig((v) => v ? { ...v, total_questions: Number(e.target.value) } : v)} className={fieldClass} />
                 </label>
-                <label className="text-sm text-slate-300">Opening time
+                <label className="text-sm text-slate-300">Opening time (IST)
                   <input required type="datetime-local" value={examConfig.start_time} onChange={(e) => setExamConfig((v) => v ? { ...v, start_time: e.target.value } : v)} className={fieldClass} />
                 </label>
-                <label className="text-sm text-slate-300">Closing time
+                <label className="text-sm text-slate-300">Closing time (IST)
                   <input required type="datetime-local" value={examConfig.end_time} onChange={(e) => setExamConfig((v) => v ? { ...v, end_time: e.target.value } : v)} className={fieldClass} />
                 </label>
               </div>
@@ -502,7 +523,7 @@ export default function ExamQuestionBankPage() {
                 {configRevisions.map((revision) => (
                   <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                     <span className="font-semibold">{revision.revision_number === 0 ? "Initial configuration" : `Revision ${revision.revision_number}`}</span>
-                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")} · Staff account #{revision.changed_by}</span>
+                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST · Staff account #{revision.changed_by}</span>
                     <p className="mt-2 text-slate-400">{String(revision.configuration.title || "Untitled")} · {String(revision.configuration.duration_minutes || "—")} minutes · {String(revision.configuration.total_questions || "—")} questions · Subject: {String(revision.configuration.subject || "—")}</p>
                   </div>
                 ))}
