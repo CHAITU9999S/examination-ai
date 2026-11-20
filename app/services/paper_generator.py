@@ -12,6 +12,7 @@ def generate_paper(
     question_details=None,
     difficulty_counts=None,
     question_type_counts=None,
+    group_counts=None,
     randomize=True,
     seed_salt=0,
 ):
@@ -41,6 +42,50 @@ def generate_paper(
 
     seed = f"{exam_id}-{student_id}-{seed_salt}"
     rng = random.Random(seed)
+
+    # Exact type-by-difficulty selection takes precedence over the
+    # older independent difficulty/type margin configuration.
+    if group_counts is not None:
+        if not isinstance(group_counts, dict) or not group_counts:
+            raise ValueError("Group counts must be a non-empty dictionary")
+        if sum(group_counts.values()) != number_of_questions:
+            raise ValueError("Group counts must equal the requested question count")
+        if not isinstance(question_details, dict):
+            raise ValueError("Question details are required for group-based selection")
+        available_groups = {}
+        for question_id in selected:
+            details = question_details.get(question_id) or {}
+            difficulty = getattr(details.get("difficulty"), "value", details.get("difficulty"))
+            question_type = getattr(details.get("question_type"), "value", details.get("question_type"))
+            key = f"{difficulty}|{question_type}"
+            available_groups.setdefault(key, []).append(question_id)
+        paper = []
+        allowed_difficulties = {"easy", "medium", "hard"}
+        allowed_types = {"MCQ", "multi_select", "short_answer", "long_answer", "image_upload"}
+        for key, count in group_counts.items():
+            if (
+                not isinstance(key, str)
+                or "|" not in key
+                or key.split("|", 1)[0] not in allowed_difficulties
+                or key.split("|", 1)[1] not in allowed_types
+                or isinstance(count, bool)
+                or not isinstance(count, int)
+                or count < 0
+            ):
+                raise ValueError("Invalid type-by-difficulty group configuration")
+            available = list(available_groups.get(key, []))
+            if count > len(available):
+                raise ValueError(
+                    f"Not enough questions in the configured group: {key}"
+                )
+            if randomize:
+                rng.shuffle(available)
+            paper.extend(available[:count])
+        if len(paper) != number_of_questions:
+            raise ValueError("Configured question groups do not match the paper size")
+        if randomize:
+            rng.shuffle(paper)
+        return paper
 
     # Preserve existing behavior when distributions are not configured.
     if not difficulty_counts and not question_type_counts:
