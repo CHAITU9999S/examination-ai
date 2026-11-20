@@ -742,7 +742,13 @@ def reuse_questions_from_previous_banks(
     if existing_ids:
         raise HTTPException(status_code=409, detail="One or more questions are already in this examination bank.")
 
-    existing_count = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).count()
+    last_assignment = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam_id
+    ).order_by(
+        ExamQuestion.question_order.desc(),
+        ExamQuestion.id.desc(),
+    ).first()
+    last_order = (last_assignment.question_order or 0) if last_assignment else 0
     marks_by_group = {}
     existing_groups = db.query(QuestionBank).join(
         ExamQuestion, ExamQuestion.question_id == QuestionBank.id
@@ -804,7 +810,7 @@ def reuse_questions_from_previous_banks(
             db.add(ExamQuestion(
                 exam_id=exam_id,
                 question_id=copied.id,
-                question_order=existing_count + offset,
+                question_order=last_order + offset,
             ))
         _audit_exam_action(db, current_user.id, "exam_questions_reused", {
             "exam_id": exam_id,
