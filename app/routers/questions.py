@@ -126,9 +126,10 @@ def list_questions(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin"))
 ):
-    questions = db.query(QuestionBank).order_by(
-        QuestionBank.id
-    ).all()
+    query = db.query(QuestionBank)
+    if current_user.role == "examiner":
+        query = query.filter(QuestionBank.created_by == current_user.id)
+    questions = query.order_by(QuestionBank.id).all()
 
     question_ids = [
         question.id for question in questions
@@ -202,6 +203,11 @@ async def upload_question_image(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found.",
+        )
+    if question.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the question creator can change its prompt image.",
         )
 
     image_bytes = await file.read(10 * 1024 * 1024 + 1)
@@ -287,6 +293,14 @@ def get_question_image(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question image not found.",
         )
+    if (
+        current_user.role == "examiner"
+        and question.created_by != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can view prompt images only for questions you created.",
+        )
 
     if question.question_image_data:
         return Response(
@@ -336,6 +350,11 @@ def delete_question(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found."
+        )
+    if question.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the question creator can delete this question.",
         )
 
     try:
