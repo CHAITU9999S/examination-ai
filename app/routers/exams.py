@@ -534,6 +534,7 @@ def list_exam_questions(
 
     return {
         "exam_id": exam_id,
+        "created_by": exam.created_by,
         "total_assigned": len(assignments),
         "questions": [
             {
