@@ -256,6 +256,7 @@ def get_all_pending_subjective_answers(
         ExamSession,
         QuestionBank,
         Exam,
+        Result,
     ).join(
         ExamSession,
         Answer.session_id == ExamSession.id,
@@ -265,6 +266,9 @@ def get_all_pending_subjective_answers(
     ).join(
         Exam,
         ExamSession.exam_id == Exam.id,
+    ).outerjoin(
+        Result,
+        Result.session_id == ExamSession.id,
     ).filter(
         ExamSession.status.in_(("submitted", "auto_submitted")),
         QuestionBank.question_type.in_([
@@ -330,7 +334,7 @@ def get_all_pending_subjective_answers(
                 "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
             }
-            for answer, session, question, exam in rows
+            for answer, session, question, exam, result in rows
         ],
     }
 
