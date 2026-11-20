@@ -424,6 +424,17 @@ def assign_exam_questions(
             detail="One or more question IDs do not exist.",
         )
 
+    current_bank_ids = {
+        row[0] for row in db.query(ExamQuestion.question_id).filter(
+            ExamQuestion.exam_id == exam_id
+        ).all()
+    }
+    if not set(question_ids).issubset(current_bank_ids):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only questions already copied into this examination bank can be assigned. Use the previous-bank reuse endpoint to create independent copies first.",
+        )
+
     if exam.subject:
         mismatched = [
             question.id
@@ -793,7 +804,10 @@ def delete_exam_question_bank(
         has_answers = db.query(Answer.id).filter(
             Answer.question_id == question_id
         ).first()
-        if still_assigned is None and has_answers is None:
+        used_as_source = db.query(QuestionBank.id).filter(
+            QuestionBank.source_question_id == question_id
+        ).first()
+        if still_assigned is None and has_answers is None and used_as_source is None:
             db.delete(question)
             removed_question_ids.append(question_id)
 
