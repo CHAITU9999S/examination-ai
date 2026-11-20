@@ -995,6 +995,11 @@ def configure_question_timer(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Question is not in this examination bank.")
     assignment.question_time_limit_seconds = data.seconds
+    _audit_exam_action(db, current_user.id, "exam_question_timer_configured", {
+        "exam_id": exam_id,
+        "question_id": question_id,
+        "seconds": data.seconds,
+    })
     db.commit()
     return {"exam_id": exam_id, "question_id": question_id, "question_time_limit_seconds": assignment.question_time_limit_seconds}
 
