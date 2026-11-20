@@ -286,11 +286,19 @@ def get_or_start_question_timer(
             detail="This question is not assigned to the examination.",
         )
 
+    limit_seconds = assignment.question_time_limit_seconds
     answer = db.query(Answer).filter(
         Answer.session_id == session.id,
         Answer.question_id == question_id,
     ).with_for_update().first()
-    limit_seconds = assignment.question_time_limit_seconds
+
+    if limit_seconds is None:
+        return {
+            "question_time_limit_seconds": None,
+            "elapsed_seconds": 0,
+            "remaining_seconds": None,
+            "is_locked": bool(answer.is_locked) if answer else False,
+        }
 
     if answer is None:
         answer = Answer(
@@ -303,15 +311,6 @@ def get_or_start_question_timer(
         db.flush()
     elif answer.question_started_at is None:
         answer.question_started_at = datetime.utcnow()
-
-    if limit_seconds is None:
-        db.commit()
-        return {
-            "question_time_limit_seconds": None,
-            "elapsed_seconds": 0,
-            "remaining_seconds": None,
-            "is_locked": bool(answer.is_locked),
-        }
 
     now = datetime.utcnow()
     started_at = answer.question_started_at or now
