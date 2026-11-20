@@ -195,7 +195,7 @@ def generate_ai_grading_suggestion(
             exam,
         )
 
-    if session.status != "submitted":
+    if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Answers can only be graded after examination submission.",
