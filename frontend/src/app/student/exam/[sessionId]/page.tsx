@@ -30,6 +30,7 @@ interface ExamQuestion {
   marks: number;
   options?: ExamOption[];
   question_image_available?: boolean;
+  question_time_limit_seconds?: number | null;
 }
 
 interface ExamPaper {
@@ -41,6 +42,7 @@ interface ExamPaper {
   proctoring_enabled?: boolean;
   gaze_tracking_sensitivity?: number | null;
   max_tab_switch_warnings?: number | null;
+  is_paused?: boolean;
 }
 
 interface SavedAnswer {
@@ -57,6 +59,10 @@ export default function StudentExamPage() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [questionRemainingSeconds, setQuestionRemainingSeconds] = useState<number | null>(null);
+  const [questionTimerLocked, setQuestionTimerLocked] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseBusy, setPauseBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -256,6 +262,7 @@ export default function StudentExamPage() {
       };
 
       setPaper(normalizedPaper);
+      setIsPaused(Boolean(normalizedPaper.is_paused));
     } catch (err) {
       setError(
         err instanceof Error
@@ -349,6 +356,7 @@ export default function StudentExamPage() {
       }
 
       setRemainingSeconds(Math.floor(seconds));
+      setIsPaused(Boolean(data.is_paused));
     } catch (err) {
       setError(
         err instanceof Error
@@ -357,6 +365,51 @@ export default function StudentExamPage() {
       );
     }
   }, [getHeaders, sessionId]);
+
+  const loadQuestionTimer = useCallback(async (questionId: number) => {
+    const headers = getHeaders();
+    if (!headers) return;
+    try {
+      const response = await fetch(
+        `${API_URL}/exam-sessions/${sessionId}/question-timer/${questionId}`,
+        { method: "GET", headers, cache: "no-store" }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to load question timer.");
+      setQuestionRemainingSeconds(
+        data.remaining_seconds === null || data.remaining_seconds === undefined
+          ? null
+          : Math.max(0, Number(data.remaining_seconds))
+      );
+      setQuestionTimerLocked(Boolean(data.is_locked));
+    } catch (timerError) {
+      setError(timerError instanceof Error ? timerError.message : "Unable to load question timer.");
+    }
+  }, [getHeaders, sessionId]);
+
+  const togglePause = useCallback(async () => {
+    if (pauseBusy) return;
+    const headers = getHeaders();
+    if (!headers) return;
+    setPauseBusy(true);
+    setError("");
+    try {
+      const action = isPaused ? "resume" : "pause";
+      const response = await fetch(
+        `${API_URL}/exam-sessions/${action}/${sessionId}`,
+        { method: "POST", headers }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to change exam pause state.");
+      setIsPaused(Boolean(data.is_paused));
+      setRemainingSeconds(Number(data.remaining_seconds));
+      setMessage(data.message || (data.is_paused ? "Exam paused." : "Exam resumed."));
+    } catch (pauseError) {
+      setError(pauseError instanceof Error ? pauseError.message : "Unable to change exam pause state.");
+    } finally {
+      setPauseBusy(false);
+    }
+  }, [getHeaders, isPaused, pauseBusy, sessionId]);
 
   const saveAnswer = useCallback(async (
     questionId: number,
@@ -429,7 +482,7 @@ export default function StudentExamPage() {
       // Flush every written answer before submission. If the server has
       // already expired the session, automatic submission must still proceed;
       // the backend expiry workflow remains authoritative in that case.
-      const pendingSaves = Object.entries(answersRef.current)
+      const pendingSaves = (isPaused ? [] : Object.entries(answersRef.current))
         .filter(([questionId]) =>
           paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
         )
@@ -497,9 +550,11 @@ export default function StudentExamPage() {
     saveAnswer,
     paper,
     remainingSeconds,
+    isPaused,
   ]);
 
   function updateAnswer(questionId: number, answerText: string) {
+    if (isPaused || questionTimerLocked) return;
     const updated = {
       ...answersRef.current,
       [questionId]: answerText,
@@ -605,6 +660,38 @@ export default function StudentExamPage() {
       submitExam(true);
     }
   }, [remainingSeconds, submitExam]);
+
+  const currentQuestionId = paper?.questions[currentIndex]?.id ?? null;
+
+  useEffect(() => {
+    if (!currentQuestionId || !examAccessToken) return;
+    setQuestionRemainingSeconds(null);
+    setQuestionTimerLocked(false);
+    void loadQuestionTimer(currentQuestionId);
+  }, [currentQuestionId, examAccessToken, loadQuestionTimer]);
+
+  useEffect(() => {
+    if (questionRemainingSeconds === null || questionRemainingSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setQuestionRemainingSeconds((previous) =>
+        previous === null ? null : Math.max(0, previous - 1)
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [questionRemainingSeconds === null || questionRemainingSeconds <= 0]);
+
+  useEffect(() => {
+    if (questionRemainingSeconds !== 0 || questionTimerLocked || !currentQuestionId) return;
+    setQuestionTimerLocked(true);
+    void loadQuestionTimer(currentQuestionId);
+  }, [questionRemainingSeconds, questionTimerLocked, currentQuestionId, loadQuestionTimer]);
+
+  useEffect(() => {
+    if (!questionTimerLocked || isPaused || !paper) return;
+    if (currentIndex < paper.questions.length - 1) {
+      setCurrentIndex((index) => Math.min(paper.questions.length - 1, index + 1));
+    }
+  }, [questionTimerLocked, isPaused, paper, currentIndex]);
 
   const heartbeatToken = examAccessToken;
   const heartbeatUrl = paper?.proctoring_enabled && heartbeatToken
@@ -866,22 +953,25 @@ export default function StudentExamPage() {
             </p>
           </div>
 
-          <div className="text-right">
-            <p className="text-xs text-slate-400">
-              Time Remaining
-            </p>
-
-            <p
-              className={`text-xl font-bold tabular-nums ${
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            <div className="text-right">
+              <p className="text-xs text-slate-400">Time Remaining</p>
+              <p className={`text-xl font-bold tabular-nums ${
                 remainingSeconds !== null && remainingSeconds <= 60
                   ? "text-red-400"
                   : remainingSeconds !== null && remainingSeconds <= 300
                     ? "text-amber-400"
                     : "text-green-400"
-              }`}
+              }`}>{formatTime(remainingSeconds)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={togglePause}
+              disabled={pauseBusy || submitting}
+              className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/10 disabled:opacity-50"
             >
-              {formatTime(remainingSeconds)}
-            </p>
+              {pauseBusy ? "Please wait..." : isPaused ? "Resume Exam" : "Pause Exam"}
+            </button>
           </div>
         </div>
       </header>
@@ -943,6 +1033,17 @@ export default function StudentExamPage() {
               </div>
 
               <div className="mt-6">
+                <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+                  {currentQuestion.question_time_limit_seconds ? (
+                    <span className={`rounded-full px-3 py-1 ${questionRemainingSeconds !== null && questionRemainingSeconds <= 10 ? "bg-red-500/20 text-red-300" : "bg-cyan-500/15 text-cyan-300"}`}>
+                      Question time: {formatTime(questionRemainingSeconds)}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-400">No separate question timer</span>
+                  )}
+                  {isPaused && <span className="rounded-full bg-amber-500/20 px-3 py-1 text-amber-300">Paused — overall deadline continues</span>}
+                  {questionTimerLocked && <span className="rounded-full bg-red-500/20 px-3 py-1 text-red-300">Question time expired — answer locked</span>}
+                </div>
                 <h2 className="whitespace-pre-wrap text-lg font-semibold leading-8">
                   {currentQuestion.question_text}
                 </h2>
@@ -960,7 +1061,9 @@ export default function StudentExamPage() {
                   </div>
                 )}
 
-                {renderAnswerInput(currentQuestion)}
+                <fieldset disabled={isPaused || questionTimerLocked} className="min-w-0">
+                  {renderAnswerInput(currentQuestion)}
+                </fieldset>
               </div>
 
               <div className="mt-8 flex flex-wrap justify-between gap-3">
@@ -969,7 +1072,7 @@ export default function StudentExamPage() {
                   onClick={() =>
                     setCurrentIndex((index) => Math.max(0, index - 1))
                   }
-                  disabled={currentIndex === 0}
+                  disabled={currentIndex === 0 || isPaused}
                   className="rounded-lg border border-white/20 px-5 py-3 text-sm disabled:opacity-40"
                 >
                   Previous
@@ -983,7 +1086,8 @@ export default function StudentExamPage() {
                         Math.min(paper.questions.length - 1, index + 1)
                       )
                     }
-                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500"
+                    disabled={isPaused}
+                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500 disabled:opacity-40"
                   >
                     Next Question
                   </button>
@@ -991,7 +1095,7 @@ export default function StudentExamPage() {
                   <button
                     type="button"
                     onClick={() => setShowSubmitConfirmation(true)}
-                    disabled={submitting}
+                    disabled={submitting || isPaused}
                     className="rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
                   >
                     Submit Examination
@@ -1024,6 +1128,7 @@ export default function StudentExamPage() {
                   key={question.id}
                   type="button"
                   onClick={() => setCurrentIndex(index)}
+                  disabled={isPaused}
                   aria-label={`Go to question ${index + 1}`}
                   className={`rounded-lg py-3 text-sm font-semibold ${
                     currentIndex === index
