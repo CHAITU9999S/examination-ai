@@ -367,16 +367,6 @@ def remove_exam_question(
             detail="Question is not part of this examination bank.",
         )
 
-    remaining = db.query(ExamQuestion).filter(
-        ExamQuestion.exam_id == exam_id,
-        ExamQuestion.id != assignment.id,
-    ).count()
-    if remaining < (exam.total_questions or 0):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Removing this question would leave fewer questions than the examination requires.",
-        )
-
     db.delete(assignment)
     _audit_exam_action(db, current_user.id, "exam_question_removed_from_bank", {
         "exam_id": exam_id,
