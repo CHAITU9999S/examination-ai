@@ -50,6 +50,16 @@ const navigation = [
     href: "/admin/exams",
   },
   {
+    title: "Answer Grading",
+    description: "Review AI suggestions and approve or revise marks for submitted examinations.",
+    href: "/examiner/grading",
+  },
+  {
+    title: "Result Publication",
+    description: "Review, publish and inspect examination results.",
+    href: "/examiner/results",
+  },
+  {
     title: "Historical Performance",
     description: "Review published results and long-term student performance.",
     href: "/admin/performance",
