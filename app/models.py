@@ -195,6 +195,20 @@ class Question(Base):
         nullable=True
     )
 
+    # Independent bank copies retain their source for provenance.
+    source_question_id = Column(
+        Integer,
+        ForeignKey("question_bank.id"),
+        nullable=True,
+        index=True,
+    )
+    source_question = relationship(
+        "Question",
+        remote_side="Question.id",
+        foreign_keys=[source_question_id],
+        uselist=False,
+    )
+
     creator = relationship(
         "User",
         back_populates="questions"
@@ -331,6 +345,9 @@ class ExamQuestion(Base):
 
     question_order = Column(Integer, nullable=True)
 
+    # Optional per-question timer configured by the examination creator.
+    question_time_limit_seconds = Column(Integer, nullable=True)
+
     exam = relationship(
         "Exam",
         back_populates="exam_questions"
@@ -373,6 +390,15 @@ class ExamSession(Base):
     started_at = Column(DateTime(), nullable=True)
 
     submitted_at = Column(DateTime(), nullable=True)
+
+    # Pausing never changes expires_at; the server deadline remains authoritative.
+    is_paused = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    paused_at = Column(DateTime(), nullable=True)
 
     status = Column(
         String(20),
@@ -459,6 +485,11 @@ class Answer(Base):
 
     answer_text = Column(Text, nullable=True)
 
+    # Per-student question timing and lock state.
+    question_started_at = Column(DateTime(), nullable=True)
+    question_elapsed_seconds = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    is_locked = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+
     image_path = Column(String(500), nullable=True)
     image_data = Column(LargeBinary, nullable=True)
     thumbnail_data = Column(LargeBinary, nullable=True)
@@ -506,6 +537,67 @@ class Answer(Base):
             "question_id",
             name="uq_answers_session_question"
         ),
+    )
+
+
+# -----------------------------------------
+# EXAM ASSIGNMENTS
+# -----------------------------------------
+
+class ExamAssignment(Base):
+    __tablename__ = "exam_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+
+    __table_args__ = (
+        UniqueConstraint("exam_id", "student_id", name="uq_exam_assignment_student"),
+        Index("ix_exam_assignments_student_active", "student_id", "is_active"),
+    )
+
+
+# -----------------------------------------
+# EXAM CONFIGURATION REVISION HISTORY
+# -----------------------------------------
+
+class ExamConfigurationRevision(Base):
+    __tablename__ = "exam_configuration_revisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
+    revision_number = Column(Integer, nullable=False)
+    configuration_snapshot = Column(JSON, nullable=False)
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+
+    __table_args__ = (
+        UniqueConstraint("exam_id", "revision_number", name="uq_exam_config_revision"),
+    )
+
+
+# -----------------------------------------
+# HUMAN MARK REVISION HISTORY
+# -----------------------------------------
+
+class AnswerMarkRevision(Base):
+    __tablename__ = "answer_mark_revisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    answer_id = Column(Integer, ForeignKey("answers.id"), nullable=False)
+    revision_number = Column(Integer, nullable=False)
+    previous_marks = Column(Float, nullable=True)
+    new_marks = Column(Float, nullable=False)
+    previous_feedback = Column(Text, nullable=True)
+    new_feedback = Column(Text, nullable=True)
+    revised_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+
+    __table_args__ = (
+        UniqueConstraint("answer_id", "revision_number", name="uq_answer_mark_revision"),
     )
 
 
