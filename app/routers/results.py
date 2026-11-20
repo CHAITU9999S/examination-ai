@@ -145,6 +145,7 @@ def get_my_published_results(
                 "total_marks": result.total_marks,
                 "obtained_marks": result.obtained_marks,
                 "percentage": result.percentage,
+                "grade": _letter_grade(result.percentage),
                 "percentile": _get_percentile(
                     db,
                     exam.id,
@@ -219,6 +220,7 @@ def get_my_result_details(
         question_results.append({
             **score,
             "question_text": question.question_text if question else None,
+            "student_answer": answer.answer_text if answer else None,
             "outcome": outcome,
             "examiner_feedback": (
                 answer.examiner_feedback if answer else None
@@ -247,6 +249,7 @@ def get_my_result_details(
         "total_marks": result.total_marks,
         "obtained_marks": result.obtained_marks,
         "percentage": result.percentage,
+        "grade": _letter_grade(result.percentage),
         "percentile": percentile,
         "cohort_distribution": _get_cohort_distribution(
             db,
