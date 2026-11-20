@@ -70,6 +70,13 @@ function toLocalDateTime(value?: string | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+const configDifficulties = ["easy", "medium", "hard"] as const;
+const configQuestionTypes = ["MCQ", "multi_select", "short_answer", "long_answer", "image_upload"] as const;
+const defaultConfigGroupCounts: Record<string, string> = Object.fromEntries(
+  configDifficulties.flatMap((difficulty) =>
+    configQuestionTypes.map((type) => [`${difficulty}|${type}`, "0"])
+  )
+);
 const fieldClass = "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500";
 const cardClass = "rounded-2xl border border-white/10 bg-slate-900 p-5";
 
@@ -82,6 +89,8 @@ export default function ExamQuestionBankPage() {
   const [examConfig, setExamConfig] = useState<ExamConfiguration | null>(null);
   const [configRevisions, setConfigRevisions] = useState<ConfigRevision[]>([]);
   const [revisionsUsed, setRevisionsUsed] = useState(0);
+  const [useConfigGroupCounts, setUseConfigGroupCounts] = useState(false);
+  const [configGroupCounts, setConfigGroupCounts] = useState<Record<string, string>>(defaultConfigGroupCounts);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [sourceBanks, setSourceBanks] = useState<SourceBank[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -159,6 +168,14 @@ export default function ExamQuestionBankPage() {
         end_time: toLocalDateTime(config.end_time),
       });
       setSubject(config.subject || "");
+      const savedGroupCounts = config.selection_rules?.group_counts as Record<string, number> | undefined;
+      setUseConfigGroupCounts(Boolean(savedGroupCounts));
+      setConfigGroupCounts({
+        ...defaultConfigGroupCounts,
+        ...(savedGroupCounts
+          ? Object.fromEntries(Object.entries(savedGroupCounts).map(([key, value]) => [key, String(value)]))
+          : {}),
+      });
       setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
       setRevisionsUsed(Number(revisions.revisions_used || 0));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
@@ -288,12 +305,30 @@ export default function ExamQuestionBankPage() {
   async function updateExamConfiguration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!examConfig) return;
+    let selectionRules: Record<string, unknown> = {};
+    if (useConfigGroupCounts) {
+      const parsed = Object.fromEntries(
+        Object.entries(configGroupCounts).map(([key, value]) => [key, Number(value || 0)])
+      ) as Record<string, number>;
+      if (Object.values(parsed).some((value) => !Number.isInteger(value) || value < 0)) {
+        setError("Question group counts must be non-negative whole numbers.");
+        return;
+      }
+      const configuredTotal = Object.values(parsed).reduce((sum, value) => sum + value, 0);
+      if (configuredTotal !== Number(examConfig.total_questions)) {
+        setError(`Question group counts must add up to ${examConfig.total_questions}. Current total: ${configuredTotal}.`);
+        return;
+      }
+      selectionRules = { group_counts: parsed };
+    }
+
     setWorking(true); setError(""); setMessage("");
     try {
       await request(`/exams/${examId}`, {
         method: "PUT",
         body: JSON.stringify({
           ...examConfig,
+          selection_rules: selectionRules,
           duration_minutes: Number(examConfig.duration_minutes),
           total_questions: Number(examConfig.total_questions),
           start_time: new Date(examConfig.start_time).toISOString(),
@@ -428,6 +463,29 @@ export default function ExamQuestionBankPage() {
                 <label className="text-sm text-slate-300">Closing time
                   <input required type="datetime-local" value={examConfig.end_time} onChange={(e) => setExamConfig((v) => v ? { ...v, end_time: e.target.value } : v)} className={fieldClass} />
                 </label>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
+                <label className="flex items-center gap-3 text-sm text-slate-200">
+                  <input type="checkbox" checked={useConfigGroupCounts} onChange={(e) => setUseConfigGroupCounts(e.target.checked)} />
+                  Use exact question counts by type and difficulty
+                </label>
+                {useConfigGroupCounts && (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-xs">
+                      <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-2">Difficulty</th>{configQuestionTypes.map((type) => <th key={type} className="p-2">{type}</th>)}</tr></thead>
+                      <tbody>{configDifficulties.map((difficulty) => (
+                        <tr key={difficulty} className="border-b border-white/5">
+                          <th className="p-2 capitalize text-slate-300">{difficulty}</th>
+                          {configQuestionTypes.map((type) => {
+                            const key = `${difficulty}|${type}`;
+                            return <td key={key} className="p-2"><input type="number" min="0" step="1" value={configGroupCounts[key] ?? "0"} onChange={(e) => setConfigGroupCounts((current) => ({ ...current, [key]: e.target.value }))} className="w-20 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-white" /></td>;
+                          })}
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                    <p className="mt-2 text-xs text-cyan-300">Configured: {Object.values(configGroupCounts).reduce((sum, value) => sum + (Number(value) || 0), 0)} / {examConfig.total_questions}</p>
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-5 text-sm text-slate-300">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={examConfig.randomize_questions} onChange={(e) => setExamConfig((v) => v ? { ...v, randomize_questions: e.target.checked } : v)} /> Randomize papers</label>
