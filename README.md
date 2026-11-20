@@ -40,23 +40,31 @@ The platform provides separate access and functionality for Students, Examiners,
 - Long-answer questions.
 - Image-upload questions.
 - Subject and difficulty classification.
+- Separate examination-specific question banks.
+- Add, remove, and delete a complete examination question bank.
+- Copy questions from earlier authorized banks as independent snapshots.
+- Source-question tracking so reuse does not modify the original.
+- Type/difficulty filters and per-question timer configuration.
 - Marks and negative-marking configuration.
 
 ### Examination Management
 - Examination creation and configuration.
 - Subject-based question selection.
 - Difficulty-based question distribution.
-- Question-type distribution.
-- Randomized question selection.
-- Individual student paper generation.
-- Examination scheduling.
-- Configurable examination duration.
+- Exact question counts for every question-type/difficulty combination.
+- Randomized question selection with distinct papers when combinations are available.
+- Persisted individual student papers.
+- Student-specific exam assignment and access enforcement.
+- Examination scheduling and configurable examination duration.
+- Three-revision configuration history before a student session starts.
 
 ### Timed Examination Engine
 - Unique examination sessions.
 - Secure examination access tokens.
 - Server-side time validation.
-- Remaining-time calculation.
+- Remaining-time calculation and server-enforced per-question timers.
+- Saved question progress, answers, and timer state across refresh/reconnection.
+- Pause/resume controls that do not extend the official deadline.
 - Automatic submission after expiry.
 - Protection against duplicate active sessions.
 
@@ -74,7 +82,10 @@ The platform provides separate access and functionality for Students, Examiners,
 - AI-assisted subjective evaluation.
 - Suggested marks and evaluation explanations.
 - Examiner review and final grading.
-- OCR support for image-based answers.
+- AI suggestions kept separate from approved marks.
+- Human mark revision history with a three-revision limit per answer.
+- OCR and AI vision evaluation support for image-based answers.
+- Published student results with question-wise marks, percentages, and grades.
 
 ### Automated Proctoring
 - Browser tab visibility and window-focus event monitoring.
@@ -126,19 +137,21 @@ Face and gaze inference runs locally in the candidate's browser. Camera frames a
 ## 4. User Roles and Permissions
 
 ### Admin
-- Create Admin accounts.
-- Delete Admin accounts, subject to platform safety checks.
-- Create and delete Examiner accounts.
-- View and manage Student accounts.
-- Activate and deactivate user accounts.
-- Manage platform configuration.
+- Create additional Admin and Examiner accounts.
+- View all accounts and activate, deactivate, or reactivate accounts.
+- Create and manage examinations that the Admin personally owns.
+- View Examiner-created examinations and question banks in read-only mode.
+- Assign students to Admin-owned examinations.
+- Review submissions, AI suggestions, final marks, proctoring events, and results.
+- View student lists, Examiner lists, schedules, and historical performance.
 
 ### Examiner
-- Create and manage questions.
-- Configure examinations.
-- Generate examination papers.
-- Review submitted answers.
-- Review and finalize subjective grades.
+- Create and manage only examinations they own.
+- Add/remove questions and manage their examination-specific question banks.
+- Reuse questions from their own previous examination banks as independent copies.
+- Configure type/difficulty counts, question timers, schedules, and student assignments.
+- Review submissions, AI suggestions, and proctoring information for their own exams.
+- Approve AI suggestions, revise marks within the revision limit, and publish results.
 
 ### Student
 - Register through public registration.
@@ -153,6 +166,18 @@ Public registration is restricted to Students.
 The first Admin account must be created through a secure backend bootstrap process.
 
 ---
+
+## AI Provider Configuration
+
+AI grading is optional and disabled by default. The backend accepts an AI key only through server-side environment variables:
+
+- `AI_API_KEY`: preferred provider credential.
+- `AI_API_BASE_URL`: optional base URL for an OpenAI-compatible provider.
+- `AI_GRADING_MODEL`: provider model name.
+- `AI_GRADING_ENABLED`: set to `True` only when the backend provider is configured.
+- `OPENAI_API_KEY`: backward-compatible fallback for existing setups.
+
+Never place an AI key in `frontend/.env`, browser code, GitHub source, or a student's exam token. The frontend does not receive the provider credential. If a mentor supplies a provider key, configure it only as a backend secret and use only the provider quota/terms authorized for the project. No live environment variables are changed by this source-code update.
 
 ## 5. Project Architecture
 
