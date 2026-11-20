@@ -544,7 +544,7 @@ export default function ExaminerGradingPage() {
               <button
                 type="button"
                 onClick={submitBulkGrades}
-                disabled={saving || Boolean(selectedAnswer.result_published) || (selectedAnswer.awarded_marks !== null && selectedAnswer.awarded_marks !== undefined && markRevisionInfo?.revisions_remaining === 0)}
+                disabled={saving}
                 className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
               >
                 {saving ? "Saving..." : `Submit ${selectedForBulk.length} selected grades`}
