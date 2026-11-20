@@ -179,15 +179,20 @@ alembic upgrade head
 
 ## AI Provider Configuration
 
-AI grading is optional and disabled by default. The backend accepts an AI key only through server-side environment variables:
+AI grading is optional and disabled by default. Every AI-powered evaluation request must authenticate with the mentor-provided credential only:
 
-- `AI_API_KEY`: preferred provider credential.
-- `AI_API_BASE_URL`: optional base URL for an OpenAI-compatible provider.
-- `AI_GRADING_MODEL`: provider model name.
-- `AI_GRADING_ENABLED`: set to `True` only when the backend provider is configured.
-- `OPENAI_API_KEY`: backward-compatible fallback for existing setups.
+- `MENTORS_API_KEY`: the sole credential accepted for AI evaluation.
+- `MENTORS_API_BASE_URL`: optional custom endpoint for the mentor's OpenAI-compatible API.
+- `MENTORS_API_MODEL`: model name supported by the mentor's API.
+- `AI_GRADING_ENABLED`: set to `True` only after the mentor's API details are configured.
 
-Never place an AI key in `frontend/.env`, browser code, GitHub source, or a student's exam token. The frontend does not receive the provider credential. If a mentor supplies a provider key, configure it only as a backend secret and use only the provider quota/terms authorized for the project. No live environment variables are changed by this source-code update.
+The backend does not fall back to `OPENAI_API_KEY`, `AI_API_KEY`, or another provider credential. If `MENTORS_API_KEY` is missing, AI evaluation remains unavailable rather than switching providers. The existing OpenAI-compatible client library is used only as the request protocol; the credential and configured endpoint/model must belong to the mentor-approved API.
+
+Never place the key in `frontend/.env`, browser code, GitHub source, or a student's exam token. Configure it only as a backend secret. No live environment variables are changed by this source-code update.
+
+## Examination Schedule Time Zone
+
+All examination opening and closing times are entered and displayed in Indian Standard Time (IST, `Asia/Kolkata`, UTC+05:30), regardless of the browser or server time zone. The backend interprets timezone-naive schedule input as IST and normalizes timestamps to UTC for storage and deadline comparisons. API responses include explicit UTC offsets so the frontend can display the same instant in IST.
 
 ## 5. Project Architecture
 
