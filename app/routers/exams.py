@@ -720,7 +720,7 @@ def reuse_questions_from_previous_banks(
     ).filter(ExamQuestion.question_id.in_(source_ids)).all()
     allowed_source_ids = set()
     for assignment, source_exam in source_assignments:
-        if source_exam.id == exam_id:
+        if source_exam.id >= exam_id:
             continue
         if current_user.role == UserRole.ADMIN.value or source_exam.created_by == current_user.id:
             allowed_source_ids.add(assignment.question_id)
