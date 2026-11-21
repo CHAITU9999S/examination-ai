@@ -17,6 +17,7 @@ interface BankQuestion {
   subject?: string | null;
   difficulty: Difficulty;
   marks: number;
+  tags?: string[];
   question_time_limit_seconds?: number | null;
 }
 interface SourceQuestion {
@@ -126,6 +127,7 @@ export default function ExamQuestionBankPage() {
   const [subject, setSubject] = useState("");
   const [expectedAnswer, setExpectedAnswer] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
+  const [tags, setTags] = useState("");
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctOption, setCorrectOption] = useState("0");
   const [correctOptions, setCorrectOptions] = useState<number[]>([0]);
@@ -286,6 +288,7 @@ export default function ExamQuestionBankPage() {
         negative_marks: Number(negativeMarks),
         expected_answer: expectedAnswer.trim() || null,
         model_answer_text: modelAnswer.trim() || null,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       };
       if (objective) payload.options = cleanedOptions;
       if (questionType === "MCQ") payload.correct_option_index = Number(correctOption);
@@ -310,6 +313,7 @@ export default function ExamQuestionBankPage() {
       setQuestionText("");
       setExpectedAnswer("");
       setModelAnswer("");
+      setTags("");
       setOptions(["", "", "", ""]);
       setPromptImage(null);
       setMessage("Question added to this examination bank.");
@@ -688,6 +692,9 @@ export default function ExamQuestionBankPage() {
                 <textarea value={modelAnswer} onChange={(e) => setModelAnswer(e.target.value)} rows={2} className={fieldClass} />
               </label>
             </div>
+            <label className="block text-sm text-slate-300">Tags (separate with commas)
+              <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Example: algebra, equations, practice" className={fieldClass + " mt-2"} />
+            </label>
             <label className="block text-sm text-slate-300">Optional question prompt image
               <input type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp" onChange={(e) => setPromptImage(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm text-slate-300" />
             </label>
@@ -711,6 +718,7 @@ export default function ExamQuestionBankPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-cyan-300">Q{question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                       <p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>
+                      {question.tags && question.tags.length > 0 && <p className="mt-2 text-xs text-slate-400">Tags: {question.tags.join(", ")}</p>}
                     </div>
                     <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove from Bank</button>
                   </div>
