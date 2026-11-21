@@ -182,8 +182,10 @@ def login(
     Allow Students, Examiners and Admins to log in.
     """
 
+    normalized_email = str(login_data.email).strip().lower()
+
     user = db.query(User).filter(
-        User.email == login_data.email
+        func.lower(User.email) == normalized_email
     ).first()
 
     if user is None or not verify_password(
