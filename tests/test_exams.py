@@ -851,3 +851,106 @@ def test_exam_question_bank_cannot_be_deleted_after_session(client, db_session):
     )
     assert response.status_code == 409
     assert db_session.get(QuestionBank, question.id) is not None
+
+
+def test_exam_configuration_has_three_revisions(client, db_session):
+    creator = create_user(db_session, "examiner", "config_revision_limit@test.com")
+    exam_data = valid_exam_data()
+    exam_data["total_questions"] = 1
+    exam_data["selection_rules"] = {}
+    create_response = client.post(
+        "/exams/",
+        json=exam_data,
+        headers=get_auth_headers(creator),
+    )
+    assert create_response.status_code == 201
+    exam_id = create_response.json()["exam_id"]
+
+    question = QuestionBank(
+        question_text="One question",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam_id, question_id=question.id, question_order=1))
+    db_session.commit()
+
+    for revision in range(1, 4):
+        update_data = valid_exam_data()
+        update_data["total_questions"] = 1
+        update_data["selection_rules"] = {}
+        update_data["title"] = f"Configuration revision {revision}"
+        response = client.put(
+            f"/exams/{exam_id}",
+            json=update_data,
+            headers=get_auth_headers(creator),
+        )
+        assert response.status_code == 200
+
+    fourth_update = valid_exam_data()
+    fourth_update["total_questions"] = 1
+    fourth_update["selection_rules"] = {}
+    response = client.put(
+        f"/exams/{exam_id}",
+        json=fourth_update,
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 409
+
+
+def test_question_marks_revisions_do_not_use_exam_configuration_limit(client, db_session):
+    creator = create_user(db_session, "examiner", "separate_revision_limits@test.com")
+    exam_data = valid_exam_data()
+    exam_data["total_questions"] = 1
+    exam_data["selection_rules"] = {}
+    create_response = client.post(
+        "/exams/",
+        json=exam_data,
+        headers=get_auth_headers(creator),
+    )
+    exam_id = create_response.json()["exam_id"]
+    question = QuestionBank(
+        question_text="One question",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam_id, question_id=question.id, question_order=1))
+    db_session.commit()
+
+    for new_marks in (2, 3, 4):
+        marks_response = client.put(
+            f"/exams/{exam_id}/question-marks",
+            json={"marks_by_group": {"easy|MCQ": new_marks}},
+            headers=get_auth_headers(creator),
+        )
+        assert marks_response.status_code == 200
+
+    update_data = valid_exam_data()
+    update_data["total_questions"] = 1
+    update_data["selection_rules"] = {}
+    update_response = client.put(
+        f"/exams/{exam_id}",
+        json=update_data,
+        headers=get_auth_headers(creator),
+    )
+    assert update_response.status_code == 200
+
+    marks_history = client.get(
+        f"/exams/{exam_id}/question-marks",
+        headers=get_auth_headers(creator),
+    )
+    config_history = client.get(
+        f"/exams/{exam_id}/configuration-revisions",
+        headers=get_auth_headers(creator),
+    )
+    assert marks_history.json()["revisions_used"] == 3
+    assert config_history.json()["revisions_used"] == 1
