@@ -155,7 +155,9 @@ export default function AdminUsersPage() {
     const confirmed = window.confirm(
       user.role === "student"
         ? `Permanently delete Student ${user.full_name} (${user.email}) and all of their examination assignments, sessions, answers, marks, results, and proctoring records? This cannot be undone.`
-        : `Delete the account belonging to ${user.full_name} (${user.email})?`
+        : user.role === "examiner"
+          ? `Permanently delete Examiner ${user.full_name} (${user.email}) and their examinations, sessions, answers, marks, results, proctoring events, question banks, and related records? Questions still used by other examinations will be kept. This cannot be undone.`
+          : `Delete the account belonging to ${user.full_name} (${user.email})?`
     );
 
     if (!confirmed) return;
@@ -170,7 +172,9 @@ export default function AdminUsersPage() {
       if (!headers) return;
 
       const response = await fetch(
-        `${API_URL}/admin/users/${user.id}`,
+        user.role === "examiner"
+          ? `${API_URL}/admin/examiners/${user.id}/with-records`
+          : `${API_URL}/admin/users/${user.id}`,
         {
           method: "DELETE",
           headers,
@@ -366,7 +370,9 @@ export default function AdminUsersPage() {
                             disabled={actionId === user.id}
                             className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                           >
-                            Delete
+                            {user.role === "examiner"
+                              ? "Delete with records"
+                              : "Delete"}
                           </button>
                         </div>
                       </td>
