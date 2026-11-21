@@ -11,6 +11,7 @@ from app.models import (
     User,
     Exam,
     ExamSession,
+    ExamAssignment,
     ExamQuestion,
     QuestionBank,
     Option,
@@ -49,6 +50,14 @@ def answer_test_data(db_session):
     db_session.add(exam)
     db_session.commit()
     db_session.refresh(exam)
+
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
 
     mcq = QuestionBank(
         question_text="What is Python?",
