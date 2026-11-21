@@ -461,7 +461,10 @@ def delete_examiner_with_records(
     try:
         session_ids = [
             row[0] for row in db.query(ExamSession.id).filter(
-                ExamSession.exam_id.in_(exam_ids)
+                or_(
+                    ExamSession.exam_id.in_(exam_ids),
+                    ExamSession.student_id == examiner.id,
+                )
             ).all()
         ] if exam_ids else []
 
@@ -520,7 +523,10 @@ def delete_examiner_with_records(
         # Remove assignments created by this Examiner, including assignments
         # they made for examinations owned by someone else.
         db.query(ExamAssignment).filter(
-            ExamAssignment.assigned_by == examiner.id
+            or_(
+                ExamAssignment.assigned_by == examiner.id,
+                ExamAssignment.student_id == examiner.id,
+            )
         ).delete(synchronize_session=False)
 
         # Remove this Examiner's named question banks, but keep questions
