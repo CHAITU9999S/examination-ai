@@ -1,4 +1,4 @@
-name: ExamGuard AI Frontend Checks
+name: Frontend Check
 
 on:
   push:
