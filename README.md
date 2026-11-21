@@ -233,7 +233,7 @@ examination-ai/
 └── README.md
 ```
 
-The target implementation contains a 102-file planned architecture. Additional generated migration files may be created when required.
+The repository is organized into backend, frontend, database migration, documentation, and test directories. The repository structure may grow as features and maintenance work are added.
 
 ---
 
@@ -350,7 +350,7 @@ Testing areas include:
 
 ## 10. Project Status
 
-Development is organized around the agreed 102-file target architecture.
+Development is organized around the project's agreed Milestone 1, Milestone 2, UI, AI proctoring, and web-access scope.
 
 Files are reviewed and integrated incrementally.
 
