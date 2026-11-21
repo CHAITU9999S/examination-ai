@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.auth import hash_password
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models import AdminActivityLog, Exam, ExamAssignment, ExamSession, Result, User
+from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment, ExamSession, ProctorEvent, Result, User
 from app.schemas import (
     AdminUserCreate,
     MessageResponse,
@@ -239,6 +239,80 @@ def delete_user(
         "full_name": target_user.full_name,
         "role": target_user.role,
     }
+
+    if target_user.role == UserRole.STUDENT.value:
+        try:
+            session_ids = [
+                row[0] for row in db.query(ExamSession.id).filter(
+                    ExamSession.student_id == target_user.id
+                ).all()
+            ]
+            answer_ids = []
+            if session_ids:
+                answer_ids = [
+                    row[0] for row in db.query(Answer.id).filter(
+                        Answer.session_id.in_(session_ids)
+                    ).all()
+                ]
+
+            if answer_ids:
+                db.query(AnswerMarkRevision).filter(
+                    AnswerMarkRevision.answer_id.in_(answer_ids)
+                ).delete(synchronize_session=False)
+
+            if session_ids:
+                db.query(Result).filter(
+                    Result.session_id.in_(session_ids)
+                ).delete(synchronize_session=False)
+                db.query(ProctorEvent).filter(
+                    ProctorEvent.session_id.in_(session_ids)
+                ).delete(synchronize_session=False)
+                db.query(Answer).filter(
+                    Answer.session_id.in_(session_ids)
+                ).delete(synchronize_session=False)
+                db.query(ExamSession).filter(
+                    ExamSession.id.in_(session_ids)
+                ).delete(synchronize_session=False)
+
+            db.query(ExamAssignment).filter(
+                or_(
+                    ExamAssignment.student_id == target_user.id,
+                    ExamAssignment.assigned_by == target_user.id,
+                )
+            ).delete(synchronize_session=False)
+
+            # Remove old activity entries linked to this account.
+            db.query(AdminActivityLog).filter(
+                or_(
+                    AdminActivityLog.actor_user_id == target_user.id,
+                    AdminActivityLog.target_user_id == target_user.id,
+                )
+            ).delete(synchronize_session=False)
+
+            record_admin_activity(
+                db=db,
+                actor_user_id=current_admin.id,
+                target_user_id=None,
+                action="student_deleted",
+                details={
+                    "target_user_id": target_user.id,
+                    **deleted_user_details,
+                    "deleted_sessions": len(session_ids),
+                    "deleted_answers": len(answer_ids),
+                },
+            )
+            db.delete(target_user)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This Student account could not be deleted because another record still depends on it.",
+            )
+
+        return MessageResponse(
+            message="The Student account and its examination assignments, sessions, answers, marks, results, and proctoring records were deleted."
+        )
 
     try:
         # Keep the audit record even though the target account is deleted.
