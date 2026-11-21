@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -257,6 +257,53 @@ def delete_user(
         db.commit()
     except IntegrityError:
         db.rollback()
+
+        if target_user.role == UserRole.STUDENT.value:
+            assigned_exam_ids = db.query(
+                ExamAssignment.exam_id
+            ).filter(
+                ExamAssignment.student_id == target_user.id
+            )
+
+            session_exam_ids = db.query(
+                ExamSession.exam_id
+            ).filter(
+                ExamSession.student_id == target_user.id
+            )
+
+            linked_exams = db.query(
+                Exam, User
+            ).outerjoin(
+                User, User.id == Exam.created_by
+            ).filter(
+                or_(
+                    Exam.id.in_(assigned_exam_ids),
+                    Exam.id.in_(session_exam_ids),
+                )
+            ).order_by(
+                Exam.title.asc()
+            ).all()
+
+            if linked_exams:
+                exam_details = "; ".join(
+                    (
+                        f"{exam.title} — Created by: "
+                        f"{creator.full_name if creator else 'Unknown'} "
+                        f"({creator.role.title() if creator else 'Unknown'})"
+                    )
+                    for exam, creator in linked_exams
+                )
+
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "This student is linked to examination records and "
+                        "cannot be permanently deleted. Deactivate the "
+                        "student account instead. Linked examinations: "
+                        f"{exam_details}"
+                    )
+                )
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
