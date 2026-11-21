@@ -538,3 +538,130 @@ def test_non_creator_cannot_add_question_to_exam_bank(
         headers=get_auth_headers(admin),
     )
     assert response.status_code == 403
+
+
+def test_exam_creator_can_update_question_marks_and_view_history(client, db_session):
+    creator = create_user(db_session, "examiner", "marks_owner@test.com")
+    exam = Exam(
+        title="Marks Settings Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    first = QuestionBank(
+        question_text="Question one",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        created_by=creator.id,
+    )
+    second = QuestionBank(
+        question_text="Question two",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        created_by=creator.id,
+    )
+    db_session.add_all([first, second])
+    db_session.flush()
+    db_session.add_all([
+        ExamQuestion(exam_id=exam.id, question_id=first.id, question_order=1),
+        ExamQuestion(exam_id=exam.id, question_id=second.id, question_order=2),
+    ])
+    db_session.commit()
+
+    response = client.put(
+        f"/exams/{exam.id}/question-marks",
+        json={"marks_by_group": {"easy|MCQ": 3}},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 200
+    assert db_session.get(QuestionBank, first.id).marks == 3
+    assert db_session.get(QuestionBank, second.id).marks == 3
+
+    history = client.get(
+        f"/exams/{exam.id}/question-marks",
+        headers=get_auth_headers(creator),
+    )
+    assert history.status_code == 200
+    assert history.json()["marks_by_group"]["easy|MCQ"] == 3
+    assert history.json()["revisions_used"] == 1
+    assert history.json()["revisions"][0]["marks_snapshot"]["easy|MCQ"] == 3
+
+
+def test_question_paper_marks_have_a_separate_three_revision_limit(client, db_session):
+    creator = create_user(db_session, "examiner", "marks_limit@test.com")
+    exam = Exam(
+        title="Marks Revision Limit",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Question",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="medium",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
+    db_session.commit()
+
+    for new_marks in (2, 3, 4):
+        response = client.put(
+            f"/exams/{exam.id}/question-marks",
+            json={"marks_by_group": {"medium|short_answer": new_marks}},
+            headers=get_auth_headers(creator),
+        )
+        assert response.status_code == 200
+
+    fourth_change = client.put(
+        f"/exams/{exam.id}/question-marks",
+        json={"marks_by_group": {"medium|short_answer": 5}},
+        headers=get_auth_headers(creator),
+    )
+    assert fourth_change.status_code == 409
+
+
+def test_admin_cannot_change_another_creators_question_marks(client, db_session):
+    creator = create_user(db_session, "examiner", "marks_creator@test.com")
+    admin = create_user(db_session, "admin", "marks_admin@test.com")
+    exam = Exam(
+        title="Owned Marks Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
+    db_session.commit()
+
+    response = client.put(
+        f"/exams/{exam.id}/question-marks",
+        json={"marks_by_group": {"easy|MCQ": 2}},
+        headers=get_auth_headers(admin),
+    )
+    assert response.status_code == 403
