@@ -162,6 +162,13 @@ def list_exams(
         Exam.id.desc()
     ).all()
 
+    creator_ids = {exam.created_by for exam in exams}
+    creators = db.query(User).filter(User.id.in_(creator_ids)).all() if creator_ids else []
+    creator_names = {
+        creator.id: creator.full_name
+        for creator in creators
+    }
+
     def utc_timestamp(value):
         if value is None:
             return None
@@ -187,6 +194,7 @@ def list_exams(
             "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
             "max_tab_switch_warnings": exam.max_tab_switch_warnings,
             "created_by": exam.created_by,
+            "created_by_name": creator_names.get(exam.created_by, "Unknown"),
         }
         for exam in exams
     ]
