@@ -1,4 +1,4 @@
-name: ExamGuard AI Database Migration Checks
+name: Database Check
 
 on:
   pull_request:
