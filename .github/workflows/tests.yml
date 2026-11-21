@@ -1,41 +1,32 @@
-
 name: Run Tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  backend-tests:
     name: Backend Automated Tests
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: requirements.txt
-
-      - name: Upgrade pip
-        run: |
-          python -m pip install --upgrade pip
-
       - name: Install project dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Configure test environment
         run: |
           echo "APP_ENV=test" >> $GITHUB_ENV
@@ -43,8 +34,93 @@ jobs:
           echo "JWT_SECRET_KEY=examguard-test-only-secret-for-ci" >> $GITHUB_ENV
           echo "JWT_ALGORITHM=HS256" >> $GITHUB_ENV
           echo "DATABASE_URL=sqlite:///./examguard_test.db" >> $GITHUB_ENV
-
       - name: Run automated tests
+        run: python -m pytest -v
+
+  container-build:
+    name: Container Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
         run: |
-          python -m pytest -v
-          
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Build backend image
+        run: docker build --tag examguard-ai-backend:test .
+
+  frontend-checks:
+    name: Frontend Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript type check
+        run: npm run typecheck
+      - name: Build Next.js application
+        run: npm run build
+
+  migration-check:
+    name: Database Migration Check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: examguard
+          POSTGRES_PASSWORD: examguard
+          POSTGRES_DB: examguard_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U examguard -d examguard_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://examguard:examguard@localhost:5432/examguard_ci
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Apply all migrations to a fresh PostgreSQL database
+        run: alembic upgrade head
+      - name: Confirm migration head
+        run: alembic current
+
+  manual-database-update:
+    name: Update Database
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run database migration
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: alembic upgrade head
