@@ -151,7 +151,7 @@ export default function ExaminerResultsPage() {
           <div>
             <h1 className="text-3xl font-bold">Result Review & Publication</h1>
             <p className="mt-2 text-slate-400">
-              Publish only after all subjective answers have been graded.
+              Review and publish results for examinations you created. Grade all subjective answers before publishing.
             </p>
           </div>
           <button
@@ -225,7 +225,7 @@ export default function ExaminerResultsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Historical Results</h2>
-              <p className="mt-1 text-sm text-slate-400">Previously calculated results visible to this examination creator.</p>
+              <p className="mt-1 text-sm text-slate-400">Previously calculated results for examinations you created.</p>
             </div>
             <span className="text-sm text-slate-400">{history.length} result(s)</span>
           </div>
