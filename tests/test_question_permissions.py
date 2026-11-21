@@ -175,3 +175,23 @@ def test_examiner_and_admin_can_delete_questions(
 
     assert remaining_question is None
     
+
+
+def test_admin_cannot_delete_another_users_question(client, db_session):
+    examiner = create_user(
+        db_session, "examiner", "question_owner@test.com"
+    )
+    admin = create_user(
+        db_session, "admin", "question_admin@test.com"
+    )
+    question = create_question(db_session, examiner)
+
+    response = client.delete(
+        f"/questions/{question.id}",
+        headers=get_auth_headers(admin),
+    )
+
+    assert response.status_code == 403
+    assert db_session.query(QuestionBank).filter(
+        QuestionBank.id == question.id
+    ).first() is not None
