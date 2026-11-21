@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session, aliased
 from app.auth import hash_password
 from app.database import get_db
 from app.dependencies import get_current_admin
-from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment, ExamSession, ProctorEvent, Result, User
+from app.models import (
+    AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment,
+    ExamConfigurationRevision, ExamQuestion, ExamQuestionMarksRevision,
+    ExamSession, Option, ProctorEvent, QuestionBank, Result, User,
+)
+from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 from app.schemas import (
     AdminUserCreate,
     MessageResponse,
@@ -388,6 +393,240 @@ def delete_user(
         )
 
     return MessageResponse(message="User account deleted successfully.")
+
+
+@router.delete(
+    "/examiners/{user_id}/with-records",
+    response_model=MessageResponse
+)
+def delete_examiner_with_records(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete an Examiner and the records that belong to their work."""
+
+    examiner = db.query(User).filter(
+        User.id == user_id,
+        User.role == UserRole.EXAMINER.value,
+    ).first()
+
+    if examiner is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Examiner account not found.",
+        )
+
+    exam_ids = [
+        row[0] for row in db.query(Exam.id).filter(
+            Exam.created_by == examiner.id
+        ).all()
+    ]
+
+    # Keep another Examiner's examination history if this Examiner reviewed it.
+    outside_exam_filter = Exam.created_by != examiner.id
+    outside_config_changes = db.query(ExamConfigurationRevision.id).join(
+        Exam, Exam.id == ExamConfigurationRevision.exam_id
+    ).filter(
+        ExamConfigurationRevision.changed_by == examiner.id,
+        outside_exam_filter,
+    ).count()
+    outside_marks_changes = db.query(ExamQuestionMarksRevision.id).join(
+        Exam, Exam.id == ExamQuestionMarksRevision.exam_id
+    ).filter(
+        ExamQuestionMarksRevision.changed_by == examiner.id,
+        outside_exam_filter,
+    ).count()
+    outside_answer_revisions = db.query(AnswerMarkRevision.id).join(
+        Answer, Answer.id == AnswerMarkRevision.answer_id
+    ).join(
+        ExamSession, ExamSession.id == Answer.session_id
+    ).join(
+        Exam, Exam.id == ExamSession.exam_id
+    ).filter(
+        AnswerMarkRevision.revised_by == examiner.id,
+        outside_exam_filter,
+    ).count()
+
+    if outside_config_changes or outside_marks_changes or outside_answer_revisions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This Examiner has review or change history in another "
+                "Examiner's examination. That history will be kept. Please "
+                "resolve those records before deleting this account."
+            ),
+        )
+
+    try:
+        session_ids = [
+            row[0] for row in db.query(ExamSession.id).filter(
+                ExamSession.exam_id.in_(exam_ids)
+            ).all()
+        ] if exam_ids else []
+
+        answer_ids = [
+            row[0] for row in db.query(Answer.id).filter(
+                Answer.session_id.in_(session_ids)
+            ).all()
+        ] if session_ids else []
+
+        owned_question_ids = [
+            row[0] for row in db.query(QuestionBank.id).filter(
+                QuestionBank.created_by == examiner.id
+            ).all()
+        ]
+
+        collection_ids = [
+            row[0] for row in db.query(QuestionCollection.id).filter(
+                QuestionCollection.created_by == examiner.id
+            ).all()
+        ]
+
+        # Remove records that depend on the Examiner's examinations.
+        if answer_ids:
+            db.query(AnswerMarkRevision).filter(
+                AnswerMarkRevision.answer_id.in_(answer_ids)
+            ).delete(synchronize_session=False)
+
+        if session_ids:
+            db.query(Result).filter(
+                Result.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ProctorEvent).filter(
+                ProctorEvent.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(Answer).filter(
+                Answer.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamSession).filter(
+                ExamSession.id.in_(session_ids)
+            ).delete(synchronize_session=False)
+
+        if exam_ids:
+            db.query(ExamAssignment).filter(
+                ExamAssignment.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamConfigurationRevision).filter(
+                ExamConfigurationRevision.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamQuestionMarksRevision).filter(
+                ExamQuestionMarksRevision.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamQuestion).filter(
+                ExamQuestion.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+
+        # Remove assignments created by this Examiner, including assignments
+        # they made for examinations owned by someone else.
+        db.query(ExamAssignment).filter(
+            ExamAssignment.assigned_by == examiner.id
+        ).delete(synchronize_session=False)
+
+        # Remove this Examiner's named question banks, but keep questions
+        # that are still used by another exam, bank, or answer.
+        if collection_ids:
+            db.query(QuestionCollectionItem).filter(
+                QuestionCollectionItem.collection_id.in_(collection_ids)
+            ).delete(synchronize_session=False)
+            db.query(QuestionCollection).filter(
+                QuestionCollection.id.in_(collection_ids)
+            ).delete(synchronize_session=False)
+
+        removable_question_ids = []
+        for question_id in owned_question_ids:
+            used_in_exam = db.query(ExamQuestion.id).filter(
+                ExamQuestion.question_id == question_id
+            ).first()
+            used_in_answer = db.query(Answer.id).filter(
+                Answer.question_id == question_id
+            ).first()
+            used_in_collection = db.query(QuestionCollectionItem.id).filter(
+                QuestionCollectionItem.question_id == question_id
+            ).first()
+            used_as_source = db.query(QuestionBank.id).filter(
+                QuestionBank.source_question_id == question_id
+            ).first()
+
+            if not any((
+                used_in_exam,
+                used_in_answer,
+                used_in_collection,
+                used_as_source,
+            )):
+                removable_question_ids.append(question_id)
+
+        if removable_question_ids:
+            db.query(Option).filter(
+                Option.question_id.in_(removable_question_ids)
+            ).delete(synchronize_session=False)
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(removable_question_ids)
+            ).delete(synchronize_session=False)
+
+        kept_question_ids = set(owned_question_ids) - set(removable_question_ids)
+        if kept_question_ids:
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(kept_question_ids)
+            ).update(
+                {QuestionBank.created_by: None},
+                synchronize_session=False,
+            )
+
+        # Remove audit rows that name this Examiner. Keep the final deletion
+        # entry under the Admin who carried out the action.
+        db.query(AdminActivityLog).filter(
+            or_(
+                AdminActivityLog.actor_user_id == examiner.id,
+                AdminActivityLog.target_user_id == examiner.id,
+            )
+        ).delete(synchronize_session=False)
+
+        if exam_ids:
+            db.query(Exam).filter(
+                Exam.id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+
+        deleted_details = {
+            "target_user_id": examiner.id,
+            "full_name": examiner.full_name,
+            "email": examiner.email,
+            "role": examiner.role,
+            "deleted_examinations": len(exam_ids),
+            "deleted_sessions": len(session_ids),
+            "deleted_answers": len(answer_ids),
+            "deleted_questions": len(removable_question_ids),
+        }
+
+        record_admin_activity(
+            db=db,
+            actor_user_id=current_admin.id,
+            target_user_id=None,
+            action="examiner_and_records_deleted",
+            details=deleted_details,
+        )
+        db.delete(examiner)
+        db.commit()
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The Examiner could not be deleted because another record "
+                "still depends on this account. No records were deleted."
+            ),
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+    return MessageResponse(
+        message=(
+            "The Examiner account and its examination records were deleted. "
+            "Questions still used elsewhere were kept."
+        )
+    )
 
 
 @router.patch(
