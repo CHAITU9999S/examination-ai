@@ -108,6 +108,8 @@ export default function ExamQuestionBankPage() {
   const [questionMarksByGroup, setQuestionMarksByGroup] = useState<Record<string, string>>({});
   const [questionMarksRevisions, setQuestionMarksRevisions] = useState<QuestionMarksRevision[]>([]);
   const [questionMarksRevisionsUsed, setQuestionMarksRevisionsUsed] = useState(0);
+  const [questionMarksCanEdit, setQuestionMarksCanEdit] = useState(false);
+  const [questionMarksLocked, setQuestionMarksLocked] = useState(false);
   const [useConfigGroupCounts, setUseConfigGroupCounts] = useState(false);
   const [configGroupCounts, setConfigGroupCounts] = useState<Record<string, string>>(defaultConfigGroupCounts);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
@@ -205,6 +207,8 @@ export default function ExamQuestionBankPage() {
       );
       setQuestionMarksRevisions(Array.isArray(marksSettings.revisions) ? marksSettings.revisions : []);
       setQuestionMarksRevisionsUsed(Number(marksSettings.revisions_used || 0));
+      setQuestionMarksCanEdit(Boolean(marksSettings.can_edit));
+      setQuestionMarksLocked(Boolean(marksSettings.has_sessions));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
       setSourceBanks(Array.isArray(sources.banks) ? sources.banks : []);
       setStudents(Array.isArray(eligible.students) ? eligible.students : []);
@@ -611,12 +615,13 @@ export default function ExamQuestionBankPage() {
               </div>
               <button
                 type="submit"
-                disabled={working || !examConfig?.can_edit || questionMarksRevisionsUsed >= 3}
+                disabled={working || !questionMarksCanEdit || questionMarksRevisionsUsed >= 3}
                 className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold hover:bg-cyan-500 disabled:opacity-40"
               >
                 {questionMarksRevisionsUsed >= 3 ? "Marks Revision Limit Reached" : "Save Question Marks"}
               </button>
-              {!examConfig?.can_edit && <p className="text-xs text-slate-500">You can view these marks, but only the examination creator can change them.</p>}
+              {questionMarksLocked && <p className="text-xs text-slate-500">These marks are locked because a student session has already been created.</p>}
+              {!questionMarksLocked && !questionMarksCanEdit && <p className="text-xs text-slate-500">You can view these marks, but only the examination creator can change them.</p>}
             </form>
           )}
           <div className="mt-5 border-t border-white/10 pt-4">
