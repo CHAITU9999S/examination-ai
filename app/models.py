@@ -581,6 +581,25 @@ class ExamConfigurationRevision(Base):
 
 
 # -----------------------------------------
+# QUESTION PAPER MARK SETTINGS HISTORY
+# -----------------------------------------
+
+class ExamQuestionMarksRevision(Base):
+    __tablename__ = "exam_question_marks_revisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
+    revision_number = Column(Integer, nullable=False)
+    marks_snapshot = Column(JSON, nullable=False)
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+
+    __table_args__ = (
+        UniqueConstraint("exam_id", "revision_number", name="uq_exam_question_marks_revision"),
+    )
+
+
+# -----------------------------------------
 # HUMAN MARK REVISION HISTORY
 # -----------------------------------------
 
