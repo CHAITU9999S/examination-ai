@@ -70,9 +70,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=APP_NAME,
     description=(
-        "AI-Based Intelligent Examination Platform "
-        "with Automated Proctoring and Candidate "
-        "Performance Analysis."
+        "ExamGuard AI is an online examination platform. "
+        "Students can take exams and view their results. "
+        "Examiners can manage exams and review answers. "
+        "Admins can manage user accounts and examinations. "
+        "The platform also supports timed exams, AI-assisted evaluation, "
+        "and browser-based proctoring."
     ),
     version="1.0.0",
     debug=DEBUG,
