@@ -59,6 +59,7 @@ export default function ExaminerExamsPage() {
 
   const [exams, setExams] = useState<Exam[]>([]);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -109,6 +110,7 @@ export default function ExaminerExamsPage() {
       if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
       const profile = await profileResponse.json();
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
+      setCurrentUserId(Number(profile.id));
 
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
@@ -151,6 +153,32 @@ export default function ExaminerExamsPage() {
   useEffect(() => {
     loadExams();
   }, [loadExams]);
+
+  async function deleteExam(exam: Exam) {
+    const confirmed = window.confirm(
+      `Permanently delete "${exam.title}" and all its assignments, student sessions, answers, marks, results, and proctoring records? Shared question-bank questions will be kept. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setError("");
+    setMessage("");
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to delete this examination.");
+      }
+      setMessage(`"${exam.title}" and its related records were deleted.`);
+      await loadExams();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete this examination.");
+    }
+  }
 
   function resetForm() {
     setTitle("");
@@ -354,6 +382,12 @@ export default function ExaminerExamsPage() {
             Manage My Question Banks
           </Link>
         </div>
+
+        {message && (
+          <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300">
+            {message}
+          </div>
+        )}
 
         {error && (
           <div
@@ -708,12 +742,23 @@ export default function ExaminerExamsPage() {
                         {formatDate(exam.end_time)}
                       </td>
                       <td className="px-4 py-4">
-                        <Link
-                          href={`/examiner/exams/${exam.id}/question-bank`}
-                          className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30"
-                        >
-                          Manage Bank & Students
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/examiner/exams/${exam.id}/question-bank`}
+                            className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30"
+                          >
+                            Manage Bank & Students
+                          </Link>
+                          {Number(exam.created_by) === currentUserId && (
+                            <button
+                              type="button"
+                              onClick={() => deleteExam(exam)}
+                              className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
