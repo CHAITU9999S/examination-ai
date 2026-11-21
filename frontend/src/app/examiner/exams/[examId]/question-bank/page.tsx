@@ -61,6 +61,12 @@ interface ConfigRevision {
   changed_by: number;
   created_at: string;
 }
+interface QuestionMarksRevision {
+  revision_number: number;
+  marks_snapshot: Record<string, number>;
+  changed_by: number;
+  created_at: string;
+}
 
 const INDIA_TIME_ZONE = "Asia/Kolkata";
 
@@ -99,6 +105,9 @@ export default function ExamQuestionBankPage() {
   const [examConfig, setExamConfig] = useState<ExamConfiguration | null>(null);
   const [configRevisions, setConfigRevisions] = useState<ConfigRevision[]>([]);
   const [revisionsUsed, setRevisionsUsed] = useState(0);
+  const [questionMarksByGroup, setQuestionMarksByGroup] = useState<Record<string, string>>({});
+  const [questionMarksRevisions, setQuestionMarksRevisions] = useState<QuestionMarksRevision[]>([]);
+  const [questionMarksRevisionsUsed, setQuestionMarksRevisionsUsed] = useState(0);
   const [useConfigGroupCounts, setUseConfigGroupCounts] = useState(false);
   const [configGroupCounts, setConfigGroupCounts] = useState<Record<string, string>>(defaultConfigGroupCounts);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
@@ -161,7 +170,7 @@ export default function ExamQuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      const [profile, bank, sources, eligible, assigned, config, revisions] = await Promise.all([
+      const [profile, bank, sources, eligible, assigned, config, revisions, marksSettings] = await Promise.all([
         request("/users/me"),
         request(`/exams/${examId}/questions`),
         request(`/exams/${examId}/question-bank/sources`),
@@ -169,6 +178,7 @@ export default function ExamQuestionBankPage() {
         request(`/exams/${examId}/assignments`),
         request(`/exams/${examId}`),
         request(`/exams/${examId}/configuration-revisions`),
+        request(`/exams/${examId}/question-marks`),
       ]);
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
       setExamConfig({
@@ -188,6 +198,13 @@ export default function ExamQuestionBankPage() {
       });
       setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
       setRevisionsUsed(Number(revisions.revisions_used || 0));
+      setQuestionMarksByGroup(
+        Object.fromEntries(
+          Object.entries(marksSettings.marks_by_group || {}).map(([key, value]) => [key, String(value)])
+        )
+      );
+      setQuestionMarksRevisions(Array.isArray(marksSettings.revisions) ? marksSettings.revisions : []);
+      setQuestionMarksRevisionsUsed(Number(marksSettings.revisions_used || 0));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
       setSourceBanks(Array.isArray(sources.banks) ? sources.banks : []);
       setStudents(Array.isArray(eligible.students) ? eligible.students : []);
@@ -205,6 +222,22 @@ export default function ExamQuestionBankPage() {
     (filterType === "all" || question.question_type === filterType) &&
     (filterDifficulty === "all" || question.difficulty === filterDifficulty)
   ), [questions, filterType, filterDifficulty]);
+
+  const questionMarkGroups = useMemo(() => {
+    const groups: Record<string, { questionType: QuestionType; difficulty: Difficulty; count: number }> = {};
+    for (const question of questions) {
+      const key = `${question.difficulty}|${question.question_type}`;
+      if (!groups[key]) {
+        groups[key] = {
+          questionType: question.question_type,
+          difficulty: question.difficulty,
+          count: 0,
+        };
+      }
+      groups[key].count += 1;
+    }
+    return Object.entries(groups).map(([key, group]) => ({ key, ...group }));
+  }, [questions]);
 
   function toggleSource(id: number) {
     setSelectedSources((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -350,6 +383,33 @@ export default function ExamQuestionBankPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update examination configuration.");
     } finally { setWorking(false); }
+  }
+
+  async function saveQuestionMarks(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedMarks = Object.fromEntries(
+      questionMarkGroups.map((group) => [group.key, Number(questionMarksByGroup[group.key])])
+    );
+    if (Object.values(parsedMarks).some((value) => !Number.isFinite(value) || value <= 0)) {
+      setError("Enter a positive maximum mark for every question group.");
+      return;
+    }
+
+    setWorking(true);
+    setError("");
+    setMessage("");
+    try {
+      await request(`/exams/${examId}/question-marks`, {
+        method: "PUT",
+        body: JSON.stringify({ marks_by_group: parsedMarks }),
+      });
+      setMessage("Question paper marks updated and saved in their own revision history.");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update question paper marks.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function validatePaperConfiguration() {
@@ -520,6 +580,62 @@ export default function ExamQuestionBankPage() {
             </div>
           </section>
         )}
+
+        <section className={cardClass}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Question Paper Marks Settings</h2>
+              <p className="mt-1 text-sm text-slate-400">Change the maximum marks for each type and difficulty group. This has its own three-revision limit and is separate from exam settings and student answer marks.</p>
+            </div>
+            <span className="text-xs text-cyan-300">{questionMarksRevisionsUsed}/3 revisions used</span>
+          </div>
+          {questionMarkGroups.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">Add questions to this bank before setting group marks.</p>
+          ) : (
+            <form onSubmit={saveQuestionMarks} className="mt-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {questionMarkGroups.map((group) => (
+                  <label key={group.key} className="text-sm text-slate-300">
+                    <span className="block capitalize">{group.difficulty} · {group.questionType.replaceAll("_", " ")} ({group.count} question(s))</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={questionMarksByGroup[group.key] ?? ""}
+                      onChange={(event) => setQuestionMarksByGroup((current) => ({ ...current, [group.key]: event.target.value }))}
+                      className={fieldClass + " mt-2"}
+                    />
+                  </label>
+                ))}
+              </div>
+              <button
+                type="submit"
+                disabled={working || !examConfig?.can_edit || questionMarksRevisionsUsed >= 3}
+                className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold hover:bg-cyan-500 disabled:opacity-40"
+              >
+                {questionMarksRevisionsUsed >= 3 ? "Marks Revision Limit Reached" : "Save Question Marks"}
+              </button>
+              {!examConfig?.can_edit && <p className="text-xs text-slate-500">You can view these marks, but only the examination creator can change them.</p>}
+            </form>
+          )}
+          <div className="mt-5 border-t border-white/10 pt-4">
+            <h3 className="font-semibold">Question Marks History</h3>
+            {questionMarksRevisions.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">No question marks revisions have been made.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {questionMarksRevisions.map((revision) => (
+                  <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
+                    <span className="font-semibold">Revision {revision.revision_number}</span>
+                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST · Staff account #{revision.changed_by}</span>
+                    <p className="mt-2 text-slate-400">{Object.entries(revision.marks_snapshot).map(([key, value]) => `${key.replace("|", " · ")}: ${value} marks`).join(" | ")}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className={cardClass}>
           <h2 className="text-xl font-semibold">Add a New Question</h2>
