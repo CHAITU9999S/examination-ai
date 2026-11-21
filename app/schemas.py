@@ -216,9 +216,9 @@ class ExamCreate(BaseModel):
 
     selection_rules: dict[str, Any] | None = None
 
-    start_time: datetime
+    start_time: datetime | None = None
 
-    end_time: datetime
+    end_time: datetime | None = None
 
     negative_marking: bool = False
 
@@ -235,6 +235,11 @@ class ExamCreate(BaseModel):
         default=3,
         ge=0
     )
+
+
+class ExamScheduleUpdate(BaseModel):
+    start_time: datetime
+    end_time: datetime
 
 
 # ==========================================
