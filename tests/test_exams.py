@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.auth import create_access_token
-from app.models import User, Exam, ExamAssignment, QuestionBank, ExamQuestion
+from app.models import User, Exam, ExamAssignment, ExamQuestion, ExamSession, QuestionBank
 
 
 def create_user(db, role, email):
@@ -665,3 +665,181 @@ def test_admin_cannot_change_another_creators_question_marks(client, db_session)
         headers=get_auth_headers(admin),
     )
     assert response.status_code == 403
+
+
+def test_question_marks_cannot_change_after_student_session(client, db_session):
+    creator = create_user(db_session, "examiner", "marks_locked@test.com")
+    student = create_user(db_session, "student", "marks_locked_student@test.com")
+    exam = Exam(
+        title="Started Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
+    db_session.add(ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="in_progress",
+    ))
+    db_session.commit()
+
+    response = client.put(
+        f"/exams/{exam.id}/question-marks",
+        json={"marks_by_group": {"easy|MCQ": 2}},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 409
+    assert db_session.get(QuestionBank, question.id).marks == 1
+
+
+def test_question_marks_cannot_change_question_shared_with_another_exam(client, db_session):
+    creator = create_user(db_session, "examiner", "shared_marks@test.com")
+    first_exam = Exam(
+        title="First Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    second_exam = Exam(
+        title="Second Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add_all([first_exam, second_exam])
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Shared Question",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="medium",
+        marks=2,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add_all([
+        ExamQuestion(exam_id=first_exam.id, question_id=question.id, question_order=1),
+        ExamQuestion(exam_id=second_exam.id, question_id=question.id, question_order=1),
+    ])
+    db_session.commit()
+
+    response = client.put(
+        f"/exams/{first_exam.id}/question-marks",
+        json={"marks_by_group": {"medium|short_answer": 3}},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 409
+    assert db_session.get(QuestionBank, question.id).marks == 2
+
+
+def test_exam_creator_can_delete_whole_question_bank_safely(client, db_session):
+    creator = create_user(db_session, "examiner", "whole_bank_owner@test.com")
+    student = create_user(db_session, "student", "whole_bank_student@test.com")
+    source = QuestionBank(
+        question_text="Original question",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        created_by=creator.id,
+    )
+    db_session.add(source)
+    db_session.flush()
+    local_question = QuestionBank(
+        question_text="Local question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    copied_question = QuestionBank(
+        question_text="Copied question",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        created_by=creator.id,
+        source_question_id=source.id,
+    )
+    exam = Exam(
+        title="Delete Bank Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=creator.id,
+    )
+    db_session.add_all([local_question, copied_question, exam])
+    db_session.flush()
+    db_session.add_all([
+        ExamQuestion(exam_id=exam.id, question_id=local_question.id, question_order=1),
+        ExamQuestion(exam_id=exam.id, question_id=copied_question.id, question_order=2),
+        ExamAssignment(exam_id=exam.id, student_id=student.id, assigned_by=creator.id, is_active=True),
+    ])
+    db_session.commit()
+
+    response = client.delete(
+        f"/exams/{exam.id}/question-bank",
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 200
+    assert db_session.get(QuestionBank, local_question.id) is None
+    assert db_session.get(QuestionBank, copied_question.id) is None
+    assert db_session.get(QuestionBank, source.id) is not None
+    assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 0
+    assignment = db_session.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == student.id,
+    ).one()
+    assert assignment.is_active is False
+
+
+def test_exam_question_bank_cannot_be_deleted_after_session(client, db_session):
+    creator = create_user(db_session, "examiner", "whole_bank_locked@test.com")
+    student = create_user(db_session, "student", "whole_bank_locked_student@test.com")
+    exam = Exam(
+        title="Locked Bank Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
+    db_session.add(ExamSession(exam_id=exam.id, student_id=student.id, status="in_progress"))
+    db_session.commit()
+
+    response = client.delete(
+        f"/exams/{exam.id}/question-bank",
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 409
+    assert db_session.get(QuestionBank, question.id) is not None
