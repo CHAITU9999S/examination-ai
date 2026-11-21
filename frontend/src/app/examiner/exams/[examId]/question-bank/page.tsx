@@ -18,6 +18,10 @@ interface BankQuestion {
   difficulty: Difficulty;
   marks: number;
   tags?: string[];
+  expected_answer?: string | null;
+  model_answer_text?: string | null;
+  question_image_available?: boolean;
+  options?: { id: number; option_text: string; is_correct: boolean }[];
   question_time_limit_seconds?: number | null;
 }
 interface SourceQuestion {
@@ -719,6 +723,16 @@ export default function ExamQuestionBankPage() {
                       <p className="text-xs text-cyan-300">Q{question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                       <p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>
                       {question.tags && question.tags.length > 0 && <p className="mt-2 text-xs text-slate-400">Tags: {question.tags.join(", ")}</p>}
+                      {question.options && question.options.length > 0 && (
+                        <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                          {question.options.map((option) => (
+                            <li key={option.id}>• {option.option_text}{option.is_correct ? " (Correct answer)" : ""}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {question.expected_answer && <p className="mt-3 text-sm text-slate-400">Expected answer: {question.expected_answer}</p>}
+                      {question.model_answer_text && <p className="mt-2 text-sm text-slate-400">Model answer: {question.model_answer_text}</p>}
+                      {question.question_image_available && <p className="mt-2 text-xs text-cyan-300">Question prompt image attached</p>}
                     </div>
                     <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove from Bank</button>
                   </div>
