@@ -487,7 +487,7 @@ export default function ExaminerGradingPage() {
             </Link>
 
             <p className="mt-1 text-sm text-slate-400">
-              Examiner / Answer Grading
+              {staffRole === "admin" ? "Admin / Answer Grading" : "Examiner / Answer Grading"}
             </p>
           </div>
 
@@ -506,8 +506,8 @@ export default function ExaminerGradingPage() {
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Review subjective answers and approve their final marks.
-          AI suggestions are optional and must be reviewed by an examiner.
+          Review answers from examinations you created and approve the final marks.
+          AI suggestions for written and image answers are optional and must be checked before saving.
         </p>
 
         {error && (
@@ -795,7 +795,8 @@ export default function ExaminerGradingPage() {
               </div>
 
               {selectedAnswer.question_type === "short_answer" ||
-              selectedAnswer.question_type === "long_answer" ? (
+              selectedAnswer.question_type === "long_answer" ||
+              selectedAnswer.question_type === "image_upload" ? (
                 <div>
                   <button
                     type="button"
@@ -817,7 +818,7 @@ export default function ExaminerGradingPage() {
                 </div>
               ) : (
                 <p className="text-sm text-slate-400">
-                  Handwritten image answers are reviewed manually by an examiner.
+                  AI suggestions are not available for this answer type. Review it and enter the marks yourself.
                 </p>
               )}
 
