@@ -172,6 +172,7 @@ def list_questions(
             "marks": question.marks,
             "negative_marks": question.negative_marks,
             "question_image_available": bool(question.question_image_path),
+            "created_by": question.created_by,
             "tags": question.tags or [],
             "options": options_by_question.get(
                 question.id,
