@@ -40,14 +40,15 @@ def create_student(
 
 
 def create_exam(db, title="Security Test Exam"):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     exam = Exam(
         title=title,
         subject="General Knowledge",
         duration_minutes=30,
         total_questions=1,
         randomize_questions=False,
-        start_time=None,
-        end_time=None,
+        start_time=now - timedelta(minutes=1),
+        end_time=now + timedelta(hours=2),
         created_by=None,
     )
 
@@ -65,6 +66,20 @@ def create_active_session(
     selected_question_ids=None,
 ):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    if student.role == "student":
+        assignment = db.query(ExamAssignment).filter(
+            ExamAssignment.exam_id == exam.id,
+            ExamAssignment.student_id == student.id,
+        ).first()
+        if assignment is None:
+            db.add(ExamAssignment(
+                exam_id=exam.id,
+                student_id=student.id,
+                assigned_by=student.id,
+                is_active=True,
+            ))
+            db.commit()
 
     session = ExamSession(
         exam_id=exam.id,
