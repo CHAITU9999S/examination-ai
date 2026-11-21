@@ -168,6 +168,10 @@ def list_exams(
         creator.id: creator.full_name
         for creator in creators
     }
+    creator_roles = {
+        creator.id: creator.role
+        for creator in creators
+    }
 
     def utc_timestamp(value):
         if value is None:
@@ -195,6 +199,7 @@ def list_exams(
             "max_tab_switch_warnings": exam.max_tab_switch_warnings,
             "created_by": exam.created_by,
             "created_by_name": creator_names.get(exam.created_by, "Unknown"),
+            "created_by_role": creator_roles.get(exam.created_by),
         }
         for exam in exams
     ]
