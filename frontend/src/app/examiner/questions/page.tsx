@@ -26,6 +26,7 @@ interface QuestionOption {
 
 interface Question {
   id: number;
+  created_by: number;
   question_text: string;
   question_type: QuestionType;
   subject?: string | null;
@@ -42,6 +43,7 @@ export default function ExaminerQuestionsPage() {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState<number | null>(null);
@@ -87,20 +89,22 @@ export default function ExaminerQuestionsPage() {
 
       if (!headers) return;
 
-      const response = await fetch(`${API_URL}/questions`, {
-        method: "GET",
-        headers,
-      });
+      const [profileResponse, response] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { method: "GET", headers }),
+        fetch(`${API_URL}/questions`, { method: "GET", headers }),
+      ]);
 
-      if (response.status === 401 || response.status === 403) {
+      if ([profileResponse, response].some((item) => item.status === 401 || item.status === 403)) {
         router.replace("/login");
         return;
       }
 
-      if (!response.ok) {
-        throw new Error("Unable to load questions.");
+      if (!profileResponse.ok || !response.ok) {
+        throw new Error("Unable to load your account and questions.");
       }
 
+      const profile = await profileResponse.json();
+      setCurrentUserId(Number(profile.id));
       const data = await response.json();
 
       const questionList = Array.isArray(data)
@@ -709,14 +713,16 @@ export default function ExaminerQuestionsPage() {
                       <span className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
                         {question.difficulty || "Unspecified"}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => void deleteQuestion(question.id)}
-                        disabled={deletingQuestionId !== null}
-                        className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
-                      >
-                        {deletingQuestionId === question.id ? "Deleting..." : "Delete Question"}
-                      </button>
+                      {question.created_by === currentUserId && (
+                        <button
+                          type="button"
+                          onClick={() => void deleteQuestion(question.id)}
+                          disabled={deletingQuestionId !== null}
+                          className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                        >
+                          {deletingQuestionId === question.id ? "Deleting..." : "Delete Question"}
+                        </button>
+                      )}
                     </div>
                   </div>
 
