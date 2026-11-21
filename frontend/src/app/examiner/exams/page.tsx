@@ -749,7 +749,7 @@ export default function ExaminerExamsPage() {
                           >
                             Manage Bank & Students
                           </Link>
-                          {(staffRole === "examiner" || Number(exam.created_by) === currentUserId) && (
+                          {(staffRole === "admin" || staffRole === "examiner" || Number(exam.created_by) === currentUserId) && (
                             <button
                               type="button"
                               onClick={() => deleteExam(exam)}
