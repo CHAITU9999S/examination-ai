@@ -169,7 +169,7 @@ The first Admin account can be created through the protected backend bootstrap e
 
 ## Database Migration
 
-The examination workflow changes are recorded in the Alembic migration history. The Neon database was read-only checked and reported migration version `0020_repair_exam_session_question_index`, which includes the repair for the `exam_sessions.current_question_index` column.
+The examination workflow changes are recorded in the Alembic migration history. The Neon database was read-only checked and reported migration version `0021_exam_question_marks_revisions`, which includes the repair for the `exam_sessions.current_question_index` column.
 
 This is the last database state that was directly verified. Check the live database's Alembic version before applying any further migration. Do not rerun migrations or change the database just to update this documentation.
 
