@@ -18,6 +18,7 @@ interface Exam {
   end_time?: string | null;
   negative_marking?: boolean;
   proctoring_enabled?: boolean;
+  created_by_name?: string | null;
 }
 
 function formatDate(value?: string | null) {
@@ -347,6 +348,11 @@ export default function StudentExamsPage() {
                   </div>
 
                   <div className="mt-6 space-y-3 text-sm text-slate-300">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Created by</span>
+                      <span className="text-right">{exam.created_by_name || "Not available"}</span>
+                    </div>
+
                     <div className="flex justify-between gap-4">
                       <span className="text-slate-400">Duration</span>
                       <span>{exam.duration_minutes} minutes</span>
