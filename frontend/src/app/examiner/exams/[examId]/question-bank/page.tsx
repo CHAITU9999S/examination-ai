@@ -481,11 +481,11 @@ export default function ExamQuestionBankPage() {
   }
 
   async function removeAssignment(studentId: number) {
-    if (!window.confirm("Remove this student's examination assignment?")) return;
+    if (!window.confirm("Revoke this student's access to the examination? They will no longer be able to open or continue it. Their existing exam records will be kept.")) return;
     setWorking(true); setError(""); setMessage("");
     try {
       await request(`/exams/${examId}/assignments/${studentId}`, { method: "DELETE" });
-      setMessage("Student assignment removed.");
+      setMessage("Student access to this examination has been revoked.");
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to remove assignment.");
@@ -803,7 +803,7 @@ export default function ExamQuestionBankPage() {
               {assignedStudents.map((student) => (
                 <div key={student.student_id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-800/50 p-3 text-sm">
                   <span>{student.full_name}<span className="ml-2 text-xs text-slate-400">{student.email}</span></span>
-                  <button onClick={() => removeAssignment(student.student_id)} disabled={working} className="text-xs text-red-300 hover:underline disabled:opacity-40">Remove assignment</button>
+                  <button onClick={() => removeAssignment(student.student_id)} disabled={working} className="text-xs text-red-300 hover:underline disabled:opacity-40">Revoke Access</button>
                 </div>
               ))}
             </div>
