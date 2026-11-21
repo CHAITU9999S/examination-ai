@@ -20,6 +20,12 @@ interface BankData {
   total_assigned: number;
   questions: Question[];
 }
+interface MarksRevision {
+  revision_number: number;
+  marks_snapshot: Record<string, number>;
+  changed_by: number;
+  created_at: string;
+}
 
 export default function AdminQuestionBankViewPage() {
   const params = useParams<{ examId: string }>();
@@ -27,6 +33,8 @@ export default function AdminQuestionBankViewPage() {
   const examId = String(params.examId || "");
   const [bank, setBank] = useState<BankData | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [marksRevisions, setMarksRevisions] = useState<MarksRevision[]>([]);
+  const [marksRevisionsUsed, setMarksRevisionsUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -37,21 +45,25 @@ export default function AdminQuestionBankViewPage() {
     if (!token) { router.replace("/login"); return; }
     const headers = { Authorization: `Bearer ${token}` };
     try {
-      const [profileResponse, bankResponse] = await Promise.all([
+      const [profileResponse, bankResponse, marksResponse] = await Promise.all([
         fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams/${examId}/questions`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams/${examId}/question-marks`, { headers, cache: "no-store" }),
       ]);
-      if (profileResponse.status === 401 || bankResponse.status === 401) {
+      if ([profileResponse, bankResponse, marksResponse].some((response) => response.status === 401)) {
         router.replace("/login");
         return;
       }
       const profile = await profileResponse.json().catch(() => ({}));
       const data = await bankResponse.json().catch(() => ({}));
-      if (!profileResponse.ok || !bankResponse.ok) {
+      const marksData = await marksResponse.json().catch(() => ({}));
+      if (!profileResponse.ok || !bankResponse.ok || !marksResponse.ok) {
         throw new Error(data.detail || "Unable to load examination question bank.");
       }
       setIsOwner(Number(profile.id) === Number(data.created_by));
       setBank(data);
+      setMarksRevisions(Array.isArray(marksData.revisions) ? marksData.revisions : []);
+      setMarksRevisionsUsed(Number(marksData.revisions_used || 0));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load question bank.");
     } finally {
@@ -101,6 +113,25 @@ export default function AdminQuestionBankViewPage() {
             )}
           </section>
         )}
+        <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Question Paper Marks History</h2>
+            <span className="text-xs text-slate-400">{marksRevisionsUsed}/3 revisions used</span>
+          </div>
+          {marksRevisions.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No question paper marks revisions have been made.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {marksRevisions.map((revision) => (
+                <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
+                  <p className="font-semibold">Revision {revision.revision_number}</p>
+                  <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST · Staff account #{revision.changed_by}</p>
+                  <p className="mt-2 text-slate-400">{Object.entries(revision.marks_snapshot).map(([key, value]) => `${key.replace("|", " · ")}: ${value} marks`).join(" | ")}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
