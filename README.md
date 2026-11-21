@@ -96,7 +96,7 @@ The platform provides separate access and functionality for Students, Examiners,
 - Server-side event validation and suspicion-score calculation.
 - WebSocket heartbeat and server-side session-expiry checks.
 
-Face and gaze inference runs locally in the candidate's browser. Camera frames are not uploaded by the detector. Gaze estimation is a coarse attention indicator and can be affected by lighting, glasses, camera placement, and device differences; it is not proof of misconduct or a replacement for examiner review. The MediaPipe WASM runtime and model are loaded from public CDNs, so the browser needs network access as well as camera permission over HTTPS.
+Face and gaze inference runs locally in the candidate's browser. Camera frames are not uploaded by the detector. Gaze estimation is a coarse attention indicator and can be affected by lighting, glasses, camera placement, and device differences; it is not proof of misconduct or a replacement for examiner review. The face-detection model is loaded by the browser when an exam starts, so the browser needs network access as well as camera permission over HTTPS.
 
 ---
 
@@ -124,7 +124,7 @@ Face and gaze inference runs locally in the candidate's browser. Camera frames a
 
 ### AI and Image Processing
 - Optional OpenAI-compatible AI provider API (server-side only)
-- MediaPipe Tasks Vision (browser-side face landmarks)
+- TensorFlow.js with MediaPipe FaceMesh (browser-side face landmarks)
 - Pillow
 - Tesseract OCR
 
@@ -248,8 +248,11 @@ The existing database includes:
 - options
 - exams
 - exam_questions
+- exam_assignments
+- exam_configuration_revisions
 - exam_sessions
 - answers
+- answer_mark_revisions
 - results
 - proctor_events
 - admin_activity_logs
@@ -298,12 +301,12 @@ The current implementation is limited to Milestones 1 and 2 and the agreed UI an
 
 - AI-assisted grading is disabled by default. When enabled, it uses the mentor-provided API credential configured as a backend-only secret. Examiners must review and approve marks; AI suggestions do not directly finalize grades.
 - The supplied Dockerfile installs the Tesseract executable and English language pack. Non-Docker deployments must install Tesseract separately and set TESSERACT_CMD.
-- The supplied docker-compose.yml mounts a named Docker volume at the configured answer upload directory. Cloud deployments must configure an equivalent persistent disk/volume; container-local ephemeral storage is not durable.
+- The current answer-image upload route stores the original image and its thumbnail in Neon PostgreSQL. It does not use the Docker upload volume.
 - The student exam flow now uses the backend's exam-start, paper, remaining-time, answer-save, image-upload, and submit routes. Students can list available exams; exam paper responses include the IDs and metadata expected by the frontend.
 
 ### Backend Container Deployment
 
-The repository includes a backend Dockerfile and Docker Compose configuration. The image installs Tesseract OCR and stores uploaded answer images in the named `examguard_uploads` volume.
+The repository includes a backend Dockerfile and Docker Compose configuration. The image installs Tesseract OCR. The current answer-image upload route stores image data in PostgreSQL instead of the Docker volume.
 
 1. Copy `.env.example` to `.env`.
 2. Set a valid PostgreSQL `DATABASE_URL` and a strong `JWT_SECRET_KEY` in `.env`.

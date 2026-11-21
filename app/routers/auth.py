@@ -131,8 +131,10 @@ def register_student(
     Admin and Examiner accounts must be created by an Admin.
     """
 
+    normalized_email = str(student_data.email).strip().lower()
+
     existing_user = db.query(User).filter(
-        User.email == student_data.email
+        func.lower(User.email) == normalized_email
     ).first()
 
     if existing_user:
@@ -143,7 +145,7 @@ def register_student(
 
     new_student = User(
         full_name=student_data.full_name,
-        email=student_data.email,
+        email=normalized_email,
         password_hash=hash_password(student_data.password),
         role=UserRole.STUDENT.value,
         is_active=True

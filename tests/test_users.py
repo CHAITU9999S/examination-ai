@@ -98,6 +98,18 @@ def test_duplicate_email_registration(client, student):
     assert response.status_code == 409
 
 
+def test_registration_rejects_email_with_different_letter_case(client, student):
+    response = client.post(
+        "/auth/register",
+        json={
+            "full_name": "Another Student",
+            "email": student.email.upper(),
+            "password": "AnotherPass123!",
+        },
+    )
+
+    assert response.status_code == 409
+
 def test_password_change(client, student):
     """A student can change their password using the current password."""
 

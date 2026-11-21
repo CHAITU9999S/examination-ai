@@ -173,6 +173,42 @@ def exam_headers(token):
     }
 
 
+def test_cannot_clear_answer_after_question_timer_expires(
+    client,
+    db_session,
+    answer_test_data,
+):
+    data = answer_test_data
+    assignment = db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == data["exam"].id,
+        ExamQuestion.question_id == data["mcq"].id,
+    ).first()
+    assignment.question_time_limit_seconds = 1
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    saved_answer = Answer(
+        session_id=data["session"].id,
+        question_id=data["mcq"].id,
+        answer_text="1",
+        question_started_at=now - timedelta(seconds=5),
+        question_elapsed_seconds=1,
+        is_locked=True,
+    )
+    db_session.add(saved_answer)
+    db_session.commit()
+
+    response = client.delete(
+        f"/answers/{data['session'].id}/{data['mcq'].id}",
+        headers=exam_headers(data["token"]),
+    )
+
+    assert response.status_code == 409
+    still_saved = db_session.query(Answer).filter(
+        Answer.session_id == data["session"].id,
+        Answer.question_id == data["mcq"].id,
+    ).first()
+    assert still_saved is not None
+
 def test_submit_valid_mcq_answer(
     client,
     db_session,

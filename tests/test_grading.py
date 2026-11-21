@@ -125,6 +125,108 @@ def test_examiner_can_manually_grade_subjective_answer(
     assert saved_result.percentage == pytest.approx(80.0)
 
 
+def test_admin_cannot_grade_an_exam_created_by_an_examiner(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    admin = User(
+        full_name="Test Admin",
+        email="grading-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(admin),
+        json={"awarded_marks": 4.0},
+    )
+
+    assert response.status_code == 403
+    db_session.refresh(data["answer"])
+    assert data["answer"].awarded_marks is None
+
+
+def test_admin_can_view_an_examiner_exam_without_changing_marks(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    admin = User(
+        full_name="Read Only Admin",
+        email="grading-readonly-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+
+    response = client.get(
+        f"/grading/exams/{data['exam'].id}/pending",
+        headers=auth_headers(admin),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["exam_id"] == data["exam"].id
+
+
+def test_previously_graded_answers_can_be_loaded(
+    client,
+    grading_data,
+):
+    data = grading_data
+    grade_response = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={"awarded_marks": 4.0},
+    )
+    assert grade_response.status_code == 200
+
+    response = client.get(
+        "/grading/graded",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total_graded"] == 1
+    assert response.json()["answers"][0]["answer_id"] == data["answer"].id
+
+
+def test_invalid_ai_approval_rubric_does_not_save_marks(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    response = client.post(
+        f"/grading/answers/{data['answer'].id}/approve-ai",
+        headers=auth_headers(data["examiner"]),
+        json={
+            "awarded_marks": 4.0,
+            "rubric_scores": [
+                {
+                    "criterion": "Correctness",
+                    "max_marks": 2.0,
+                    "awarded_marks": 2.0,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    db_session.rollback()
+    saved_answer = db_session.query(Answer).filter(
+        Answer.id == data["answer"].id,
+    ).first()
+    assert saved_answer.awarded_marks is None
+
 def test_ai_grading_is_disabled_without_explicit_opt_in(
     client,
     grading_data,

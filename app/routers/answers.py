@@ -490,10 +490,22 @@ def delete_saved_answer(
             detail="This question does not belong to your examination paper.",
         )
 
+    timer_state = get_or_start_question_timer(
+        session,
+        question_id,
+        db,
+    )
+
     answer = db.query(Answer).filter(
         Answer.session_id == session_id,
         Answer.question_id == question_id,
     ).first()
+
+    if timer_state["is_locked"] or (answer is not None and answer.is_locked):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This question is locked because its time has ended.",
+        )
 
     if answer is not None:
         try:

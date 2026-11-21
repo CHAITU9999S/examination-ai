@@ -54,16 +54,22 @@ export default function ImageUpload({
     setError("");
 
     if (!acceptedTypes.includes(file.type)) {
+      setSelectedFile(null);
+      onFileSelect(null);
       setError("Unsupported image format. Please select a supported image.");
       return;
     }
 
     if (file.size === 0) {
+      setSelectedFile(null);
+      onFileSelect(null);
       setError("The selected file is empty.");
       return;
     }
 
     if (file.size > maxSizeMB * 1024 * 1024) {
+      setSelectedFile(null);
+      onFileSelect(null);
       setError(`Image size must not exceed ${maxSizeMB} MB.`);
       return;
     }

@@ -138,9 +138,9 @@ export default function ExaminerResultsPage() {
             <Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="text-2xl font-bold">
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
-            <p className="mt-1 text-sm text-slate-400">Examiner / Result Publication</p>
+            <p className="mt-1 text-sm text-slate-400">{staffRole === "admin" ? "Admin / Result Publication" : "Examiner / Result Publication"}</p>
           </div>
-          <Link href="/examiner/dashboard" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
+          <Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
             ← Dashboard
           </Link>
         </div>

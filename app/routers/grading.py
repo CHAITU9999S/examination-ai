@@ -82,12 +82,12 @@ def require_examiner_or_admin(user: User):
         )
 
 
-def get_authorized_exam(
+def get_visible_exam(
     exam_id: int,
     current_user: User,
     db: Session,
 ):
-    """Retrieve an exam the current examiner is allowed to manage."""
+    """Find an exam that this staff member is allowed to view."""
 
     exam = db.query(Exam).filter(
         Exam.id == exam_id,
@@ -104,7 +104,25 @@ def get_authorized_exam(
     if role == "examiner" and exam.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only grade answers for your own examinations.",
+            detail="You can only view your own examinations.",
+        )
+
+    return exam
+
+
+def get_authorized_exam(
+    exam_id: int,
+    current_user: User,
+    db: Session,
+):
+    """Find an exam this staff member is allowed to change."""
+
+    exam = get_visible_exam(exam_id, current_user, db)
+
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only change marks for examinations you created.",
         )
 
     return exam
@@ -195,6 +213,7 @@ def _get_submitted_answer_context(
     answer_id: int,
     current_user: User,
     db: Session,
+    allow_read_only_admin: bool = False,
 ):
     """Load and authorize an answer from a submitted examination."""
 
@@ -218,11 +237,10 @@ def _get_submitted_answer_context(
             detail="Exam session not found.",
         )
 
-    exam = get_authorized_exam(
-        session.exam_id,
-        current_user,
-        db,
-    )
+    if allow_read_only_admin:
+        exam = get_visible_exam(session.exam_id, current_user, db)
+    else:
+        exam = get_authorized_exam(session.exam_id, current_user, db)
 
     if session.status not in {"submitted", "auto_submitted"}:
         raise HTTPException(
@@ -279,9 +297,7 @@ def get_all_pending_subjective_answers(
         Answer.awarded_marks.is_(None),
     )
 
-    role = getattr(current_user.role, "value", current_user.role)
-    if role == "examiner":
-        query = query.filter(Exam.created_by == current_user.id)
+    query = query.filter(Exam.created_by == current_user.id)
 
     rows = query.order_by(
         ExamSession.submitted_at.asc(),
@@ -349,7 +365,7 @@ def get_pending_subjective_answers(
 
     require_examiner_or_admin(current_user)
 
-    exam = get_authorized_exam(
+    exam = get_visible_exam(
         exam_id,
         current_user,
         db,
@@ -429,6 +445,7 @@ def get_subjective_answer_image(
         answer_id,
         current_user,
         db,
+        allow_read_only_admin=True,
     )
 
     if not answer.image_path:
@@ -769,9 +786,7 @@ def list_submitted_sessions_for_review(
         ExamSession.status.in_(("submitted", "auto_submitted")),
     )
 
-    role = getattr(current_user.role, "value", current_user.role)
-    if role == "examiner":
-        query = query.filter(Exam.created_by == current_user.id)
+    query = query.filter(Exam.created_by == current_user.id)
 
     rows = query.order_by(
         ExamSession.submitted_at.desc(),
@@ -1136,6 +1151,7 @@ def get_answer_mark_revisions(
         answer_id,
         current_user,
         db,
+        allow_read_only_admin=True,
     )
     revisions = db.query(AnswerMarkRevision).filter(
         AnswerMarkRevision.answer_id == answer_id
@@ -1188,9 +1204,7 @@ def get_previously_graded_subjective_answers(
         QuestionBank.question_type.in_(["short_answer", "long_answer", "image_upload"]),
         Answer.awarded_marks.isnot(None),
     )
-    role = getattr(current_user.role, "value", current_user.role)
-    if role == "examiner":
-        query = query.filter(Exam.created_by == current_user.id)
+    query = query.filter(Exam.created_by == current_user.id)
 
     rows = query.order_by(
         ExamSession.submitted_at.desc(),
@@ -1227,6 +1241,6 @@ def get_previously_graded_subjective_answers(
                 "rubric_scores": answer.rubric_scores or [],
                 "submitted_at": session.submitted_at,
             }
-            for answer, session, question, exam, student in rows
+            for answer, session, question, exam, student, result in rows
         ],
     }

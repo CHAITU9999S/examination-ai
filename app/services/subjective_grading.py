@@ -116,7 +116,7 @@ def _require_examiner_access(
             detail="Your account is inactive.",
         )
 
-    if role == "examiner" and exam.created_by != current_user.id:
+    if exam.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only grade answers for examinations you created.",
@@ -535,34 +535,24 @@ def approve_subjective_marks(
             detail=f"Awarded marks must be between 0 and {maximum_marks}.",
         )
 
-    try:
-        locked_answer = db.query(Answer).filter(
-            Answer.id == answer_id,
-        ).with_for_update().first()
+    locked_answer = db.query(Answer).filter(
+        Answer.id == answer_id,
+    ).with_for_update().first()
 
-        if locked_answer is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Answer not found.",
-            )
-
-        locked_answer.awarded_marks = float(awarded_marks)
-
-        db.commit()
-        db.refresh(locked_answer)
-
-        return {
-            "message": "Subjective answer graded successfully.",
-            "answer_id": locked_answer.id,
-            "awarded_marks": locked_answer.awarded_marks,
-            "maximum_marks": maximum_marks,
-            "graded_by": current_user.id,
-        }
-
-    except SQLAlchemyError:
-        db.rollback()
-
+    if locked_answer is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error while saving the awarded marks.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Answer not found.",
         )
+
+    locked_answer.awarded_marks = float(awarded_marks)
+
+    # The grading route saves marks, feedback and rubric scores together.
+    # Do not commit here because the route still has checks to complete.
+    return {
+        "message": "Subjective answer graded successfully.",
+        "answer_id": locked_answer.id,
+        "awarded_marks": locked_answer.awarded_marks,
+        "maximum_marks": maximum_marks,
+        "graded_by": current_user.id,
+    }

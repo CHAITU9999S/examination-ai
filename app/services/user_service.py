@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.auth import get_password_hash, verify_password
+from app.auth import hash_password, verify_password
 from app.models import User
 
 
@@ -274,7 +274,7 @@ def change_user_password(
             detail="New password must be different from the current password.",
         )
 
-    user.password_hash = get_password_hash(new_password)
+    user.password_hash = hash_password(new_password)
 
     try:
         db.commit()
