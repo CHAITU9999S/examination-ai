@@ -163,15 +163,15 @@ Face and gaze inference runs locally in the candidate's browser. Camera frames a
 
 Public registration is restricted to Students.
 
-The first Admin account must be created through a secure backend bootstrap process.
+The first Admin account can be created through the protected backend bootstrap endpoint. Further Admin accounts can be created either by an existing Admin in the Admin dashboard or through the same backend endpoint using its configured secret.
 
 ---
 
 ## Database Migration
 
-The examination workflow additions are included in Alembic migration `0019_exam_workflow_features`. It adds exam assignments, question source tracking, per-question timers, saved session progress, pause state, configuration revision history, and human mark revision history.
+The examination workflow changes are recorded in the Alembic migration history. The Neon database was read-only checked and reported migration version `0020_repair_exam_session_question_index`, which includes the repair for the `exam_sessions.current_question_index` column.
 
-The migration file is committed as source code only. It has **not** been executed against Neon. Apply database migrations through the backend deployment workflow only after reviewing the migration and taking the required database backup:
+This is the last database state that was directly verified. Check the live database's Alembic version before applying any further migration. Do not rerun migrations or change the database just to update this documentation.
 
 ```bash
 alembic upgrade head
@@ -296,11 +296,10 @@ The current implementation is limited to Milestones 1 and 2 and the agreed UI an
 
 ## Milestone 2 Runtime Requirements and Known Integration Work
 
-- AI-assisted grading is disabled by default. It requires an explicitly enabled setting and a valid server-side OpenAI API key. The examiner must review and approve marks; AI suggestions do not directly finalize grades.
+- AI-assisted grading is disabled by default. When enabled, it uses the mentor-provided API credential configured as a backend-only secret. Examiners must review and approve marks; AI suggestions do not directly finalize grades.
 - The supplied Dockerfile installs the Tesseract executable and English language pack. Non-Docker deployments must install Tesseract separately and set TESSERACT_CMD.
 - The supplied docker-compose.yml mounts a named Docker volume at the configured answer upload directory. Cloud deployments must configure an equivalent persistent disk/volume; container-local ephemeral storage is not durable.
 - The student exam flow now uses the backend's exam-start, paper, remaining-time, answer-save, image-upload, and submit routes. Students can list available exams; exam paper responses include the IDs and metadata expected by the frontend.
-- AI grading remains disabled by default. It requires an administrator-configured server-side API key and explicit enablement; the examiner must review and approve marks.
 
 ### Backend Container Deployment
 
