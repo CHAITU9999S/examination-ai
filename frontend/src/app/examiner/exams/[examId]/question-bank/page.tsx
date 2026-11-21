@@ -640,6 +640,15 @@ export default function ExamQuestionBankPage() {
                 ? `${new Date(istDateTimeToIso(examConfig.start_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST to ${new Date(istDateTimeToIso(examConfig.end_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST`
                 : "Not scheduled"}
             </p>
+            {examConfig.start_time && examConfig.end_time &&
+              new Date(istDateTimeToIso(examConfig.end_time)).getTime() <= Date.now() && (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                  This examination schedule has expired. If no student examination session has been created, you can set a new future opening and closing time below. Save the new schedule before assigning students.
+                </div>
+              )}
+            <p className="mt-2 text-xs text-slate-400">
+              To reopen an expired examination, choose a future opening time and closing time, then save the schedule. Your existing questions and examination details will be kept.
+            </p>
             <form onSubmit={saveExamSchedule} className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="text-sm text-slate-300">Opening time (IST)
                 <input required type="datetime-local" value={examConfig.start_time} onChange={(e) => setExamConfig((v) => v ? { ...v, start_time: e.target.value } : v)} className={fieldClass + " mt-2"} />
@@ -850,7 +859,7 @@ export default function ExamQuestionBankPage() {
 
         <section className={cardClass}>
           <h2 className="text-xl font-semibold">Assign Students</h2>
-          <p className="mt-1 text-sm text-slate-400">Only assigned students can see and start this examination.</p>
+          <p className="mt-1 text-sm text-slate-400">Only assigned students can see and start this examination. If its schedule has expired, update and save a future schedule above before assigning students.</p>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
             {students.map((student) => (
               <label key={student.id} className="flex items-center gap-3 rounded-lg bg-slate-800/60 p-3 text-sm">
