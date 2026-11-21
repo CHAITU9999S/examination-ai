@@ -152,10 +152,11 @@ export default function AdminUsersPage() {
   }
 
   async function deleteUser(user: User) {
+    const userRole = String(user.role || "").trim().toLowerCase();
     const confirmed = window.confirm(
-      user.role === "student"
+      userRole === "student"
         ? `Permanently delete Student ${user.full_name} (${user.email}) and all of their examination assignments, sessions, answers, marks, results, and proctoring records? This cannot be undone.`
-        : user.role === "examiner"
+        : userRole === "examiner"
           ? `Permanently delete Examiner ${user.full_name} (${user.email}) and their examinations, sessions, answers, marks, results, proctoring events, question banks, and related records? Questions still used by other examinations will be kept. This cannot be undone.`
           : `Delete the account belonging to ${user.full_name} (${user.email})?`
     );
@@ -172,7 +173,7 @@ export default function AdminUsersPage() {
       if (!headers) return;
 
       const response = await fetch(
-        user.role === "examiner"
+        userRole === "examiner"
           ? `${API_URL}/admin/examiners/${user.id}/with-records`
           : `${API_URL}/admin/users/${user.id}`,
         {
@@ -370,7 +371,7 @@ export default function AdminUsersPage() {
                             disabled={actionId === user.id}
                             className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                           >
-                            {user.role === "examiner"
+                            {String(user.role || "").trim().toLowerCase() === "examiner"
                               ? "Delete with records"
                               : "Delete"}
                           </button>
