@@ -1191,14 +1191,12 @@ def remove_exam_assignment(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin")),
 ):
-    """Deactivate a student assignment before any session is created."""
+    """Revoke one student's access without deleting exam or attempt history."""
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can manage assignments.")
-    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
-        raise HTTPException(status_code=409, detail="Assignments cannot change after an exam session is created.")
     assignment = db.query(ExamAssignment).filter(
         ExamAssignment.exam_id == exam_id,
         ExamAssignment.student_id == student_id,
@@ -1207,12 +1205,12 @@ def remove_exam_assignment(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Active student assignment not found.")
     assignment.is_active = False
-    _audit_exam_action(db, current_user.id, "exam_student_assignment_removed", {
+    _audit_exam_action(db, current_user.id, "exam_student_access_revoked", {
         "exam_id": exam_id,
         "student_id": student_id,
     })
     db.commit()
-    return {"message": "Student assignment removed.", "exam_id": exam_id, "student_id": student_id}
+    return {"message": "Student access to this examination has been revoked.", "exam_id": exam_id, "student_id": student_id}
 
 
 @router.get("/{exam_id}/validate-configuration")
