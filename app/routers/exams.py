@@ -583,6 +583,7 @@ def list_exam_questions(
                 "subject": question.subject,
                 "difficulty": question.difficulty,
                 "marks": question.marks,
+                "tags": question.tags or [],
                 "question_time_limit_seconds": assignment.question_time_limit_seconds,
                 "source_question_id": question.source_question_id,
                 "expected_answer": question.expected_answer,
