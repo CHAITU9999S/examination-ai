@@ -6,7 +6,7 @@ This checklist is for the post-merge, deployed application. Automated GitHub Act
 
 - [ ] Confirm the latest Render backend deployment succeeded.
 - [ ] Confirm the frontend deployment succeeded and uses the correct HTTPS backend URL.
-- [ ] Confirm the PostgreSQL migration head is `0016_answer_rubric_scores`.
+- [ ] Confirm the PostgreSQL migration head is `0020_repair_exam_session_question_index`.
 - [ ] Confirm the Render CORS allowed-origin list contains the deployed frontend origin.
 - [ ] Keep `AI_GRADING_ENABLED=false` unless an authorized API key has been configured by the project owner.
 - [ ] Do not share Admin passwords, bootstrap tokens, or API keys in chat.
