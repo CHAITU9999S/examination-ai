@@ -27,6 +27,8 @@ interface Exam {
   negative_marking?: boolean;
   proctoring_enabled?: boolean;
   created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
 }
 
 const INDIA_TIME_ZONE = "Asia/Kolkata";
@@ -134,11 +136,7 @@ export default function ExaminerExamsPage() {
         throw new Error("Unexpected examination data returned by the server.");
       }
 
-      setExams(
-        profile.role === "admin"
-          ? examList.filter((exam: Exam) => exam.created_by === Number(profile.id))
-          : examList
-      );
+      setExams(examList);
     } catch (err) {
       setError(
         err instanceof Error
@@ -632,7 +630,7 @@ export default function ExaminerExamsPage() {
         <section className="mt-10 rounded-2xl border border-white/10 bg-slate-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold">My Examinations</h2>
+              <h2 className="text-xl font-bold">{staffRole === "admin" ? "All Examinations" : "My Examinations"}</h2>
 
               <p className="mt-1 text-sm text-slate-400">
                 {exams.length} examination(s)
@@ -655,7 +653,7 @@ export default function ExaminerExamsPage() {
             </p>
           ) : exams.length === 0 ? (
             <p className="py-10 text-center text-slate-400">
-              You have not created any examinations yet.
+              {staffRole === "admin" ? "No examinations have been created yet." : "You have not created any examinations yet."}
             </p>
           ) : (
             <div className="mt-6 overflow-x-auto">
@@ -664,6 +662,7 @@ export default function ExaminerExamsPage() {
                   <tr className="border-b border-white/10 text-slate-400">
                     <th className="px-4 py-3">Title</th>
                     <th className="px-4 py-3">Subject</th>
+                    {staffRole === "admin" && <th className="px-4 py-3">Created By</th>}
                     <th className="px-4 py-3">Duration</th>
                     <th className="px-4 py-3">Questions</th>
                     <th className="px-4 py-3">Start Time</th>
@@ -685,6 +684,13 @@ export default function ExaminerExamsPage() {
                       <td className="px-4 py-4 text-slate-300">
                         {exam.subject || "—"}
                       </td>
+
+                      {staffRole === "admin" && (
+                        <td className="px-4 py-4 text-slate-300">
+                          <span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span>
+                          <span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span>
+                        </td>
+                      )}
 
                       <td className="px-4 py-4 text-slate-300">
                         {exam.duration_minutes} minutes
