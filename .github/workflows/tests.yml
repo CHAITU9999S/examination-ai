@@ -1,5 +1,5 @@
 
-name: ExamGuard AI Tests
+name: Run Tests
 
 on:
   push:
