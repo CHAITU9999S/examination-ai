@@ -1109,3 +1109,37 @@ def list_all_exam_schedules(
             for assignment, exam, student, creator in rows
         ],
     }
+
+@router.delete(
+    "/users/{user_id}/with-records",
+    response_model=MessageResponse,
+)
+def delete_user_with_records(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete a Student, Examiner, or Admin with the records for that role."""
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found.",
+        )
+
+    if target_user.role == UserRole.STUDENT.value:
+        return delete_user(user_id, current_admin, db)
+
+    if target_user.role == UserRole.EXAMINER.value:
+        return delete_examiner_with_records(user_id, current_admin, db)
+
+    if target_user.role == UserRole.ADMIN.value:
+        return delete_admin_with_records(user_id, current_admin, db)
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This account type cannot be deleted.",
+    )
+
