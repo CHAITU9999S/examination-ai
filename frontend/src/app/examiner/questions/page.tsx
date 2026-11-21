@@ -181,7 +181,7 @@ export default function ExaminerQuestionsPage() {
       !Number.isFinite(parsedNegativeMarks) ||
       parsedNegativeMarks < 0
     ) {
-      setError("Negative marks cannot be negative.");
+      setError("Negative marks must be zero or greater.");
       return;
     }
 
