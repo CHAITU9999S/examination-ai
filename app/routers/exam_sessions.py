@@ -190,6 +190,17 @@ def validate_exam_token(
             detail="Exam session not found.",
         )
 
+    assignment = db.query(ExamAssignment.id).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your access to this examination has been revoked.",
+        )
+
     return payload, session
 
 
@@ -424,6 +435,17 @@ def refresh_exam_access_token(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Student account is invalid or inactive.",
+        )
+
+    assignment = db.query(ExamAssignment.id).filter(
+        ExamAssignment.exam_id == session.exam_id,
+        ExamAssignment.student_id == session.student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your access to this examination has been revoked.",
         )
 
     now = get_current_utc_time()
