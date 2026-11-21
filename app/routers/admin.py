@@ -635,6 +635,268 @@ def delete_examiner_with_records(
     )
 
 
+@router.delete(
+    "/admins/{user_id}/with-records",
+    response_model=MessageResponse
+)
+def delete_admin_with_records(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete another Admin and the records that belong to their work."""
+
+    admin_to_delete = db.query(User).filter(
+        User.id == user_id,
+        User.role == UserRole.ADMIN.value,
+    ).first()
+
+    if admin_to_delete is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin account not found.",
+        )
+
+    if admin_to_delete.id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account.",
+        )
+
+    active_admin_count = db.query(User).filter(
+        User.role == UserRole.ADMIN.value,
+        User.is_active.is_(True),
+    ).count()
+
+    if admin_to_delete.is_active and active_admin_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The last active Admin account cannot be deleted.",
+        )
+
+    exam_ids = [
+        row[0] for row in db.query(Exam.id).filter(
+            Exam.created_by == admin_to_delete.id
+        ).all()
+    ]
+
+    # Keep another person's examination history if this Admin reviewed it.
+    outside_exam_filter = or_(
+        Exam.created_by != admin_to_delete.id,
+        Exam.created_by.is_(None),
+    )
+    outside_config_changes = db.query(ExamConfigurationRevision.id).join(
+        Exam, Exam.id == ExamConfigurationRevision.exam_id
+    ).filter(
+        ExamConfigurationRevision.changed_by == admin_to_delete.id,
+        outside_exam_filter,
+    ).count()
+    outside_marks_changes = db.query(ExamQuestionMarksRevision.id).join(
+        Exam, Exam.id == ExamQuestionMarksRevision.exam_id
+    ).filter(
+        ExamQuestionMarksRevision.changed_by == admin_to_delete.id,
+        outside_exam_filter,
+    ).count()
+    outside_answer_revisions = db.query(AnswerMarkRevision.id).join(
+        Answer, Answer.id == AnswerMarkRevision.answer_id
+    ).join(
+        ExamSession, ExamSession.id == Answer.session_id
+    ).join(
+        Exam, Exam.id == ExamSession.exam_id
+    ).filter(
+        AnswerMarkRevision.revised_by == admin_to_delete.id,
+        outside_exam_filter,
+    ).count()
+
+    if outside_config_changes or outside_marks_changes or outside_answer_revisions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This Admin has review or change history in another person's "
+                "examination. That history will be kept. Please resolve those "
+                "records before deleting this account."
+            ),
+        )
+
+    try:
+        session_conditions = [
+            ExamSession.student_id == admin_to_delete.id
+        ]
+        if exam_ids:
+            session_conditions.append(ExamSession.exam_id.in_(exam_ids))
+
+        session_ids = [
+            row[0] for row in db.query(ExamSession.id).filter(
+                or_(*session_conditions)
+            ).all()
+        ]
+
+        answer_ids = [
+            row[0] for row in db.query(Answer.id).filter(
+                Answer.session_id.in_(session_ids)
+            ).all()
+        ] if session_ids else []
+
+        owned_question_ids = [
+            row[0] for row in db.query(QuestionBank.id).filter(
+                QuestionBank.created_by == admin_to_delete.id
+            ).all()
+        ]
+        collection_ids = [
+            row[0] for row in db.query(QuestionCollection.id).filter(
+                QuestionCollection.created_by == admin_to_delete.id
+            ).all()
+        ]
+
+        # Remove records that depend on this Admin's examinations.
+        if answer_ids:
+            db.query(AnswerMarkRevision).filter(
+                AnswerMarkRevision.answer_id.in_(answer_ids)
+            ).delete(synchronize_session=False)
+
+        if session_ids:
+            db.query(Result).filter(
+                Result.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ProctorEvent).filter(
+                ProctorEvent.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(Answer).filter(
+                Answer.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamSession).filter(
+                ExamSession.id.in_(session_ids)
+            ).delete(synchronize_session=False)
+
+        if exam_ids:
+            db.query(ExamAssignment).filter(
+                ExamAssignment.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamConfigurationRevision).filter(
+                ExamConfigurationRevision.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamQuestionMarksRevision).filter(
+                ExamQuestionMarksRevision.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamQuestion).filter(
+                ExamQuestion.exam_id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+
+        # Remove assignments made by this Admin and assignments where
+        # this Admin was added as a student.
+        db.query(ExamAssignment).filter(
+            or_(
+                ExamAssignment.assigned_by == admin_to_delete.id,
+                ExamAssignment.student_id == admin_to_delete.id,
+            )
+        ).delete(synchronize_session=False)
+
+        # Remove this Admin's named question banks, but keep questions
+        # that are still used by another exam, bank, or answer.
+        if collection_ids:
+            db.query(QuestionCollectionItem).filter(
+                QuestionCollectionItem.collection_id.in_(collection_ids)
+            ).delete(synchronize_session=False)
+            db.query(QuestionCollection).filter(
+                QuestionCollection.id.in_(collection_ids)
+            ).delete(synchronize_session=False)
+
+        removable_question_ids = []
+        for question_id in owned_question_ids:
+            used_in_exam = db.query(ExamQuestion.id).filter(
+                ExamQuestion.question_id == question_id
+            ).first()
+            used_in_answer = db.query(Answer.id).filter(
+                Answer.question_id == question_id
+            ).first()
+            used_in_collection = db.query(QuestionCollectionItem.id).filter(
+                QuestionCollectionItem.question_id == question_id
+            ).first()
+            used_as_source = db.query(QuestionBank.id).filter(
+                QuestionBank.source_question_id == question_id
+            ).first()
+
+            if not any((
+                used_in_exam,
+                used_in_answer,
+                used_in_collection,
+                used_as_source,
+            )):
+                removable_question_ids.append(question_id)
+
+        if removable_question_ids:
+            db.query(Option).filter(
+                Option.question_id.in_(removable_question_ids)
+            ).delete(synchronize_session=False)
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(removable_question_ids)
+            ).delete(synchronize_session=False)
+
+        kept_question_ids = set(owned_question_ids) - set(removable_question_ids)
+        if kept_question_ids:
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(kept_question_ids)
+            ).update(
+                {QuestionBank.created_by: None},
+                synchronize_session=False,
+            )
+
+        # Remove audit rows linked to the deleted Admin. Keep the final
+        # deletion entry under the Admin who carried out this action.
+        db.query(AdminActivityLog).filter(
+            or_(
+                AdminActivityLog.actor_user_id == admin_to_delete.id,
+                AdminActivityLog.target_user_id == admin_to_delete.id,
+            )
+        ).delete(synchronize_session=False)
+
+        if exam_ids:
+            db.query(Exam).filter(
+                Exam.id.in_(exam_ids)
+            ).delete(synchronize_session=False)
+
+        deleted_details = {
+            "target_user_id": admin_to_delete.id,
+            "full_name": admin_to_delete.full_name,
+            "email": admin_to_delete.email,
+            "role": admin_to_delete.role,
+            "deleted_examinations": len(exam_ids),
+            "deleted_sessions": len(session_ids),
+            "deleted_answers": len(answer_ids),
+            "deleted_questions": len(removable_question_ids),
+        }
+
+        record_admin_activity(
+            db=db,
+            actor_user_id=current_admin.id,
+            target_user_id=None,
+            action="admin_and_records_deleted",
+            details=deleted_details,
+        )
+        db.delete(admin_to_delete)
+        db.commit()
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The Admin could not be deleted because another record still "
+                "depends on this account. No records were deleted."
+            ),
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+    return MessageResponse(
+        message=(
+            "The Admin account and its examination records were deleted. "
+            "Questions still used elsewhere were kept."
+        )
+    )
+
+
 @router.patch(
     "/users/{user_id}/status",
     response_model=UserResponse
