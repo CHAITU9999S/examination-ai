@@ -1459,6 +1459,55 @@ def update_exam_question_marks(
     }
 
 
+@router.patch("/{exam_id}/schedule")
+def update_exam_schedule(
+    exam_id: int,
+    data: ExamScheduleUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Allow the examination creator to set or change the schedule before a session starts."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).with_for_update().first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the examination creator can schedule this exam.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(
+            status_code=409,
+            detail="The examination schedule cannot change after a student session has been created.",
+        )
+
+    try:
+        validate_exam_config(
+            exam.duration_minutes,
+            data.start_time,
+            data.end_time,
+            exam.selection_rules,
+            exam.total_questions,
+            exam.gaze_tracking_sensitivity,
+            exam.max_tab_switch_warnings,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    exam.start_time = normalize_schedule_input_to_naive_utc(data.start_time)
+    exam.end_time = normalize_schedule_input_to_naive_utc(data.end_time)
+    _audit_exam_action(db, current_user.id, "examination_scheduled", {
+        "exam_id": exam.id,
+        "start_time": exam.start_time.isoformat(),
+        "end_time": exam.end_time.isoformat(),
+    })
+    db.commit()
+
+    return {
+        "message": "Examination schedule saved.",
+        "exam_id": exam.id,
+        "start_time": exam.start_time.replace(tzinfo=timezone.utc).isoformat(),
+        "end_time": exam.end_time.replace(tzinfo=timezone.utc).isoformat(),
+    }
+
+
 @router.get("/{exam_id}")
 def get_exam_details(
     exam_id: int,
