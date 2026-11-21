@@ -1582,10 +1582,14 @@ def delete_exam(
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
 
-    if exam.created_by != current_user.id:
+    # Examiners can delete their own exams. Admins can delete any exam.
+    if (
+        current_user.role != UserRole.ADMIN.value
+        and exam.created_by != current_user.id
+    ):
         raise HTTPException(
             status_code=403,
-            detail="Only the person who created this examination can delete it.",
+            detail="You can delete only examinations you created.",
         )
 
     session_ids = [
