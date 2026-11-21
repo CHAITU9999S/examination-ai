@@ -601,7 +601,7 @@ export default function ExaminerQuestionsPage() {
               />
 
               <p className="mt-2 text-xs text-slate-500">
-                Used as a reference for subjective answer evaluation.
+                Add a model answer if you want to use AI suggestions for written or image answers.
               </p>
             </div>
 
