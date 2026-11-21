@@ -160,6 +160,9 @@ def validate_exam_config(
     normalized_start = normalize_schedule_input_to_naive_utc(start_time)
     normalized_end = normalize_schedule_input_to_naive_utc(end_time)
 
+    if (normalized_start is None) != (normalized_end is None):
+        raise ValueError("Set both examination start and end times, or leave both empty.")
+
     if normalized_start and normalized_end:
         if normalized_end <= normalized_start:
             raise ValueError(
