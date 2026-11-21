@@ -19,6 +19,7 @@ interface Exam {
   negative_marking?: boolean;
   proctoring_enabled?: boolean;
   created_by_name?: string | null;
+  created_by_role?: string | null;
 }
 
 function formatDate(value?: string | null) {
@@ -350,7 +351,10 @@ export default function StudentExamsPage() {
                   <div className="mt-6 space-y-3 text-sm text-slate-300">
                     <div className="flex justify-between gap-4">
                       <span className="text-slate-400">Created by</span>
-                      <span className="text-right">{exam.created_by_name || "Not available"}</span>
+                      <span className="text-right">
+                        {exam.created_by_name || "Not available"}
+                        {exam.created_by_role ? ` (${exam.created_by_role === "admin" ? "Admin" : "Examiner"})` : ""}
+                      </span>
                     </div>
 
                     <div className="flex justify-between gap-4">
