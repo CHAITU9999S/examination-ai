@@ -153,7 +153,9 @@ export default function AdminUsersPage() {
 
   async function deleteUser(user: User) {
     const confirmed = window.confirm(
-      `Delete the account belonging to ${user.full_name} (${user.email})? This action may be blocked if existing records depend on this account.`
+      user.role === "student"
+        ? `Permanently delete Student ${user.full_name} (${user.email}) and all of their examination assignments, sessions, answers, marks, results, and proctoring records? This cannot be undone.`
+        : `Delete the account belonging to ${user.full_name} (${user.email})?`
     );
 
     if (!confirmed) return;
