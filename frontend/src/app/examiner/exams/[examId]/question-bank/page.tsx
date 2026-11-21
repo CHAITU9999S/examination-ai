@@ -44,6 +44,8 @@ interface Student {
 }
 interface AssignedStudent extends Student {
   student_id: number;
+  is_active: boolean;
+  session_status?: string | null;
 }
 interface ExamConfiguration {
   title: string;
@@ -386,8 +388,8 @@ export default function ExamQuestionBankPage() {
           selection_rules: selectionRules,
           duration_minutes: Number(examConfig.duration_minutes),
           total_questions: Number(examConfig.total_questions),
-          start_time: istDateTimeToIso(examConfig.start_time),
-          end_time: istDateTimeToIso(examConfig.end_time),
+          start_time: examConfig.start_time ? istDateTimeToIso(examConfig.start_time) : null,
+          end_time: examConfig.end_time ? istDateTimeToIso(examConfig.end_time) : null,
         }),
       });
       setMessage("Examination configuration updated and revision history saved.");
@@ -395,6 +397,45 @@ export default function ExamQuestionBankPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update examination configuration.");
     } finally { setWorking(false); }
+  }
+
+  async function saveExamSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!examConfig?.start_time || !examConfig.end_time) {
+      setError("Enter both the examination opening and closing times.");
+      return;
+    }
+
+    let startTime: string;
+    let endTime: string;
+    try {
+      startTime = istDateTimeToIso(examConfig.start_time);
+      endTime = istDateTimeToIso(examConfig.end_time);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enter valid examination times.");
+      return;
+    }
+
+    if (new Date(endTime) <= new Date(startTime)) {
+      setError("The examination closing time must be after its opening time.");
+      return;
+    }
+
+    setWorking(true);
+    setError("");
+    setMessage("");
+    try {
+      await request(`/exams/${examId}/schedule`, {
+        method: "PATCH",
+        body: JSON.stringify({ start_time: startTime, end_time: endTime }),
+      });
+      setMessage("Examination schedule saved.");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save the examination schedule.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function saveQuestionMarks(event: FormEvent<HTMLFormElement>) {
@@ -539,12 +580,7 @@ export default function ExamQuestionBankPage() {
                 <label className="text-sm text-slate-300">Total questions
                   <input required type="number" min="1" value={examConfig.total_questions} onChange={(e) => setExamConfig((v) => v ? { ...v, total_questions: Number(e.target.value) } : v)} className={fieldClass} />
                 </label>
-                <label className="text-sm text-slate-300">Opening time (IST)
-                  <input required type="datetime-local" value={examConfig.start_time} onChange={(e) => setExamConfig((v) => v ? { ...v, start_time: e.target.value } : v)} className={fieldClass} />
-                </label>
-                <label className="text-sm text-slate-300">Closing time (IST)
-                  <input required type="datetime-local" value={examConfig.end_time} onChange={(e) => setExamConfig((v) => v ? { ...v, end_time: e.target.value } : v)} className={fieldClass} />
-                </label>
+
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
                 <label className="flex items-center gap-3 text-sm text-slate-200">
@@ -590,6 +626,34 @@ export default function ExamQuestionBankPage() {
                 ))}
               </div>
             </div>
+          </section>
+        )}
+
+        {examConfig && (
+          <section className={cardClass}>
+            <h2 className="text-xl font-semibold">Examination Schedule</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              You can schedule this examination now or later. Students cannot start it until both times are saved.
+            </p>
+            <p className="mt-2 text-sm text-cyan-300">
+              Current schedule: {examConfig.start_time && examConfig.end_time
+                ? `${new Date(istDateTimeToIso(examConfig.start_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST to ${new Date(istDateTimeToIso(examConfig.end_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST`
+                : "Not scheduled"}
+            </p>
+            <form onSubmit={saveExamSchedule} className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm text-slate-300">Opening time (IST)
+                <input required type="datetime-local" value={examConfig.start_time} onChange={(e) => setExamConfig((v) => v ? { ...v, start_time: e.target.value } : v)} className={fieldClass + " mt-2"} />
+              </label>
+              <label className="text-sm text-slate-300">Closing time (IST)
+                <input required type="datetime-local" value={examConfig.end_time} onChange={(e) => setExamConfig((v) => v ? { ...v, end_time: e.target.value } : v)} className={fieldClass + " mt-2"} />
+              </label>
+              <div className="sm:col-span-2">
+                <button type="submit" disabled={working || !examConfig.can_edit} className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold hover:bg-cyan-500 disabled:opacity-40">
+                  Save Examination Schedule
+                </button>
+                {!examConfig.can_edit && <p className="mt-2 text-xs text-slate-500">Only the examination creator can change this schedule.</p>}
+              </div>
+            </form>
           </section>
         )}
 
@@ -798,14 +862,25 @@ export default function ExamQuestionBankPage() {
           {students.length === 0 && <p className="py-5 text-sm text-slate-400">No active Student accounts are available.</p>}
           <button onClick={assignSelectedStudents} disabled={working || selectedStudents.length === 0} className="mt-4 rounded-lg bg-cyan-600 px-5 py-2.5 font-semibold hover:bg-cyan-500 disabled:opacity-50">Assign Selected Students ({selectedStudents.length})</button>
           <div className="mt-6 border-t border-white/10 pt-5">
-            <h3 className="font-semibold">Currently Assigned ({assignedStudents.length})</h3>
+            <h3 className="font-semibold">Student Assignment History ({assignedStudents.length})</h3>
+            <p className="mt-1 text-xs text-slate-400">This list also shows students whose access was revoked, so examination history remains visible.</p>
             <div className="mt-3 space-y-2">
               {assignedStudents.map((student) => (
                 <div key={student.student_id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-800/50 p-3 text-sm">
-                  <span>{student.full_name}<span className="ml-2 text-xs text-slate-400">{student.email}</span></span>
-                  <button onClick={() => removeAssignment(student.student_id)} disabled={working} className="text-xs text-red-300 hover:underline disabled:opacity-40">Revoke Access</button>
+                  <span>
+                    {student.full_name}
+                    <span className="ml-2 text-xs text-slate-400">{student.email}</span>
+                    <span className={student.is_active ? "ml-2 text-xs text-emerald-300" : "ml-2 text-xs text-amber-300"}>
+                      {student.is_active ? "Access active" : "Access revoked"}
+                    </span>
+                    {student.session_status && <span className="ml-2 text-xs text-slate-400">Exam session: {student.session_status.replaceAll("_", " ")}</span>}
+                  </span>
+                  {student.is_active && (
+                    <button onClick={() => removeAssignment(student.student_id)} disabled={working} className="text-xs text-red-300 hover:underline disabled:opacity-40">Revoke Access</button>
+                  )}
                 </div>
               ))}
+              {assignedStudents.length === 0 && <p className="text-sm text-slate-400">No students have been assigned yet.</p>}
             </div>
           </div>
         </section>
