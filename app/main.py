@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import DATABASE_URL
 from app.routers import (
     auth,
     users,
@@ -53,6 +54,11 @@ async def lifespan(app: FastAPI):
             raise RuntimeError(
                 "Production requires a strong JWT_SECRET_KEY "
                 "of at least 32 characters."
+            )
+
+        if not DATABASE_URL.startswith("postgresql+psycopg://"):
+            raise RuntimeError(
+                "Production requires a PostgreSQL DATABASE_URL."
             )
 
     start_exam_scheduler()
