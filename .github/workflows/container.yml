@@ -1,4 +1,4 @@
-name: ExamGuard AI Container Build
+name: Build Check
 
 on:
   push:
