@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     AdminActivityLog, Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
-    ExamAssignment, ExamConfigurationRevision, ExamQuestionMarksRevision, User,
+    AnswerMarkRevision, Result, ProctorEvent, ExamAssignment, ExamConfigurationRevision, ExamQuestionMarksRevision, User,
 )
 from app.schemas import ExamCreate, ExamScheduleUpdate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
@@ -1562,6 +1562,94 @@ def update_exam_schedule(
         "exam_id": exam.id,
         "start_time": exam.start_time.replace(tzinfo=timezone.utc).isoformat(),
         "end_time": exam.end_time.replace(tzinfo=timezone.utc).isoformat(),
+    }
+
+
+
+
+# ==========================================
+# DELETE AN EXAMINATION AND ITS RECORDS
+# ==========================================
+
+@router.delete("/{exam_id}")
+def delete_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Delete an exam and its attempts while keeping shared question-bank questions."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the person who created this examination can delete it.",
+        )
+
+    session_ids = [
+        row[0] for row in db.query(ExamSession.id)
+        .filter(ExamSession.exam_id == exam_id).all()
+    ]
+    answer_ids = []
+    if session_ids:
+        answer_ids = [
+            row[0] for row in db.query(Answer.id)
+            .filter(Answer.session_id.in_(session_ids)).all()
+        ]
+
+    try:
+        if answer_ids:
+            db.query(AnswerMarkRevision).filter(
+                AnswerMarkRevision.answer_id.in_(answer_ids)
+            ).delete(synchronize_session=False)
+
+        if session_ids:
+            db.query(Result).filter(
+                Result.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ProctorEvent).filter(
+                ProctorEvent.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(Answer).filter(
+                Answer.session_id.in_(session_ids)
+            ).delete(synchronize_session=False)
+            db.query(ExamSession).filter(
+                ExamSession.id.in_(session_ids)
+            ).delete(synchronize_session=False)
+
+        db.query(ExamAssignment).filter(
+            ExamAssignment.exam_id == exam_id
+        ).delete(synchronize_session=False)
+        db.query(ExamConfigurationRevision).filter(
+            ExamConfigurationRevision.exam_id == exam_id
+        ).delete(synchronize_session=False)
+        db.query(ExamQuestionMarksRevision).filter(
+            ExamQuestionMarksRevision.exam_id == exam_id
+        ).delete(synchronize_session=False)
+        db.query(ExamQuestion).filter(
+            ExamQuestion.exam_id == exam_id
+        ).delete(synchronize_session=False)
+
+        _audit_exam_action(db, current_user.id, "examination_deleted", {
+            "exam_id": exam_id,
+            "title": exam.title,
+            "deleted_sessions": len(session_ids),
+            "deleted_answers": len(answer_ids),
+        })
+        db.delete(exam)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This examination could not be deleted because another record still depends on it.",
+        )
+
+    return {
+        "message": "The examination and its related records were deleted. Shared questions in the question bank were kept.",
+        "exam_id": exam_id,
     }
 
 
