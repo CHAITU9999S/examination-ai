@@ -303,7 +303,7 @@ export default function ExaminerExamsPage() {
       resetForm();
       await loadExams();
       if (data.exam_id) {
-        router.push(`/examiner/exams/${data.exam_id}/question-bank`);
+        router.push(`/examiner/exams/${data.exam_id}/select-question-bank`);
       }
     } catch (err) {
       setError(
@@ -350,6 +350,12 @@ export default function ExaminerExamsPage() {
         <p className="mt-2 text-slate-400">
           Create and configure your online examinations.
         </p>
+
+        <div className="mt-5">
+          <Link href="/examiner/question-banks" className="inline-flex rounded-lg border border-cyan-500/40 px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10">
+            Manage My Question Banks
+          </Link>
+        </div>
 
         {error && (
           <div
