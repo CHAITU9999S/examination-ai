@@ -668,3 +668,36 @@ def test_rubric_maximum_must_match_question_maximum(
 
     assert response.status_code == 400
     assert "maximum marks" in response.json()["detail"].lower()
+
+
+def test_answer_marks_allow_three_revisions_only(client, db_session, grading_data):
+    data = grading_data
+    initial_grade = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={"awarded_marks": 4.0},
+    )
+    assert initial_grade.status_code == 200
+
+    for new_marks in (3.0, 2.0, 1.0):
+        response = client.post(
+            f"/grading/answers/{data['answer'].id}/grade",
+            headers=auth_headers(data["examiner"]),
+            json={"awarded_marks": new_marks},
+        )
+        assert response.status_code == 200
+
+    fourth_revision = client.post(
+        f"/grading/answers/{data['answer'].id}/grade",
+        headers=auth_headers(data["examiner"]),
+        json={"awarded_marks": 0.5},
+    )
+    assert fourth_revision.status_code == 409
+
+    history = client.get(
+        f"/grading/answers/{data['answer'].id}/mark-revisions",
+        headers=auth_headers(data["examiner"]),
+    )
+    assert history.status_code == 200
+    assert history.json()["revisions_used"] == 3
+    assert [item["revision_number"] for item in history.json()["history"]] == [1, 2, 3]
