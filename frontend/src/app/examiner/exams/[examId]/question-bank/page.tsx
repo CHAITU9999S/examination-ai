@@ -707,7 +707,7 @@ export default function ExamQuestionBankPage() {
                       <p className="text-xs text-cyan-300">Q{question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                       <p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>
                     </div>
-                    <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove</button>
+                    <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove from Bank</button>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <label className="text-xs text-slate-400">Question timer (seconds; blank = no separate limit)
