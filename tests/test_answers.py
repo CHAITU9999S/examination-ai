@@ -718,3 +718,68 @@ def test_student_cannot_clear_unassigned_answer(
 
     assert response.status_code == 403
 
+
+
+def test_question_timer_starts_once_and_locks_answer_after_time(client, db_session, answer_test_data):
+    data = answer_test_data
+    assignment = db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == data["exam"].id,
+        ExamQuestion.question_id == data["mcq"].id,
+    ).one()
+    assignment.question_time_limit_seconds = 60
+    db_session.commit()
+
+    first_response = client.get(
+        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        headers=exam_headers(data["token"]),
+    )
+    assert first_response.status_code == 200
+    assert first_response.json()["question_time_limit_seconds"] == 60
+    assert first_response.json()["remaining_seconds"] <= 60
+
+    timer_answer = db_session.query(Answer).filter(
+        Answer.session_id == data["session"].id,
+        Answer.question_id == data["mcq"].id,
+    ).one()
+    original_start = timer_answer.question_started_at
+    second_response = client.get(
+        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        headers=exam_headers(data["token"]),
+    )
+    db_session.refresh(timer_answer)
+    assert second_response.status_code == 200
+    assert timer_answer.question_started_at == original_start
+
+    timer_answer.question_started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=70)
+    db_session.commit()
+    expired_response = client.get(
+        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        headers=exam_headers(data["token"]),
+    )
+    assert expired_response.status_code == 200
+    assert expired_response.json()["is_locked"] is True
+    assert expired_response.json()["remaining_seconds"] == 0
+
+    save_response = client.post(
+        f"/answers/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+        json={"question_id": data["mcq"].id, "answer_text": "1"},
+    )
+    assert save_response.status_code == 409
+
+
+def test_student_cannot_save_answer_while_exam_is_paused(client, answer_test_data):
+    data = answer_test_data
+    pause_response = client.post(
+        f"/exam-sessions/pause/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+    )
+    assert pause_response.status_code == 200
+
+    save_response = client.post(
+        f"/answers/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+        json={"question_id": data["mcq"].id, "answer_text": "1"},
+    )
+    assert save_response.status_code == 409
+    assert "paused" in save_response.json()["detail"].lower()
