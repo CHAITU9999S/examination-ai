@@ -8,6 +8,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    model_validator,
 )
 
 
@@ -235,6 +236,14 @@ class ExamCreate(BaseModel):
         default=3,
         ge=0
     )
+
+    @model_validator(mode="after")
+    def check_schedule_times(self):
+        if (self.start_time is None) != (self.end_time is None):
+            raise ValueError(
+                "Enter both examination schedule times, or leave both empty."
+            )
+        return self
 
 
 class ExamScheduleUpdate(BaseModel):
