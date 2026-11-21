@@ -12,7 +12,7 @@ from app.models import (
     AdminActivityLog, Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
     ExamAssignment, ExamConfigurationRevision, ExamQuestionMarksRevision, User,
 )
-from app.schemas import ExamCreate, QuestionCreate, UserRole
+from app.schemas import ExamCreate, ExamScheduleUpdate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
 from app.dependencies import require_role
 from app.services.session_service import generate_session_question_ids
@@ -937,8 +937,6 @@ def assign_exam_to_students(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can assign students.")
-    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
-        raise HTTPException(status_code=409, detail="Assignments cannot change after an exam session has been created.")
     if len(data.student_ids) != len(set(data.student_ids)):
         raise HTTPException(status_code=400, detail="Duplicate student IDs are not allowed.")
 
@@ -955,6 +953,18 @@ def assign_exam_to_students(
                 ExamAssignment.exam_id == exam_id,
                 ExamAssignment.student_id == student.id,
             ).first()
+
+            student_session = db.query(ExamSession.id).filter(
+                ExamSession.exam_id == exam_id,
+                ExamSession.student_id == student.id,
+            ).first()
+
+            if assignment is not None and not assignment.is_active and student_session is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{student.full_name} already has an examination session. Their revoked access cannot be restored.",
+                )
+
             if assignment is None:
                 db.add(ExamAssignment(
                     exam_id=exam_id,
@@ -992,12 +1002,27 @@ def list_exam_assignments(
         User, User.id == ExamAssignment.student_id
     ).filter(
         ExamAssignment.exam_id == exam_id,
-        ExamAssignment.is_active.is_(True),
     ).order_by(User.full_name.asc()).all()
+
+    sessions = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id
+    ).all()
+    session_status_by_student = {
+        session.student_id: session.status
+        for session in sessions
+    }
+
     return {
         "exam_id": exam_id,
         "students": [
-            {"student_id": user.id, "full_name": user.full_name, "email": user.email, "assigned_at": assignment.assigned_at}
+            {
+                "student_id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "assigned_at": assignment.assigned_at,
+                "is_active": assignment.is_active,
+                "session_status": session_status_by_student.get(user.id),
+            }
             for assignment, user in rows
         ],
     }
@@ -1095,8 +1120,8 @@ def update_exam_configuration(
         "total_questions": data.total_questions,
         "randomize_questions": data.randomize_questions,
         "selection_rules": data.selection_rules,
-        "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat(),
-        "end_time": normalize_schedule_input_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat(),
+        "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if data.start_time else None,
+        "end_time": normalize_schedule_input_to_naive_utc(data.end_time).replace(tzinfo=timezone.utc).isoformat() if data.end_time else None,
         "negative_marking": data.negative_marking,
         "proctoring_enabled": data.proctoring_enabled,
         "gaze_tracking_sensitivity": data.gaze_tracking_sensitivity,
