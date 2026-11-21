@@ -183,7 +183,7 @@ export default function AdminExamsPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              View examination schedules and platform examination records.
+              View schedules and question banks for all examinations. You can create and manage only examinations you own.
             </p>
           </div>
 
