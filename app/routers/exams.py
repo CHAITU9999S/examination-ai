@@ -1029,6 +1029,63 @@ def list_exam_assignments(
 
 
 # ==========================================
+# REMOVE A STUDENT FROM AN EXAMINATION
+# ==========================================
+
+@router.delete("/{exam_id}/assignments/{student_id}")
+def revoke_exam_assignment(
+    exam_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Stop a student's access while keeping their account and exam history."""
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the examination creator can remove student access.",
+        )
+
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+    ).first()
+
+    if assignment is None:
+        raise HTTPException(
+            status_code=404,
+            detail="This student is not assigned to the examination.",
+        )
+
+    if not assignment.is_active:
+        return {
+            "message": "This student's examination access has already been removed.",
+            "exam_id": exam_id,
+            "student_id": student_id,
+            "is_active": False,
+        }
+
+    assignment.is_active = False
+    _audit_exam_action(db, current_user.id, "exam_student_access_revoked", {
+        "exam_id": exam_id,
+        "student_id": student_id,
+    })
+    db.commit()
+
+    return {
+        "message": "Student access removed. Their account and examination history were kept.",
+        "exam_id": exam_id,
+        "student_id": student_id,
+        "is_active": False,
+    }
+
+
+# ==========================================
 # CONFIGURE A PER-QUESTION TIMER
 # ==========================================
 
