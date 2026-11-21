@@ -24,7 +24,7 @@ def test_initial_admin_is_created_with_hashed_password(db_session):
     )
 
 
-def test_initial_admin_creation_is_blocked_when_admin_exists(db_session):
+def test_initial_admin_creation_script_is_blocked_when_admin_exists(db_session):
     existing_admin = User(
         full_name="Existing Administrator",
         email="existing.admin@example.com",
@@ -75,11 +75,11 @@ def test_initial_admin_rejects_invalid_input(
     ).count() == 0
 
 
-def test_bootstrap_endpoint_is_disabled_without_setup_token(
+def test_bootstrap_endpoint_is_disabled_without_admin_bootstrap_secret(
     client,
     monkeypatch,
 ):
-    monkeypatch.delenv("INITIAL_ADMIN_SETUP_TOKEN", raising=False)
+    monkeypatch.delenv("ADMIN_BOOTSTRAP_SECRET", raising=False)
 
     response = client.post(
         "/auth/bootstrap-admin",
@@ -93,14 +93,11 @@ def test_bootstrap_endpoint_is_disabled_without_setup_token(
     assert response.status_code == 404
 
 
-def test_bootstrap_endpoint_rejects_invalid_setup_token(
+def test_bootstrap_endpoint_rejects_invalid_admin_bootstrap_secret(
     client,
     monkeypatch,
 ):
-    monkeypatch.setenv(
-        "INITIAL_ADMIN_SETUP_TOKEN",
-        "a" * 40,
-    )
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_SECRET", "a" * 40)
 
     response = client.post(
         "/auth/bootstrap-admin",
@@ -120,17 +117,12 @@ def test_bootstrap_endpoint_creates_admin_and_allows_login(
     db_session,
     monkeypatch,
 ):
-    monkeypatch.setenv(
-        "INITIAL_ADMIN_SETUP_TOKEN",
-        "temporary-setup-token-" + ("x" * 40),
-    )
+    setup_secret = "test-admin-bootstrap-secret-" + ("x" * 40)
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_SECRET", setup_secret)
 
     response = client.post(
         "/auth/bootstrap-admin",
-        headers={
-            "X-Admin-Bootstrap-Token":
-                "temporary-setup-token-" + ("x" * 40)
-        },
+        headers={"X-Admin-Bootstrap-Token": setup_secret},
         json={
             "full_name": "First Administrator",
             "email": "FIRST.ADMIN@example.com",
@@ -163,13 +155,13 @@ def test_bootstrap_endpoint_creates_admin_and_allows_login(
     assert login_response.json()["access_token"]
 
 
-def test_bootstrap_endpoint_refuses_second_admin(
+def test_bootstrap_endpoint_allows_additional_admin_accounts(
     client,
     db_session,
     monkeypatch,
 ):
-    setup_token = "temporary-setup-token-" + ("y" * 40)
-    monkeypatch.setenv("INITIAL_ADMIN_SETUP_TOKEN", setup_token)
+    setup_secret = "test-admin-bootstrap-secret-" + ("y" * 40)
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_SECRET", setup_secret)
 
     existing_admin = User(
         full_name="Existing Administrator",
@@ -183,7 +175,7 @@ def test_bootstrap_endpoint_refuses_second_admin(
 
     response = client.post(
         "/auth/bootstrap-admin",
-        headers={"X-Admin-Bootstrap-Token": setup_token},
+        headers={"X-Admin-Bootstrap-Token": setup_secret},
         json={
             "full_name": "Second Administrator",
             "email": "second.admin@example.com",
@@ -191,7 +183,8 @@ def test_bootstrap_endpoint_refuses_second_admin(
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 201
+    assert response.json()["role"] == "admin"
     assert db_session.query(User).filter(
         User.role == "admin"
-    ).count() == 1
+    ).count() == 2
