@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.question_bank_models import QuestionCollectionItem
 from app.models import (
     AdminActivityLog, Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
     AnswerMarkRevision, Result, ProctorEvent, ExamAssignment, ExamConfigurationRevision, ExamQuestionMarksRevision, User,
@@ -1632,15 +1633,52 @@ def delete_exam(
         db.query(ExamQuestionMarksRevision).filter(
             ExamQuestionMarksRevision.exam_id == exam_id
         ).delete(synchronize_session=False)
+        question_ids = [
+            row[0] for row in db.query(ExamQuestion.question_id).filter(
+                ExamQuestion.exam_id == exam_id
+            ).all()
+        ]
         db.query(ExamQuestion).filter(
             ExamQuestion.exam_id == exam_id
         ).delete(synchronize_session=False)
+        db.flush()
+
+        # Remove exam-owned questions only when no other exam, answer,
+        # reusable question, or named question bank still uses them.
+        removed_question_ids = []
+        for question_id in question_ids:
+            question = db.query(QuestionBank).filter(
+                QuestionBank.id == question_id
+            ).first()
+            if question is None or question.created_by != exam.created_by:
+                continue
+
+            still_used = (
+                db.query(ExamQuestion.id).filter(
+                    ExamQuestion.question_id == question_id
+                ).first()
+                or db.query(Answer.id).filter(
+                    Answer.question_id == question_id
+                ).first()
+                or db.query(QuestionBank.id).filter(
+                    QuestionBank.source_question_id == question_id
+                ).first()
+                or db.query(QuestionCollectionItem.id).filter(
+                    QuestionCollectionItem.question_id == question_id
+                ).first()
+            )
+            if still_used:
+                continue
+
+            db.delete(question)
+            removed_question_ids.append(question_id)
 
         _audit_exam_action(db, current_user.id, "examination_deleted", {
             "exam_id": exam_id,
             "title": exam.title,
             "deleted_sessions": len(session_ids),
             "deleted_answers": len(answer_ids),
+            "removed_unused_questions": removed_question_ids,
         })
         db.delete(exam)
         db.commit()
@@ -1652,7 +1690,7 @@ def delete_exam(
         )
 
     return {
-        "message": "The examination and its related records were deleted. Shared questions in the question bank were kept.",
+        "message": "The examination and its related records were deleted. Questions still used by another exam or question bank were kept.",
         "exam_id": exam_id,
     }
 
