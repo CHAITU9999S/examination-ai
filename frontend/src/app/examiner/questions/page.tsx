@@ -44,6 +44,7 @@ export default function ExaminerQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deletingQuestionId, setDeletingQuestionId] = useState<number | null>(null);
 
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] =
@@ -123,6 +124,43 @@ export default function ExaminerQuestionsPage() {
       setLoading(false);
     }
   }, [getHeaders, router]);
+
+  async function deleteQuestion(questionId: number) {
+    if (!window.confirm("Delete this question? Questions already used in an examination or student answer cannot be deleted.")) {
+      return;
+    }
+
+    setDeletingQuestionId(questionId);
+    setError("");
+    setMessage("");
+
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+
+      const response = await fetch(`${API_URL}/questions/${questionId}`, {
+        method: "DELETE",
+        headers,
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to delete this question.");
+      }
+
+      setMessage("Question deleted successfully.");
+      await loadQuestions();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete this question."
+      );
+    } finally {
+      setDeletingQuestionId(null);
+    }
+  }
 
   useEffect(() => {
     loadQuestions();
@@ -667,9 +705,19 @@ export default function ExaminerQuestionsPage() {
                       )}
                     </div>
 
-                    <span className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
-                      {question.difficulty || "Unspecified"}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
+                        {question.difficulty || "Unspecified"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void deleteQuestion(question.id)}
+                        disabled={deletingQuestionId !== null}
+                        className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        {deletingQuestionId === question.id ? "Deleting..." : "Delete Question"}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
