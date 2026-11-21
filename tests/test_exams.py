@@ -694,6 +694,8 @@ def test_question_marks_cannot_change_after_student_session(client, db_session):
         exam_id=exam.id,
         student_id=student.id,
         status="in_progress",
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).replace(tzinfo=None),
     ))
     db_session.commit()
 
@@ -834,7 +836,13 @@ def test_exam_question_bank_cannot_be_deleted_after_session(client, db_session):
     db_session.add(question)
     db_session.flush()
     db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
-    db_session.add(ExamSession(exam_id=exam.id, student_id=student.id, status="in_progress"))
+    db_session.add(ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="in_progress",
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).replace(tzinfo=None),
+    ))
     db_session.commit()
 
     response = client.delete(
