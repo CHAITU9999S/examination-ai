@@ -202,30 +202,32 @@ export default function ExaminerExamsPage() {
       return;
     }
 
-    if (!startTime || !endTime) {
-      setError("Select both examination start and end times.");
+    if (Boolean(startTime) !== Boolean(endTime)) {
+      setError("Enter both examination times, or leave both empty to schedule later.");
       return;
     }
 
-    let startIso: string;
-    let endIso: string;
-    try {
-      startIso = istDateTimeToIso(startTime);
-      endIso = istDateTimeToIso(endTime);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Enter valid IST schedule times.");
-      return;
-    }
-    const startDate = new Date(startIso);
-    const endDate = new Date(endIso);
+    let startIso: string | null = null;
+    let endIso: string | null = null;
+    if (startTime && endTime) {
+      try {
+        startIso = istDateTimeToIso(startTime);
+        endIso = istDateTimeToIso(endTime);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Enter valid IST schedule times.");
+        return;
+      }
+      const startDate = new Date(startIso);
+      const endDate = new Date(endIso);
 
-    if (
-      Number.isNaN(startDate.getTime()) ||
-      Number.isNaN(endDate.getTime()) ||
-      endDate <= startDate
-    ) {
-      setError("The examination end time must be after its start time.");
-      return;
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime()) ||
+        endDate <= startDate
+      ) {
+        setError("The examination end time must be after its start time.");
+        return;
+      }
     }
 
     if (
@@ -440,7 +442,7 @@ export default function ExaminerExamsPage() {
 
               <div>
                 <label htmlFor="startTime" className="mb-2 block text-sm font-medium">
-                  Examination start (IST)
+                  Examination start (IST, optional)
                 </label>
 
                 <input
@@ -455,7 +457,7 @@ export default function ExaminerExamsPage() {
 
               <div>
                 <label htmlFor="endTime" className="mb-2 block text-sm font-medium">
-                  Examination end (IST)
+                  Examination end (IST, optional)
                 </label>
 
                 <input
@@ -468,6 +470,7 @@ export default function ExaminerExamsPage() {
                 />
               </div>
             </div>
+            <p className="text-xs text-slate-400">You can leave both schedule times empty and schedule this examination later from its management page. Students cannot start an examination until it has been scheduled.</p>
 
             <div className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
               <h3 className="font-semibold">Examination Settings</h3>
