@@ -69,6 +69,7 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -99,6 +100,7 @@ export default function AdminExamsPage() {
       });
       if (profileResponse.ok) {
         const profile = await profileResponse.json();
+        setCurrentUserId(Number(profile.id));
       }
 
       const response = await fetch(`${API_URL}/exams`, {
@@ -303,12 +305,21 @@ export default function AdminExamsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <Link
-                          href={`/admin/exams/${exam.id}/question-bank`}
-                          className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
-                        >
-                          View Questions
-                        </Link>
+                        {Number(exam.created_by) === currentUserId ? (
+                          <Link
+                            href={`/examiner/exams/${exam.id}/question-bank`}
+                            className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
+                          >
+                            Manage Questions & Students
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/admin/exams/${exam.id}/question-bank`}
+                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
+                          >
+                            View Questions
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}
