@@ -448,7 +448,6 @@ export default function ExaminerExamsPage() {
                 <input
                   id="startTime"
                   type="datetime-local"
-                  required
                   value={startTime}
                   onChange={(event) => setStartTime(event.target.value)}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:border-blue-500"
@@ -463,7 +462,6 @@ export default function ExaminerExamsPage() {
                 <input
                   id="endTime"
                   type="datetime-local"
-                  required
                   value={endTime}
                   onChange={(event) => setEndTime(event.target.value)}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:border-blue-500"
