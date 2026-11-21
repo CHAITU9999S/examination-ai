@@ -13,6 +13,7 @@ interface Question {
   question_type: string;
   difficulty: string;
   marks: number;
+  tags?: string[];
   question_time_limit_seconds?: number | null;
 }
 interface BankData {
@@ -106,6 +107,7 @@ export default function AdminQuestionBankViewPage() {
                   <article key={question.question_id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
                     <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                     <p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>
+                    {question.tags && question.tags.length > 0 && <p className="mt-2 text-xs text-slate-400">Tags: {question.tags.join(", ")}</p>}
                     <p className="mt-2 text-xs text-slate-400">Question timer: {question.question_time_limit_seconds ? `${question.question_time_limit_seconds} seconds` : "Not configured"}</p>
                   </article>
                 ))}
