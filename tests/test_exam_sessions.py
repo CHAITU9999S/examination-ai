@@ -605,3 +605,93 @@ def test_exam_refresh_rejects_inactive_student(
     )
     assert refresh_response.status_code == 403
 
+
+
+def test_student_cannot_start_exam_before_opening_time(client, db_session):
+    student = create_student(db_session, email="early-start@test.com")
+    exam = create_exam(db_session, title="Not Open Yet")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam.start_time = now + timedelta(hours=1)
+    exam.end_time = now + timedelta(hours=2)
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
+
+    response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {create_access_token(str(student.id))}"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Exam has not started yet."
+
+
+def test_student_cannot_start_exam_after_closing_time(client, db_session):
+    student = create_student(db_session, email="late-start@test.com")
+    exam = create_exam(db_session, title="Already Closed")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam.start_time = now - timedelta(hours=2)
+    exam.end_time = now - timedelta(hours=1)
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=student.id,
+        is_active=True,
+    ))
+    db_session.commit()
+
+    response = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {create_access_token(str(student.id))}"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Exam schedule has ended."
+
+
+def test_student_can_pause_and_resume_exam_session(client, db_session):
+    student = create_student(db_session, email="pause-resume@test.com")
+    exam = create_exam(db_session, title="Pause and Resume")
+    session = create_active_session(db_session, exam, student)
+    token = create_exam_token(exam, student, session)
+    original_expiry = session.expires_at
+
+    pause_response = client.post(
+        f"/exam-sessions/pause/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert pause_response.status_code == 200
+    assert pause_response.json()["is_paused"] is True
+    db_session.refresh(session)
+    assert session.is_paused is True
+    assert session.expires_at == original_expiry
+
+    resume_response = client.post(
+        f"/exam-sessions/resume/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resume_response.status_code == 200
+    assert resume_response.json()["is_paused"] is False
+    db_session.refresh(session)
+    assert session.is_paused is False
+    assert session.expires_at == original_expiry
+
+
+def test_expired_exam_session_is_submitted_automatically(client, db_session):
+    student = create_student(db_session, email="auto-submit@test.com")
+    exam = create_exam(db_session, title="Auto Submit")
+    session = create_active_session(db_session, exam, student)
+    token = create_exam_token(exam, student, session)
+    session.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+    db_session.commit()
+
+    response = client.post(
+        f"/exam-sessions/submit/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    db_session.refresh(session)
+    assert session.status == "submitted"
+    assert session.submitted_at is not None
