@@ -104,9 +104,10 @@ export default function HomePage() {
             </li>
             <li>
               <span className="font-semibold text-gray-800">Admin accounts:</span>{" "}
-              The first Admin account is created through the secure bootstrap
-              setup. After that, an existing Admin can create additional Admin
-              accounts.
+              The first Admin account is created through the protected backend
+              bootstrap endpoint. Additional Admin accounts can be created by
+              an existing Admin in the dashboard or through that endpoint
+              using its configured secret.
             </li>
             <li>
               <span className="font-semibold text-gray-800">Account deactivation:</span>{" "}
@@ -123,8 +124,10 @@ export default function HomePage() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-gray-600">
             Students, Examiners and Admins use the login page. New student
-            accounts can be created using the registration page. Examiner and
-            additional Admin accounts are created by an existing Admin.
+            accounts can be created using the registration page. Admins create
+            Examiner accounts in the dashboard. Additional Admin accounts can
+            also be created through the protected backend bootstrap endpoint
+            with its configured secret.
           </p>
           <Link
             href="/login"
