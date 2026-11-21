@@ -1306,6 +1306,10 @@ def get_exam_question_marks(
     revisions = db.query(ExamQuestionMarksRevision).filter(
         ExamQuestionMarksRevision.exam_id == exam_id
     ).order_by(ExamQuestionMarksRevision.revision_number.asc()).all()
+    has_sessions = db.query(ExamSession.id).filter(
+        ExamSession.exam_id == exam_id
+    ).first() is not None
+    is_owner = exam.created_by == current_user.id
 
     return {
         "exam_id": exam_id,
@@ -1313,7 +1317,8 @@ def get_exam_question_marks(
         "group_counts": group_counts,
         "revisions_used": len(revisions),
         "revisions_remaining": max(0, 3 - len(revisions)),
-        "can_edit": exam.created_by == current_user.id,
+        "can_edit": is_owner and not has_sessions,
+        "has_sessions": has_sessions,
         "revisions": [
             {
                 "revision_number": row.revision_number,
