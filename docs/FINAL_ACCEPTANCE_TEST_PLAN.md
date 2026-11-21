@@ -30,6 +30,8 @@ This checklist is for the post-merge, deployed application. Automated GitHub Act
 1. As an Examiner, create objective and subjective questions in the question bank.
 2. Create an examination and assign the questions.
 3. Confirm the configured duration, start/end window, marks, negative marking, and proctoring settings.
+4. Change maximum marks for each question type/difficulty group; confirm the separate three-revision limit, history, and lock after the first student session.
+5. Confirm question-paper mark revisions do not use up the general exam-configuration or student answer-mark revision limits.
 4. As a Student, open the available examination and read the instructions.
 5. Start the examination and confirm a unique session is created.
 6. Record the displayed start time and verify the countdown is based on server time.
