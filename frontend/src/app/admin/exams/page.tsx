@@ -212,7 +212,7 @@ export default function AdminExamsPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              View schedules and question banks for all examinations. You can create and manage only examinations you own.
+              View all examinations. You can manage your own question banks and delete any examination.
             </p>
           </div>
 
@@ -340,21 +340,12 @@ export default function AdminExamsPage() {
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {Number(exam.created_by) === currentUserId ? (
-                            <>
-                              <Link
-                                href={`/examiner/exams/${exam.id}/question-bank`}
-                                className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
-                              >
-                                Manage Questions & Students
-                              </Link>
-                              <button
-                                type="button"
-                                onClick={() => deleteExam(exam)}
-                                className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
-                              >
-                                Delete
-                              </button>
-                            </>
+                            <Link
+                              href={`/examiner/exams/${exam.id}/question-bank`}
+                              className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
+                            >
+                              Manage Questions & Students
+                            </Link>
                           ) : (
                             <Link
                               href={`/admin/exams/${exam.id}/question-bank`}
@@ -363,6 +354,13 @@ export default function AdminExamsPage() {
                               View Questions
                             </Link>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => deleteExam(exam)}
+                            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
