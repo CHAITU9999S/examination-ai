@@ -730,7 +730,7 @@ def test_question_timer_starts_once_and_locks_answer_after_time(client, db_sessi
     db_session.commit()
 
     first_response = client.get(
-        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        f"/exam-sessions/{data['session'].id}/question-timer/{data['mcq'].id}",
         headers=exam_headers(data["token"]),
     )
     assert first_response.status_code == 200
@@ -743,7 +743,7 @@ def test_question_timer_starts_once_and_locks_answer_after_time(client, db_sessi
     ).one()
     original_start = timer_answer.question_started_at
     second_response = client.get(
-        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        f"/exam-sessions/{data['session'].id}/question-timer/{data['mcq'].id}",
         headers=exam_headers(data["token"]),
     )
     db_session.refresh(timer_answer)
@@ -753,7 +753,7 @@ def test_question_timer_starts_once_and_locks_answer_after_time(client, db_sessi
     timer_answer.question_started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=70)
     db_session.commit()
     expired_response = client.get(
-        f"/answers/{data['session'].id}/question-timer/{data['mcq'].id}",
+        f"/exam-sessions/{data['session'].id}/question-timer/{data['mcq'].id}",
         headers=exam_headers(data["token"]),
     )
     assert expired_response.status_code == 200
