@@ -40,11 +40,16 @@ def _utc_iso(value):
 
 def _performance_grade(percentage):
     value = float(percentage or 0)
-    if value >= 90: return "A+"
-    if value >= 80: return "A"
-    if value >= 70: return "B"
-    if value >= 60: return "C"
-    if value >= 50: return "D"
+    if value >= 90:
+        return "A+"
+    if value >= 80:
+        return "A"
+    if value >= 70:
+        return "B"
+    if value >= 60:
+        return "C"
+    if value >= 50:
+        return "D"
     return "F"
 
 
