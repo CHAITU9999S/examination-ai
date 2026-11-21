@@ -69,6 +69,7 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const getHeaders = useCallback(() => {
@@ -145,6 +146,32 @@ export default function AdminExamsPage() {
     loadExams();
   }, [loadExams]);
 
+  async function deleteExam(exam: Exam) {
+    const confirmed = window.confirm(
+      `Permanently delete "${exam.title}" and all its assignments, student sessions, answers, marks, results, and proctoring records? Shared question-bank questions will be kept. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setError("");
+    setMessage("");
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to delete this examination.");
+      }
+      setMessage(`"${exam.title}" and its related records were deleted.`);
+      await loadExams();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete this examination.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -199,6 +226,12 @@ export default function AdminExamsPage() {
           </button>
         </div>
 
+        {message && (
+          <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300">
+            {message}
+          </div>
+        )}
+
         {error && (
           <div
             role="alert"
@@ -248,7 +281,7 @@ export default function AdminExamsPage() {
                     <th className="px-4 py-3">End Time</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Settings</th>
-                    <th className="px-4 py-3">Question Bank</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
 
@@ -305,21 +338,32 @@ export default function AdminExamsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        {Number(exam.created_by) === currentUserId ? (
-                          <Link
-                            href={`/examiner/exams/${exam.id}/question-bank`}
-                            className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
-                          >
-                            Manage Questions & Students
-                          </Link>
-                        ) : (
-                          <Link
-                            href={`/admin/exams/${exam.id}/question-bank`}
-                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
-                          >
-                            View Questions
-                          </Link>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {Number(exam.created_by) === currentUserId ? (
+                            <>
+                              <Link
+                                href={`/examiner/exams/${exam.id}/question-bank`}
+                                className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
+                              >
+                                Manage Questions & Students
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => deleteExam(exam)}
+                                className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          ) : (
+                            <Link
+                              href={`/admin/exams/${exam.id}/question-bank`}
+                              className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
+                            >
+                              View Questions
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
