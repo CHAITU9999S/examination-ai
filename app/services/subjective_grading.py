@@ -206,7 +206,7 @@ def generate_ai_grading_suggestion(
     if question_type not in SUPPORTED_QUESTION_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="AI grading is currently supported only for short and long answers.",
+            detail="AI grading is supported for short answers, long answers, and image answers.",
         )
 
     if question_type == "image_upload":
