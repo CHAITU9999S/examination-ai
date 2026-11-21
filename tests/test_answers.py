@@ -783,3 +783,17 @@ def test_student_cannot_save_answer_while_exam_is_paused(client, answer_test_dat
     )
     assert save_response.status_code == 409
     assert "paused" in save_response.json()["detail"].lower()
+
+
+def test_student_can_submit_exam_before_time_runs_out(client, db_session, answer_test_data):
+    data = answer_test_data
+
+    response = client.post(
+        f"/exam-sessions/submit/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(data["session"])
+    assert data["session"].status == "submitted"
+    assert data["session"].submitted_at is not None
