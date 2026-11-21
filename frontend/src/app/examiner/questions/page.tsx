@@ -37,6 +37,7 @@ interface Question {
   expected_answer?: string | null;
   options?: QuestionOption[];
   question_image_available?: boolean;
+  tags?: string[];
 }
 
 export default function ExaminerQuestionsPage() {
@@ -56,7 +57,9 @@ export default function ExaminerQuestionsPage() {
     useState<Difficulty>("medium");
   const [marks, setMarks] = useState("1");
   const [negativeMarks, setNegativeMarks] = useState("0");
+  const [expectedAnswer, setExpectedAnswer] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
+  const [tags, setTags] = useState("");
   const [questionImageFile, setQuestionImageFile] = useState<File | null>(null);
 
   const [options, setOptions] = useState(["", "", "", ""]);
@@ -193,7 +196,9 @@ export default function ExaminerQuestionsPage() {
     setDifficulty("medium");
     setMarks("1");
     setNegativeMarks("0");
+    setExpectedAnswer("");
     setModelAnswer("");
+    setTags("");
     setQuestionImageFile(null);
     setOptions(["", "", "", ""]);
     setCorrectOption("0");
@@ -280,7 +285,9 @@ export default function ExaminerQuestionsPage() {
         difficulty,
         marks: parsedMarks,
         negative_marks: parsedNegativeMarks,
+        expected_answer: expectedAnswer.trim() || null,
         model_answer_text: modelAnswer.trim() || null,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       };
 
       if (objective) {
@@ -623,29 +630,40 @@ export default function ExaminerQuestionsPage() {
               </div>
             )}
 
-            <div>
-              <label
-                htmlFor="modelAnswer"
-                className="mb-2 block text-sm font-medium"
-              >
-                Model answer / Expected answer
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Expected answer
+                <textarea
+                  rows={4}
+                  value={expectedAnswer}
+                  onChange={(event) => setExpectedAnswer(event.target.value)}
+                  placeholder="Enter the expected answer..."
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+                />
               </label>
-
-              <textarea
-                id="modelAnswer"
-                rows={4}
-                value={modelAnswer}
-                onChange={(event) =>
-                  setModelAnswer(event.target.value)
-                }
-                placeholder="Enter the expected answer or reference answer..."
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
-              />
-
-              <p className="mt-2 text-xs text-slate-500">
-                Add a model answer if you want to use AI suggestions for written or image answers.
-              </p>
+              <label className="block text-sm font-medium">
+                Model answer
+                <textarea
+                  rows={4}
+                  value={modelAnswer}
+                  onChange={(event) => setModelAnswer(event.target.value)}
+                  placeholder="Enter the reference answer for AI suggestions..."
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+                />
+              </label>
             </div>
+            <label className="block text-sm font-medium">
+              Tags (separate with commas)
+              <input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="Example: algebra, equations, practice"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+              />
+            </label>
+            <p className="text-xs text-slate-500">
+              A model answer can be used for AI suggestions on written or image answers.
+            </p>
 
             <button
               type="submit"
@@ -702,6 +720,9 @@ export default function ExaminerQuestionsPage() {
                       <h3 className="mt-2 font-semibold">
                         {question.question_text}
                       </h3>
+                      {question.tags && question.tags.length > 0 && (
+                        <p className="mt-2 text-xs text-slate-400">Tags: {question.tags.join(", ")}</p>
+                      )}
                       {question.question_image_available && (
                         <p className="mt-2 text-xs text-green-300">
                           Question image attached
