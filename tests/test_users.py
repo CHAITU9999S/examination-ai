@@ -83,6 +83,18 @@ def test_student_registration(client, db_session):
     assert created_user.is_active is True
 
 
+def test_login_accepts_email_with_different_letter_case(client, student):
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": student.email.upper(),
+            "password": "StudentPass123!",
+        },
+    )
+
+    assert response.status_code == 200
+
+
 def test_duplicate_email_registration(client, student):
     """Registration rejects an email that already exists."""
 
