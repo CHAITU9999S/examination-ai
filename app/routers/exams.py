@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     AdminActivityLog, Exam, ExamQuestion, ExamSession, QuestionBank, Option, Answer,
-    ExamAssignment, ExamConfigurationRevision, User,
+    ExamAssignment, ExamConfigurationRevision, ExamQuestionMarksRevision, User,
 )
 from app.schemas import ExamCreate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
@@ -1275,6 +1275,145 @@ def validate_exam_question_configuration(
         "available_by_group": counts,
         "selection_rules": exam.selection_rules or {},
         "message": "The configured paper can be generated without reducing any question counts.",
+    }
+
+
+@router.get("/{exam_id}/question-marks")
+def get_exam_question_marks(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Return the current maximum marks and their separate revision history."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if current_user.role == UserRole.EXAMINER.value and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can view only your own examination marks.")
+
+    questions = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam_id).all()
+
+    marks_by_group = {}
+    group_counts = {}
+    for question in questions:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        key = f"{question.difficulty}|{question_type}"
+        marks_by_group.setdefault(key, float(question.marks or 0))
+        group_counts[key] = group_counts.get(key, 0) + 1
+
+    revisions = db.query(ExamQuestionMarksRevision).filter(
+        ExamQuestionMarksRevision.exam_id == exam_id
+    ).order_by(ExamQuestionMarksRevision.revision_number.asc()).all()
+
+    return {
+        "exam_id": exam_id,
+        "marks_by_group": marks_by_group,
+        "group_counts": group_counts,
+        "revisions_used": len(revisions),
+        "revisions_remaining": max(0, 3 - len(revisions)),
+        "can_edit": exam.created_by == current_user.id,
+        "revisions": [
+            {
+                "revision_number": row.revision_number,
+                "marks_snapshot": row.marks_snapshot,
+                "changed_by": row.changed_by,
+                "created_at": row.created_at,
+            }
+            for row in revisions
+        ],
+    }
+
+
+@router.put("/{exam_id}/question-marks")
+def update_exam_question_marks(
+    exam_id: int,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Change the maximum marks for each question type/difficulty group."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).with_for_update().first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the examination creator can change question marks.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Question marks cannot change after a student session has been created.")
+
+    marks_by_group = data.get("marks_by_group") if isinstance(data, dict) else None
+    if not isinstance(marks_by_group, dict) or not marks_by_group:
+        raise HTTPException(status_code=400, detail="Enter maximum marks for the question groups.")
+
+    questions = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam_id).all()
+    if not questions:
+        raise HTTPException(status_code=409, detail="Add questions to the bank before changing question marks.")
+
+    current_groups = {}
+    for question in questions:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        key = f"{question.difficulty}|{question_type}"
+        current_groups.setdefault(key, []).append(question)
+
+    if set(marks_by_group) != set(current_groups):
+        raise HTTPException(status_code=400, detail="Provide maximum marks for every question group in this examination bank.")
+
+    cleaned_marks = {}
+    for key, value in marks_by_group.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise HTTPException(status_code=400, detail=f"Maximum marks for {key} must be a positive number.")
+        cleaned_marks[key] = float(value)
+
+    question_ids = [question.id for question in questions]
+    shared_question = db.query(ExamQuestion.id).filter(
+        ExamQuestion.question_id.in_(question_ids),
+        ExamQuestion.exam_id != exam_id,
+    ).first()
+    if shared_question is not None:
+        raise HTTPException(status_code=409, detail="A question is shared with another examination. Its marks cannot be changed here.")
+
+    changed = any(
+        not math.isclose(float(question.marks or 0), cleaned_marks[key], rel_tol=0, abs_tol=0.0001)
+        for key, group_questions in current_groups.items()
+        for question in group_questions
+    )
+    if not changed:
+        return {"message": "The question marks are already set to these values.", "revisions_used": db.query(ExamQuestionMarksRevision).filter(ExamQuestionMarksRevision.exam_id == exam_id).count()}
+
+    revision_count = db.query(ExamQuestionMarksRevision).filter(
+        ExamQuestionMarksRevision.exam_id == exam_id
+    ).count()
+    if revision_count >= 3:
+        raise HTTPException(status_code=409, detail="The three allowed question paper marks revisions have been used.")
+
+    for key, group_questions in current_groups.items():
+        for question in group_questions:
+            question.marks = cleaned_marks[key]
+
+    db.add(ExamQuestionMarksRevision(
+        exam_id=exam_id,
+        revision_number=revision_count + 1,
+        marks_snapshot=cleaned_marks,
+        changed_by=current_user.id,
+    ))
+    _audit_exam_action(db, current_user.id, "exam_question_marks_updated", {
+        "exam_id": exam_id,
+        "marks_by_group": cleaned_marks,
+        "revision_number": revision_count + 1,
+    })
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Question marks could not be saved.")
+    return {
+        "message": "Question paper marks updated successfully.",
+        "marks_by_group": cleaned_marks,
+        "revisions_used": revision_count + 1,
+        "revisions_remaining": max(0, 2 - revision_count),
     }
 
 
