@@ -172,6 +172,11 @@ export default function ExaminerQuestionsPage() {
       return;
     }
 
+    if (!subject.trim()) {
+      setError("Enter the subject.");
+      return;
+    }
+
     if (!Number.isFinite(parsedMarks) || parsedMarks <= 0) {
       setError("Marks must be a positive number.");
       return;
@@ -229,7 +234,7 @@ export default function ExaminerQuestionsPage() {
       const payload: Record<string, unknown> = {
         question_text: questionText.trim(),
         question_type: questionType,
-        subject: subject.trim() || null,
+        subject: subject.trim(),
         difficulty,
         marks: parsedMarks,
         negative_marks: parsedNegativeMarks,
@@ -413,6 +418,8 @@ export default function ExaminerQuestionsPage() {
 
                 <input
                   id="subject"
+                  required
+                  maxLength={100}
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
                   placeholder="e.g. Computer Science"
