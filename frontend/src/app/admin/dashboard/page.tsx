@@ -51,17 +51,17 @@ const navigation = [
   },
   {
     title: "Examination Management",
-    description: "View and manage examination records.",
+    description: "View all examination records and manage only examinations you created.",
     href: "/admin/exams",
   },
   {
     title: "Answer Grading",
-    description: "Review AI suggestions and approve or revise marks for submitted examinations.",
+    description: "Review answers and approve or change marks only for examinations you created.",
     href: "/examiner/grading",
   },
   {
     title: "Result Publication",
-    description: "Review, publish and inspect examination results.",
+    description: "Review and publish results only for examinations you created.",
     href: "/examiner/results",
   },
   {
