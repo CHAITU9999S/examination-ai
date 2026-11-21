@@ -10,6 +10,7 @@ from app.routers import (
     users,
     admin,
     questions,
+    question_banks,
     exams,
     exam_sessions,
     answers,
@@ -141,6 +142,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(questions.router)
+app.include_router(question_banks.router)
 app.include_router(exams.router)
 app.include_router(exam_sessions.router)
 app.include_router(answers.router)
