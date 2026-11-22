@@ -1,4 +1,5 @@
 
+import hmac
 import os
 from typing import Callable
 
@@ -81,6 +82,32 @@ def get_current_user(
             detail="User account not found or inactive."
         )
 
+    token_session_id = payload.get("auth_session_id")
+    if user.active_session_id:
+        if (
+            not isinstance(token_session_id, str)
+            or not hmac.compare_digest(
+                token_session_id,
+                user.active_session_id,
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "This account was signed in on another device. "
+                    "Please sign in again to continue."
+                ),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    elif token_session_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This login session is no longer active. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Tokens issued before one-device sessions were introduced remain
+    # temporarily compatible only until the account's next successful login.
     return user
 
 
