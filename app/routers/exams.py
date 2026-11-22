@@ -183,6 +183,51 @@ def list_exams(
 
         return value.astimezone(timezone.utc)
 
+    # Calculate the maximum marks using the selected question groups.
+    # If the selected paper cannot be calculated safely, return no value
+    # rather than showing an incorrect total.
+    max_marks_by_exam = {}
+    for exam in exams:
+        assigned_questions = db.query(
+            QuestionBank.question_type,
+            QuestionBank.difficulty,
+            QuestionBank.marks,
+        ).join(
+            ExamQuestion,
+            ExamQuestion.question_id == QuestionBank.id,
+        ).filter(
+            ExamQuestion.exam_id == exam.id,
+        ).all()
+
+        marks_by_group = {}
+        for question_type, difficulty, marks in assigned_questions:
+            question_type = getattr(question_type, "value", question_type)
+            marks_by_group[(difficulty, question_type)] = float(marks or 0)
+
+        selection_rules = exam.selection_rules or {}
+        group_counts = selection_rules.get("group_counts") if isinstance(selection_rules, dict) else None
+        maximum = None
+
+        if isinstance(group_counts, dict):
+            needed_groups = [
+                (key.split("|", 1)[0], key.split("|", 1)[1], int(count))
+                for key, count in group_counts.items()
+                if int(count) > 0 and "|" in key
+            ]
+            if all((difficulty, question_type) in marks_by_group for difficulty, question_type, _ in needed_groups):
+                maximum = sum(
+                    marks_by_group[(difficulty, question_type)] * count
+                    for difficulty, question_type, count in needed_groups
+                )
+        elif len(assigned_questions) == int(exam.total_questions or 0):
+            maximum = sum(float(row[2] or 0) for row in assigned_questions)
+        elif assigned_questions:
+            available_marks = {float(row[2] or 0) for row in assigned_questions}
+            if len(available_marks) == 1:
+                maximum = next(iter(available_marks)) * int(exam.total_questions or 0)
+
+        max_marks_by_exam[exam.id] = round(maximum, 2) if maximum is not None else None
+
     return [
         {
             "id": exam.id,
@@ -190,6 +235,7 @@ def list_exams(
             "subject": exam.subject,
             "duration_minutes": exam.duration_minutes,
             "total_questions": exam.total_questions,
+            "max_marks": max_marks_by_exam.get(exam.id),
             "randomize_questions": exam.randomize_questions,
             "selection_rules": exam.selection_rules,
             "start_time": utc_timestamp(exam.start_time),
@@ -1583,11 +1629,8 @@ def delete_exam(
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
 
-    # Examiners can delete their own exams. Admins can delete any exam.
-    if (
-        current_user.role != UserRole.ADMIN.value
-        and exam.created_by != current_user.id
-    ):
+    # Only the examination creator can delete this examination.
+    if exam.created_by != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="You can delete only examinations you created.",
