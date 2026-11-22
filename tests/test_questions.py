@@ -1,5 +1,9 @@
 
+import io
+import json
+
 import pytest
+from PIL import Image
 
 from app.auth import create_access_token
 from app.models import User, QuestionBank, Option
@@ -258,6 +262,101 @@ def test_get_questions_returns_answers_and_options(
 
     assert len(correct_options) == 1
     assert correct_options[0]["option_text"] == "4"
+
+
+def test_question_bank_stores_image_only_prompt_and_expected_answer_image(client, db_session):
+    examiner = create_user(
+        db_session,
+        "examiner",
+        "question_bank_images@test.com",
+    )
+    headers = get_auth_headers(examiner)
+
+    bank_response = client.post(
+        "/question-banks/",
+        json={"name": "Image Question Bank", "subject": "Computer Science"},
+        headers=headers,
+    )
+    assert bank_response.status_code == 201
+    bank_id = bank_response.json()["bank_id"]
+
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), color="white").save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
+
+    question_payload = {
+        "question_text": None,
+        "question_type": "short_answer",
+        "subject": "Computer Science",
+        "difficulty": "easy",
+        "marks": 5,
+        "expected_answer": None,
+    }
+    response = client.post(
+        f"/question-banks/{bank_id}/questions/with-images",
+        data={"question_data": json.dumps(question_payload)},
+        files={
+            "question_image": ("prompt.png", image_bytes, "image/png"),
+            "expected_answer_image": ("model-answer.png", image_bytes, "image/png"),
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    question_id = response.json()["question_id"]
+
+    question = db_session.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).one()
+    assert question.question_text == ""
+    assert question.question_image_data == image_bytes
+    assert question.question_image_mime_type == "image/png"
+    assert question.expected_answer_image_data == image_bytes
+    assert question.expected_answer_image_mime_type == "image/png"
+
+    prompt_response = client.get(
+        f"/questions/{question_id}/image",
+        headers=headers,
+    )
+    expected_response = client.get(
+        f"/questions/{question_id}/expected-answer-image",
+        headers=headers,
+    )
+    assert prompt_response.status_code == 200
+    assert prompt_response.content == image_bytes
+    assert expected_response.status_code == 200
+    assert expected_response.content == image_bytes
+
+
+def test_question_bank_rejects_question_without_text_or_prompt_image(client, db_session):
+    examiner = create_user(
+        db_session,
+        "examiner",
+        "empty_prompt_question@test.com",
+    )
+    headers = get_auth_headers(examiner)
+    bank_response = client.post(
+        "/question-banks/",
+        json={"name": "Text Required Bank"},
+        headers=headers,
+    )
+    bank_id = bank_response.json()["bank_id"]
+
+    response = client.post(
+        f"/question-banks/{bank_id}/questions/with-images",
+        data={
+            "question_data": json.dumps({
+                "question_text": "   ",
+                "question_type": "short_answer",
+                "subject": "Computer Science",
+                "difficulty": "easy",
+                "marks": 2,
+            })
+        },
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert "question image" in response.json()["detail"]
 
 
 def test_student_cannot_create_question(client, db_session):
