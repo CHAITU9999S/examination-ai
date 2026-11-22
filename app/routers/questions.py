@@ -432,10 +432,10 @@ def get_expected_answer_image(
     ).first()
     if question is None or not question.expected_answer_image_data:
         raise HTTPException(status_code=404, detail="Expected-answer image not found.")
-    if question.created_by != current_user.id:
+    if current_user.role == "examiner" and question.created_by != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Only the question creator can view its expected-answer image.",
+            detail="You can view expected-answer images only for questions you created.",
         )
 
     return Response(
