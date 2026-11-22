@@ -19,6 +19,7 @@ def validate_question(
     negative_marks=0,
     correct_option_index=None,
     correct_option_indices=None,
+    has_question_image=False,
 ):
     """Validate question content, marks and correct options."""
 
@@ -27,11 +28,8 @@ def validate_question(
         raise ValueError("Invalid question type")
 
     # Question text
-    if (
-        not isinstance(question_text, str)
-        or not question_text.strip()
-    ):
-        raise ValueError("Question text cannot be empty")
+    if not (isinstance(question_text, str) and question_text.strip()) and not has_question_image:
+        raise ValueError("Enter question text or upload a question image.")
 
     # Marks
     if (
