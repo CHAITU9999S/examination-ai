@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 from app.auth import create_access_token
-from app.models import User, Exam, ExamAssignment, ExamQuestion, ExamSession, QuestionBank
+from app.models import User, Exam, ExamAssignment, ExamQuestion, ExamSession, QuestionBank, Option
+from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 
 
 def create_user(db, role, email):
@@ -954,3 +955,160 @@ def test_question_marks_revisions_do_not_use_exam_configuration_limit(client, db
     )
     assert marks_history.json()["revisions_used"] == 3
     assert config_history.json()["revisions_used"] == 1
+
+
+def test_copying_questions_from_multiple_creators_uses_destination_exam_marks(client, db_session):
+    exam_creator = create_user(db_session, "examiner", "destination_exam_creator@test.com")
+    first_owner = create_user(db_session, "examiner", "first_source_owner@test.com")
+    second_owner = create_user(db_session, "admin", "second_source_owner@test.com")
+
+    exam = Exam(
+        title="Destination Marks Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=exam_creator.id,
+    )
+    first_bank = QuestionCollection(name="First Owner Bank", created_by=first_owner.id)
+    second_bank = QuestionCollection(name="Second Owner Bank", created_by=second_owner.id)
+    db_session.add_all([exam, first_bank, second_bank])
+    db_session.flush()
+
+    first_question = QuestionBank(
+        question_text="Question from first creator",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        expected_answer="First expected answer",
+        model_answer_text="First model answer",
+        marks=2,
+        question_image_data=b"first-prompt-image",
+        question_image_mime_type="image/png",
+        expected_answer_image_data=b"first-answer-image",
+        expected_answer_image_mime_type="image/png",
+        created_by=first_owner.id,
+    )
+    second_question = QuestionBank(
+        question_text="Question from second creator",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        expected_answer="Second expected answer",
+        marks=8,
+        created_by=second_owner.id,
+    )
+    db_session.add_all([first_question, second_question])
+    db_session.flush()
+    db_session.add_all([
+        Option(question_id=first_question.id, option_text="Correct choice", is_correct=True),
+        Option(question_id=first_question.id, option_text="Wrong choice", is_correct=False),
+        Option(question_id=second_question.id, option_text="Correct choice 2", is_correct=True),
+        QuestionCollectionItem(collection_id=first_bank.id, question_id=first_question.id),
+        QuestionCollectionItem(collection_id=second_bank.id, question_id=second_question.id),
+    ])
+    db_session.commit()
+
+    response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [first_question.id, second_question.id]},
+        headers=get_auth_headers(exam_creator),
+    )
+    assert response.status_code == 201
+
+    copied_rows = db_session.query(ExamQuestion, QuestionBank).join(
+        QuestionBank, QuestionBank.id == ExamQuestion.question_id
+    ).filter(ExamQuestion.exam_id == exam.id).order_by(ExamQuestion.question_order).all()
+    assert len(copied_rows) == 2
+    copied_by_text = {question.question_text: question for _, question in copied_rows}
+
+    first_copy = copied_by_text["Question from first creator"]
+    second_copy = copied_by_text["Question from second creator"]
+    assert first_copy.marks == 1
+    assert second_copy.marks == 1
+    assert first_question.marks == 2
+    assert second_question.marks == 8
+    assert first_copy.expected_answer == "First expected answer"
+    assert first_copy.model_answer_text == "First model answer"
+    assert first_copy.question_image_data == b"first-prompt-image"
+    assert first_copy.expected_answer_image_data == b"first-answer-image"
+    copied_options = db_session.query(Option).filter(Option.question_id == first_copy.id).all()
+    assert {(option.option_text, option.is_correct) for option in copied_options} == {
+        ("Correct choice", True),
+        ("Wrong choice", False),
+    }
+
+    marks_response = client.put(
+        f"/exams/{exam.id}/question-marks",
+        json={"marks_by_group": {"easy|MCQ": 6}},
+        headers=get_auth_headers(exam_creator),
+    )
+    assert marks_response.status_code == 200
+    db_session.refresh(first_copy)
+    db_session.refresh(second_copy)
+    assert first_copy.marks == 6
+    assert second_copy.marks == 6
+    assert first_question.marks == 2
+    assert second_question.marks == 8
+
+
+def test_reusing_previous_exam_questions_keeps_destination_exam_marks_independent(client, db_session):
+    creator = create_user(db_session, "examiner", "reuse_marks_creator@test.com")
+    source_exam = Exam(
+        title="Source Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(source_exam)
+    db_session.flush()
+    source_question = QuestionBank(
+        question_text="Reusable source question",
+        question_type="short_answer",
+        subject="Science",
+        difficulty="medium",
+        expected_answer="Source answer",
+        marks=9,
+        created_by=creator.id,
+    )
+    db_session.add(source_question)
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=source_exam.id,
+        question_id=source_question.id,
+        question_order=1,
+    ))
+    target_exam = Exam(
+        title="New Destination Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=creator.id,
+    )
+    db_session.add(target_exam)
+    db_session.commit()
+
+    response = client.post(
+        f"/exams/{target_exam.id}/question-bank/reuse",
+        json={"question_ids": [source_question.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 201
+    copied_id = db_session.query(ExamQuestion.question_id).filter(
+        ExamQuestion.exam_id == target_exam.id
+    ).scalar()
+    copied = db_session.get(QuestionBank, copied_id)
+    assert copied.question_text == source_question.question_text
+    assert copied.expected_answer == "Source answer"
+    assert copied.marks == 1
+    assert source_question.marks == 9
+
+    marks_response = client.put(
+        f"/exams/{target_exam.id}/question-marks",
+        json={"marks_by_group": {"medium|short_answer": 4}},
+        headers=get_auth_headers(creator),
+    )
+    assert marks_response.status_code == 200
+    db_session.refresh(copied)
+    assert copied.marks == 4
+    assert source_question.marks == 9
