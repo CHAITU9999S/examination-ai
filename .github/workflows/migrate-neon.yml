@@ -23,8 +23,23 @@ jobs:
   migration:
     name: Neon Database Migration
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: examguard
+          POSTGRES_PASSWORD: examguard
+          POSTGRES_DB: examguard_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U examguard -d examguard_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      CI_DATABASE_URL: postgresql+psycopg://examguard:examguard@localhost:5432/examguard_ci
 
     steps:
       - name: Check out repository
@@ -48,6 +63,11 @@ jobs:
             echo "::error::Add the NEON_DATABASE_URL repository secret before running this workflow."
             exit 1
           fi
+
+      - name: Validate all migrations on a temporary PostgreSQL database
+        env:
+          DATABASE_URL: ${{ env.CI_DATABASE_URL }}
+        run: alembic upgrade head
 
       - name: Check current Neon migration status (read-only)
         if: ${{ inputs.operation == 'check' }}
