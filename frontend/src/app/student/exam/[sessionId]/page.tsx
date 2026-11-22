@@ -263,6 +263,25 @@ export default function StudentExamPage() {
       };
 
       setPaper(normalizedPaper);
+
+      const imageQuestions = questions.filter(
+        (question: ExamQuestion) => String(question.question_type).toLowerCase() === "image_upload"
+      );
+      const savedImageQuestionIds = await Promise.all(
+        imageQuestions.map(async (question: ExamQuestion) => {
+          const answerResponse = await fetch(
+            `${API_URL}/answers/${sessionId}/${question.id}`,
+            { method: "GET", headers, cache: "no-store" }
+          );
+          if (!answerResponse.ok) return null;
+          const savedAnswer = await answerResponse.json().catch(() => null);
+          return savedAnswer?.image_path ? question.id : null;
+        })
+      );
+      setUploadedImageQuestionIds(
+        savedImageQuestionIds.filter((id): id is number => id !== null)
+      );
+
       setCurrentIndex(Math.max(0, Math.min(
         Number(normalizedPaper.current_question_index || 0),
         Math.max(0, questions.length - 1)
