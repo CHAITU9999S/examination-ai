@@ -19,6 +19,9 @@ interface Exam {
   negative_marking?: boolean;
   proctoring_enabled?: boolean;
   created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  max_marks?: number | null;
 }
 
 function formatDate(value?: string | null): string {
@@ -71,6 +74,8 @@ export default function AdminExamsPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -146,6 +151,22 @@ export default function AdminExamsPage() {
     loadExams();
   }, [loadExams]);
 
+  const visibleExams = [...exams]
+    .filter((exam) => {
+      const search = searchTerm.trim().toLowerCase();
+      if (!search) return true;
+      return [exam.title, exam.subject, exam.created_by_name, exam.created_by_role]
+        .some((value) => String(value || "").toLowerCase().includes(search));
+    })
+    .sort((first, second) => {
+      if (sortBy === "title-asc") return first.title.localeCompare(second.title);
+      if (sortBy === "title-desc") return second.title.localeCompare(first.title);
+      if (sortBy === "duration-short") return first.duration_minutes - second.duration_minutes;
+      if (sortBy === "duration-long") return second.duration_minutes - first.duration_minutes;
+      if (sortBy === "oldest") return first.id - second.id;
+      return second.id - first.id;
+    });
+
   async function deleteExam(exam: Exam) {
     const confirmed = window.confirm(
       `Permanently delete "${exam.title}" and all its assignments, student sessions, answers, marks, results, and proctoring records? Shared question-bank questions will be kept. This cannot be undone.`
@@ -188,12 +209,20 @@ export default function AdminExamsPage() {
               Administrator / Examination Management
             </p>
           </div>
-          <Link
-            href="/examiner/exams"
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
-          >
-            Create Examination
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/staff/manage-exams"
+              className="rounded-lg border border-cyan-500/40 px-4 py-2.5 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
+            >
+              Manage My Examinations
+            </Link>
+            <Link
+              href="/examiner/exams"
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
+            >
+              Create Examination
+            </Link>
+          </div>
 
           <Link
             href="/admin/dashboard"
@@ -212,7 +241,7 @@ export default function AdminExamsPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              View all examinations. You can manage your own question banks and delete any examination.
+              View all examinations and see who created each one. Manage your own examinations in the separate management section.
             </p>
           </div>
 
@@ -249,8 +278,31 @@ export default function AdminExamsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                {exams.length} examination(s) found
+                {visibleExams.length} examination(s) found
               </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by name, subject, or creator"
+                aria-label="Search examinations"
+                className="min-w-[240px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              />
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                aria-label="Sort examinations"
+                className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="title-asc">Name A to Z</option>
+                <option value="title-desc">Name Z to A</option>
+                <option value="duration-short">Shortest time</option>
+                <option value="duration-long">Longest time</option>
+              </select>
             </div>
           </div>
 
@@ -258,7 +310,9 @@ export default function AdminExamsPage() {
             <p className="py-12 text-center text-slate-400">
               Loading examinations...
             </p>
-          ) : exams.length === 0 ? (
+          ) : visibleExams.length === 0 ? (
+            <p className="py-12 text-center text-slate-400">No examinations match your search.</p>
+          ) : (
             <div className="py-12 text-center">
               <p className="font-semibold text-slate-300">
                 No examinations found.
@@ -275,8 +329,10 @@ export default function AdminExamsPage() {
                   <tr className="border-b border-white/10 text-slate-400">
                     <th className="px-4 py-3">Examination</th>
                     <th className="px-4 py-3">Subject</th>
+                    <th className="px-4 py-3">Created By</th>
                     <th className="px-4 py-3">Duration</th>
                     <th className="px-4 py-3">Questions</th>
+                    <th className="px-4 py-3">Maximum Marks</th>
                     <th className="px-4 py-3">Start Time</th>
                     <th className="px-4 py-3">End Time</th>
                     <th className="px-4 py-3">Status</th>
@@ -286,7 +342,7 @@ export default function AdminExamsPage() {
                 </thead>
 
                 <tbody>
-                  {exams.map((exam) => (
+                  {visibleExams.map((exam) => (
                     <tr
                       key={exam.id}
                       className="border-b border-white/5 last:border-0"
@@ -303,11 +359,20 @@ export default function AdminExamsPage() {
                       </td>
 
                       <td className="px-4 py-4 text-slate-300">
+                        <span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span>
+                        <span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span>
+                      </td>
+
+                      <td className="px-4 py-4 text-slate-300">
                         {exam.duration_minutes} minutes
                       </td>
 
                       <td className="px-4 py-4 text-slate-300">
                         {exam.total_questions ?? "—"}
+                      </td>
+
+                      <td className="px-4 py-4 text-slate-300">
+                        {exam.max_marks === null || exam.max_marks === undefined ? "Not available yet" : exam.max_marks}
                       </td>
 
                       <td className="px-4 py-4 text-slate-300">
@@ -354,13 +419,7 @@ export default function AdminExamsPage() {
                               View Questions
                             </Link>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => deleteExam(exam)}
-                            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
-                          >
-                            Delete
-                          </button>
+                          
                         </div>
                       </td>
                     </tr>
