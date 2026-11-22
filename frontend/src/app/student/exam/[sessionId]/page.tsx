@@ -269,13 +269,17 @@ export default function StudentExamPage() {
       );
       const savedImageQuestionIds = await Promise.all(
         imageQuestions.map(async (question: ExamQuestion) => {
-          const answerResponse = await fetch(
-            `${API_URL}/answers/${sessionId}/${question.id}`,
-            { method: "GET", headers, cache: "no-store" }
-          );
-          if (!answerResponse.ok) return null;
-          const savedAnswer = await answerResponse.json().catch(() => null);
-          return savedAnswer?.image_path ? question.id : null;
+          try {
+            const answerResponse = await fetch(
+              `${API_URL}/answers/${sessionId}/${question.id}`,
+              { method: "GET", headers, cache: "no-store" }
+            );
+            if (!answerResponse.ok) return null;
+            const savedAnswer = await answerResponse.json().catch(() => null);
+            return savedAnswer?.image_path ? question.id : null;
+          } catch {
+            return null;
+          }
         })
       );
       setUploadedImageQuestionIds(
