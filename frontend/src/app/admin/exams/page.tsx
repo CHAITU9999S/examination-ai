@@ -98,6 +98,24 @@ export default function AdminExamsPage() {
 
       if (!headers) return;
 
+      const profileResponse = await fetch(`${API_URL}/users/me`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      if (profileResponse.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      const profile = await profileResponse.json().catch(() => ({}));
+      if (!profileResponse.ok) {
+        throw new Error("Unable to check your account.");
+      }
+      if (profile.role !== "admin") {
+        router.replace("/examiner/dashboard");
+        return;
+      }
+
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
         headers,
