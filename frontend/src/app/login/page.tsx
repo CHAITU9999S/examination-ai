@@ -131,6 +131,9 @@ export default function LoginPage() {
           <p className="mt-2 text-slate-400">
             Sign in to access your examination platform.
           </p>
+          <p className="mt-3 text-sm text-blue-300">
+            For account security, signing in here will sign out any other device using this account.
+          </p>
         </div>
 
         <form
