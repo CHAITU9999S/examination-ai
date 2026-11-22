@@ -37,6 +37,7 @@ export default function QuestionBankDetailPage() {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<Record<number, { prompt?: string; expected?: string }>>({});
   const [bankName, setBankName] = useState("Question Bank");
   const [text, setText] = useState("");
   const [type, setType] = useState("MCQ");
@@ -74,12 +75,37 @@ export default function QuestionBankDetailPage() {
     const bank = banks.find((item: { id: number; name: string }) => item.id === Number(bankId));
     if (!bank) throw new Error("You can manage only question banks you created.");
     setBankName(bank.name);
-    setQuestions(await questionsRes.json());
+    const loadedQuestions: Question[] = await questionsRes.json();
+    setQuestions(loadedQuestions);
+    const previews: Record<number, { prompt?: string; expected?: string }> = {};
+    await Promise.all(loadedQuestions.map(async (question) => {
+      const fetchPreview = async (url: string) => {
+        const response = await fetch(url, { headers: auth });
+        return response.ok ? URL.createObjectURL(await response.blob()) : undefined;
+      };
+      const [prompt, expected] = await Promise.all([
+        question.question_image_available
+          ? fetchPreview(API_URL + "/questions/" + question.id + "/image")
+          : Promise.resolve(undefined),
+        question.expected_answer_image_available
+          ? fetchPreview(API_URL + "/questions/" + question.id + "/expected-answer-image")
+          : Promise.resolve(undefined),
+      ]);
+      previews[question.id] = { prompt, expected };
+    }));
+    setImagePreviews(previews);
   }, [bankId, headers]);
 
   useEffect(() => {
     load().catch((loadError) => setError(loadError.message));
   }, [load]);
+
+  useEffect(() => () => {
+    Object.values(imagePreviews).forEach((preview) => {
+      if (preview.prompt) URL.revokeObjectURL(preview.prompt);
+      if (preview.expected) URL.revokeObjectURL(preview.expected);
+    });
+  }, [imagePreviews]);
 
   function changeType(nextType: string) {
     setType(nextType);
@@ -440,9 +466,23 @@ export default function QuestionBankDetailPage() {
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-cyan-300">{question.question_type} · {question.difficulty} · {question.marks} marks</p>
                 {question.question_text && <p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>}
-                {question.question_image_available && <p className="mt-2 text-xs text-blue-300">Question image saved in database</p>}
+                {question.question_image_available && (
+                  <div className="mt-3">
+                    <p className="text-xs text-blue-300">Question prompt image</p>
+                    {imagePreviews[question.id]?.prompt && (
+                      <img src={imagePreviews[question.id].prompt} alt="Question prompt" className="mt-2 max-h-48 max-w-full rounded-lg border border-white/10 bg-white object-contain" />
+                    )}
+                  </div>
+                )}
                 {question.expected_answer && <p className="mt-2 text-sm text-slate-300">Expected answer: {question.expected_answer}</p>}
-                {question.expected_answer_image_available && <p className="mt-1 text-xs text-emerald-300">Expected-answer image saved in database</p>}
+                {question.expected_answer_image_available && (
+                  <div className="mt-3">
+                    <p className="text-xs text-emerald-300">Expected-answer image</p>
+                    {imagePreviews[question.id]?.expected && (
+                      <img src={imagePreviews[question.id].expected} alt="Expected answer" className="mt-2 max-h-48 max-w-full rounded-lg border border-white/10 bg-white object-contain" />
+                    )}
+                  </div>
+                )}
                 {question.options?.map((option) => (
                   <p key={option.id} className="mt-1 text-sm text-slate-400">{option.option_text}{option.is_correct ? " (Correct)" : ""}</p>
                 ))}
