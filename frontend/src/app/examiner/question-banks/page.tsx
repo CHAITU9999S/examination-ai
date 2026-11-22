@@ -90,7 +90,7 @@ export default function QuestionBanksPage() {
     <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
         <div><Link href="/examiner/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">My Question Banks</p></div>
-        <Link href="/examiner/exams" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Examinations</Link>
+        <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Examinations</Link>
       </div>
     </header>
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
