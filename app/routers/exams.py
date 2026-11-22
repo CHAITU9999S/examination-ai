@@ -138,6 +138,7 @@ def create_exam(
 
 @router.get("/")
 def list_exams(
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(
         require_role("student", "examiner", "admin")
@@ -145,10 +146,16 @@ def list_exams(
 ):
     query = db.query(Exam)
 
+    # The Manage Examination page asks for only the current user's exams.
+    # The normal examination list still lets Admins view every exam.
+    if mine:
+        if current_user.role == UserRole.STUDENT.value:
+            raise HTTPException(status_code=403, detail="Only Admins and Examiners can manage examinations.")
+        query = query.filter(Exam.created_by == current_user.id)
     # Students can discover available examinations.
     # Examiners can access only their own exams.
     # Admins can view all exams.
-    if current_user.role == UserRole.EXAMINER.value:
+    elif current_user.role == UserRole.EXAMINER.value:
         query = query.filter(Exam.created_by == current_user.id)
     elif current_user.role == UserRole.STUDENT.value:
         query = query.join(
