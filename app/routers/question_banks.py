@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -109,7 +110,7 @@ def list_question_banks(
                 getattr(question_type, "value", question_type): count
                 for question_type, count in db.query(
                     Question.question_type,
-                    __import__("sqlalchemy").func.count(Question.id),
+                    func.count(Question.id),
                 ).join(
                     QuestionCollectionItem,
                     QuestionCollectionItem.question_id == Question.id,
