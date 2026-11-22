@@ -123,7 +123,8 @@ def create_exam_access_token(
     exam_id: int,
     student_id: int,
     session_id: int,
-    expires_at: datetime
+    expires_at: datetime,
+    auth_session_id: Optional[str] = None,
 ) -> str:
     """
     Create an examination-specific JWT token.
@@ -166,6 +167,7 @@ def create_exam_access_token(
         "exam_id": exam_id,
         "student_id": student_id,
         "session_id": session_id,
+        "auth_session_id": auth_session_id,
         "jti": secrets.token_urlsafe(16),
         "iat": now,
         "exp": token_expires_at,
