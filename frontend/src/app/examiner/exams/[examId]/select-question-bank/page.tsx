@@ -193,7 +193,7 @@ export default function SelectBankForExamPage() {
                     <input type="checkbox" checked={selected.includes(question.id)} onChange={(event) => toggleQuestion(question.id, event.target.checked)} className="mt-1" />
                     <span className="min-w-0 flex-1">
                       <span className="block whitespace-pre-wrap">{question.question_text}</span>
-                      <span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · {question.marks} marks</span>
+                      <span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · Source bank: {question.marks} marks (not copied)</span>
                       {question.options?.map((option) => <span key={option.id} className="mt-1 block text-sm text-slate-400">{option.option_text}</span>)}
                     </span>
                   </label>
@@ -204,7 +204,7 @@ export default function SelectBankForExamPage() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5">
-          <p className="text-sm text-slate-400">Selected questions from all opened banks will be copied into this examination. Original bank questions will not be changed.</p>
+          <p className="text-sm text-slate-400">Question text, answers, options and images will be copied. Source-bank maximum marks will not be copied. The new examination starts at 1 mark per type/difficulty group; set your examination's marks in Question Paper Marks Settings after copying. Original banks remain unchanged.</p>
           <button type="button" disabled={working || !exam || selected.length !== exam.total_questions} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Copying questions..." : "Copy selected questions into examination"}</button>
         </div>
       </div>
