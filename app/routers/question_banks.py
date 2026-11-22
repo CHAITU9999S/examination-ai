@@ -353,7 +353,7 @@ async def add_question_to_bank_with_images(
     try:
         data = QuestionCreate.model_validate_json(question_data)
     except ValidationError as error:
-        raise HTTPException(status_code=422, detail=error.errors())
+        raise HTTPException(status_code=422, detail=str(error))
 
     async def read_image(upload: UploadFile | None):
         if upload is None:
