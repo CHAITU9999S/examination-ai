@@ -174,7 +174,7 @@ export default function ExamQuestionBankPage() {
   }, [getHeaders, router]);
 
   const loadAll = useCallback(async () => {
-    if (!/^\\d+$/.test(examId)) {
+    if (!/^\d+$/.test(examId)) {
       setError("Invalid examination ID.");
       setLoading(false);
       return;
