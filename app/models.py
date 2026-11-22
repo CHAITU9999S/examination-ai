@@ -102,6 +102,10 @@ class User(Base):
         nullable=True
     )
 
+    # Random identifier for the account's one currently authorized device session.
+    # Rotated at every successful login; never expose this value to the UI.
+    active_session_id = Column(String(64), nullable=True, unique=True)
+
     created_at = Column(
         DateTime(),
         default=utc_now_naive,
