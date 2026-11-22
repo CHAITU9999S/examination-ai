@@ -141,7 +141,7 @@ class PasswordChange(BaseModel):
 # ==========================================
 
 class QuestionCreate(BaseModel):
-    question_text: str = Field(min_length=1)
+    question_text: str | None = Field(default=None)
 
     question_type: QuestionTypeSchema
 
