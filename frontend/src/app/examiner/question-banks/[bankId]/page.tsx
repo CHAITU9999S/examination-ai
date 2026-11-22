@@ -37,6 +37,7 @@ export default function QuestionBankDetailPage() {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [imagePreviews, setImagePreviews] = useState<Record<number, { prompt?: string; expected?: string }>>({});
   const [bankName, setBankName] = useState("Question Bank");
   const [text, setText] = useState("");
@@ -178,20 +179,64 @@ export default function QuestionBankDetailPage() {
         correct_option_indices: type === "multi_select" ? correct.map(Number) : null,
       };
 
-      const formData = new FormData();
-      formData.append("question_data", JSON.stringify(payload));
-      if (questionImage) formData.append("question_image", questionImage);
-      if (expectedAnswerImage) formData.append("expected_answer_image", expectedAnswerImage);
+      if (editingQuestion) {
+        const response = await fetch(
+          `${API_URL}/question-banks/${bankId}/questions/${editingQuestion.id}`,
+          { method: "PATCH", headers: auth, body: JSON.stringify({
+            ...payload,
+            model_answer_text: editingQuestion.model_answer_text || null,
+            tags: editingQuestion.tags || [],
+          }) }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(errorMessage(data.detail, "Unable to update question."));
+        }
 
-      const response = await fetch(
-        `${API_URL}/question-banks/${bankId}/questions/with-images`,
-        { method: "POST", headers: { Authorization: auth.Authorization }, body: formData }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(errorMessage(data.detail, "Unable to add question."));
+        if (questionImage) {
+          const imageForm = new FormData();
+          imageForm.append("file", questionImage);
+          const imageResponse = await fetch(`${API_URL}/questions/${editingQuestion.id}/image`, {
+            method: "POST",
+            headers: { Authorization: auth.Authorization },
+            body: imageForm,
+          });
+          const imageData = await imageResponse.json().catch(() => ({}));
+          if (!imageResponse.ok) {
+            throw new Error(errorMessage(imageData.detail, "Question text was updated, but the prompt image could not be saved."));
+          }
+        }
+
+        if (expectedAnswerImage) {
+          const imageForm = new FormData();
+          imageForm.append("file", expectedAnswerImage);
+          const imageResponse = await fetch(`${API_URL}/questions/${editingQuestion.id}/expected-answer-image`, {
+            method: "POST",
+            headers: { Authorization: auth.Authorization },
+            body: imageForm,
+          });
+          const imageData = await imageResponse.json().catch(() => ({}));
+          if (!imageResponse.ok) {
+            throw new Error(errorMessage(imageData.detail, "Question was updated, but the expected-answer image could not be saved."));
+          }
+        }
+      } else {
+        const formData = new FormData();
+        formData.append("question_data", JSON.stringify(payload));
+        if (questionImage) formData.append("question_image", questionImage);
+        if (expectedAnswerImage) formData.append("expected_answer_image", expectedAnswerImage);
+
+        const response = await fetch(
+          `${API_URL}/question-banks/${bankId}/questions/with-images`,
+          { method: "POST", headers: { Authorization: auth.Authorization }, body: formData }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(errorMessage(data.detail, "Unable to add question."));
+        }
       }
 
+      setEditingQuestion(null);
       setText("");
       setExpected("");
       setOptionTexts(["", "", "", ""]);
@@ -210,68 +255,45 @@ export default function QuestionBankDetailPage() {
     }
   }
 
-  async function editQuestion(question: Question) {
-    const questionText = window.prompt("Question text (leave blank if this question has a prompt image)", question.question_text || "");
-    if (questionText === null) return;
-    const questionType = window.prompt("Type: MCQ, multi_select, short_answer, long_answer, image_upload", question.question_type);
-    if (questionType === null) return;
-    const difficultyValue = window.prompt("Difficulty: easy, medium, hard", question.difficulty);
-    if (difficultyValue === null) return;
-    const subjectValue = window.prompt("Subject", question.subject || "");
-    if (subjectValue === null) return;
-    const marksValue = window.prompt("Maximum marks", String(question.marks));
-    if (marksValue === null) return;
-    const expectedValue = window.prompt("Expected answer (optional)", question.expected_answer || "");
-    if (expectedValue === null) return;
+  function editQuestion(question: Question) {
+    setEditingQuestion(question);
+    setText(question.question_text || "");
+    setType(question.question_type);
+    setDifficulty(question.difficulty);
+    setSubject(question.subject || "");
+    setMarks(String(question.marks));
+    setExpected(question.expected_answer || "");
+    setOptionTexts(
+      question.options.length
+        ? question.options.map((option) => option.option_text)
+        : ["", "", "", ""]
+    );
+    const selectedCorrect = question.options
+      .map((option, index) => option.is_correct ? String(index) : null)
+      .filter((value): value is string => value !== null);
+    setCorrect(selectedCorrect.length ? selectedCorrect : ["0"]);
+    setQuestionImage(null);
+    setExpectedAnswerImage(null);
+    const promptInput = document.getElementById("question-image-file") as HTMLInputElement | null;
+    const answerInput = document.getElementById("expected-answer-image-file") as HTMLInputElement | null;
+    if (promptInput) promptInput.value = "";
+    if (answerInput) answerInput.value = "";
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-    const isChoice = questionType === "MCQ" || questionType === "multi_select";
-    let optionValues = question.options.map((option) => option.option_text);
-    let correctIndexes = question.options
-      .map((option, index) => option.is_correct ? index : -1)
-      .filter((index) => index >= 0);
-    if (isChoice) {
-      const changedOptions: string[] = [];
-      for (let index = 0; index < Math.max(optionValues.length, 2); index += 1) {
-        const value = window.prompt("Option " + (index + 1), optionValues[index] || "");
-        if (value === null) return;
-        changedOptions.push(value);
-      }
-      optionValues = changedOptions;
-      const correctValue = window.prompt(
-        "Correct option number(s), starting from 1. For multiple select, separate numbers with commas.",
-        correctIndexes.map((index) => index + 1).join(",") || "1"
-      );
-      if (correctValue === null) return;
-      correctIndexes = correctValue.split(",")
-        .map((value) => Number(value.trim()) - 1)
-        .filter((value) => Number.isInteger(value) && value >= 0 && value < optionValues.length);
-    }
-
-    const auth = headers();
-    if (!auth) return;
-    const payload = {
-      question_text: questionText.trim() || null,
-      question_type: questionType,
-      subject: subjectValue.trim(),
-      difficulty: difficultyValue,
-      marks: Number(marksValue),
-      negative_marks: Number(question.negative_marks || 0),
-      expected_answer: expectedValue.trim() || null,
-      model_answer_text: question.model_answer_text || null,
-      options: isChoice ? optionValues : [],
-      correct_option_index: questionType === "MCQ" ? correctIndexes[0] ?? null : null,
-      correct_option_indices: questionType === "multi_select" ? correctIndexes : null,
-      tags: question.tags || [],
-    };
-    const response = await fetch(`${API_URL}/question-banks/${bankId}/questions/${question.id}`, {
-      method: "PATCH", headers: auth, body: JSON.stringify(payload),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setError(errorMessage(data.detail, "Unable to update question."));
-      return;
-    }
-    await load();
+  function cancelEdit() {
+    setEditingQuestion(null);
+    setText("");
+    setExpected("");
+    setOptionTexts(["", "", "", ""]);
+    setCorrect(["0"]);
+    setQuestionImage(null);
+    setExpectedAnswerImage(null);
+    const promptInput = document.getElementById("question-image-file") as HTMLInputElement | null;
+    const answerInput = document.getElementById("expected-answer-image-file") as HTMLInputElement | null;
+    if (promptInput) promptInput.value = "";
+    if (answerInput) answerInput.value = "";
   }
 
   async function removeQuestion(id: number) {
@@ -316,7 +338,7 @@ export default function QuestionBankDetailPage() {
         {error && <p role="alert" className="rounded-lg bg-red-500/10 p-4 text-red-300">{error}</p>}
 
         <form onSubmit={addQuestion} className="space-y-5 rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <h2 className="text-xl font-semibold">Add a Question</h2>
+          <h2 className="text-xl font-semibold">{editingQuestion ? "Edit Question" : "Add a Question"}</h2>
 
           <div>
             <label htmlFor="question-text" className="mb-2 block text-sm font-medium">
@@ -344,6 +366,7 @@ export default function QuestionBankDetailPage() {
               className="mt-2 block w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-white"
             />
             {questionImage && <p className="mt-2 text-xs text-green-300">Selected: {questionImage.name}</p>}
+            {editingQuestion?.question_image_available && !questionImage && <p className="mt-2 text-xs text-blue-300">An existing prompt image is saved. Upload a new image only if you want to replace it.</p>}
             <p className="mt-1 text-xs text-slate-400">Enter text, upload an image, or provide both. At least one is required.</p>
           </div>
 
@@ -449,12 +472,16 @@ export default function QuestionBankDetailPage() {
               className="mt-2 block w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-white"
             />
             {expectedAnswerImage && <p className="mt-2 text-xs text-green-300">Selected: {expectedAnswerImage.name}</p>}
+            {editingQuestion?.expected_answer_image_available && !expectedAnswerImage && <p className="mt-2 text-xs text-emerald-300">An existing expected-answer image is saved. Upload a new image only if you want to replace it.</p>}
             <p className="mt-1 text-xs text-slate-400">You may provide text, an image, both, or neither.</p>
           </div>
 
-          <button disabled={working} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">
-            {working ? "Saving..." : "Add Question"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button disabled={working} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">
+              {working ? "Saving..." : editingQuestion ? "Save Changes" : "Add Question"}
+            </button>
+            {editingQuestion && <button type="button" onClick={cancelEdit} className="rounded-lg border border-white/20 px-5 py-3" disabled={working}>Cancel Edit</button>}
+          </div>
         </form>
 
         <section className="space-y-3">
