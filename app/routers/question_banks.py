@@ -48,6 +48,8 @@ def create_question_bank(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("admin", "examiner")),
 ):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Enter a question bank name.")
     bank = QuestionCollection(
         name=data.name.strip(),
         description=data.description,
@@ -132,6 +134,8 @@ def update_question_bank(
     current_user=Depends(require_role("admin", "examiner")),
 ):
     bank = _get_owned_bank(db, bank_id, current_user.id)
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Enter a question bank name.")
     bank.name = data.name.strip()
     bank.description = data.description
     bank.subject = data.subject
@@ -401,7 +405,7 @@ def add_question_to_bank(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
-    if bank.subject and data.subject.casefold() != bank.subject.casefold():
+    if bank.subject and (data.subject or "").casefold() != bank.subject.casefold():
         raise HTTPException(status_code=400, detail="The question subject must match this question bank.")
 
     tags = list(data.tags or [])
