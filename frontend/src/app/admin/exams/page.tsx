@@ -72,8 +72,6 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("newest");
 
@@ -99,15 +97,6 @@ export default function AdminExamsPage() {
       const headers = getHeaders();
 
       if (!headers) return;
-
-      const profileResponse = await fetch(`${API_URL}/users/me`, {
-        method: "GET",
-        headers,
-      });
-      if (profileResponse.ok) {
-        const profile = await profileResponse.json();
-        setCurrentUserId(Number(profile.id));
-      }
 
       const response = await fetch(`${API_URL}/exams`, {
         method: "GET",
@@ -166,32 +155,6 @@ export default function AdminExamsPage() {
       if (sortBy === "oldest") return first.id - second.id;
       return second.id - first.id;
     });
-
-  async function deleteExam(exam: Exam) {
-    const confirmed = window.confirm(
-      `Permanently delete "${exam.title}" and all its assignments, student sessions, answers, marks, results, and proctoring records? Shared question-bank questions will be kept. This cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setError("");
-    setMessage("");
-    try {
-      const headers = getHeaders();
-      if (!headers) return;
-      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
-        method: "DELETE",
-        headers,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Unable to delete this examination.");
-      }
-      setMessage(`"${exam.title}" and its related records were deleted.`);
-      await loadExams();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to delete this examination.");
-    }
-  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -254,12 +217,6 @@ export default function AdminExamsPage() {
             {loading ? "Refreshing..." : "Refresh Examinations"}
           </button>
         </div>
-
-        {message && (
-          <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300">
-            {message}
-          </div>
-        )}
 
         {error && (
           <div
@@ -413,7 +370,7 @@ export default function AdminExamsPage() {
                             </Link>
                           ) : (
                             <Link
-                              href={`/admin/exams/${exam.id}/question-bank`}
+                              href={`/staff/examinations/${exam.id}`}
                               className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
                             >
                               View Questions
