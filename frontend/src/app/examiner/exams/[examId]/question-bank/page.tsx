@@ -571,7 +571,7 @@ export default function ExamQuestionBankPage() {
             <h2 className="text-xl font-semibold">Examination Questions ({questions.length})</h2>
             {questions.map((question) => (
               <article key={question.question_id} className="mt-4 rounded-xl border border-white/10 bg-slate-800/60 p-5">
-                <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · Source exam: {question.marks} marks (not copied)</p>
+                <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                 <p className="mt-3 whitespace-pre-wrap">{question.question_text}</p>
                 {question.options?.map((option) => <p key={option.id} className="mt-2 text-sm text-slate-300">{option.option_text}{option.is_correct ? " (Correct answer)" : ""}</p>)}
                 {question.expected_answer && <p className="mt-3 text-sm text-slate-400">Expected answer: {question.expected_answer}</p>}
@@ -898,7 +898,7 @@ export default function ExamQuestionBankPage() {
                     ).map((question) => (
                       <label key={question.question_id} className="flex items-start gap-3 rounded-lg bg-slate-800/60 p-3 text-sm">
                         <input type="checkbox" checked={selectedSources.includes(question.question_id)} onChange={() => toggleSource(question.question_id)} className="mt-1" />
-                        <span><span className="block">{question.question_text}</span><span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · {question.marks} marks</span></span>
+                        <span><span className="block">{question.question_text}</span><span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · Source exam: {question.marks} marks (not copied)</span></span>
                       </label>
                     ))}
                   </div>
