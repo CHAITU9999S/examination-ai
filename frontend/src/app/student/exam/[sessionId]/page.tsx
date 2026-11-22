@@ -67,7 +67,37 @@ export default function StudentExamPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState("");
+
+  // A second device login invalidates this exam token. Clear this browser's
+  // credentials and return to login as soon as the server reports replacement.
+  const setError = useCallback((message: string) => {
+    const normalizedMessage = message.toLowerCase();
+    if (
+      normalizedMessage.includes(
+        "signed out because your account was used to sign in on another device"
+      )
+    ) {
+      localStorage.removeItem("examguard_access_token");
+      localStorage.removeItem("examguard_user");
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (
+          key &&
+          (
+            key.startsWith("examguard_exam_token_") ||
+            key.startsWith("examguard_exam_refresh_") ||
+            key.startsWith("examguard_exam_id_")
+          )
+        ) {
+          sessionStorage.removeItem(key);
+        }
+      }
+      router.replace("/login?reason=session_replaced");
+      return;
+    }
+    setErrorState(message);
+  }, [router]);
   const [message, setMessage] = useState("");
   const [showSubmitConfirmation, setShowSubmitConfirmation] =
     useState(false);
