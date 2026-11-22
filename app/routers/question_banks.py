@@ -249,6 +249,126 @@ def copy_selected_bank_questions_to_exam(
     return {"message": "Selected questions were copied into this examination.", "exam_id": exam.id, "question_count": len(question_ids)}
 
 
+def _copy_question_for_exam(db: Session, source: Question, user_id: int):
+    copied = Question(
+        question_text=source.question_text,
+        question_type=source.question_type,
+        subject=source.subject,
+        difficulty=source.difficulty,
+        expected_answer=source.expected_answer,
+        model_answer_text=source.model_answer_text,
+        question_image_path=source.question_image_path,
+        question_image_data=source.question_image_data,
+        question_image_mime_type=source.question_image_mime_type,
+        marks=source.marks,
+        negative_marks=source.negative_marks,
+        tags=list(source.tags or []),
+        created_by=user_id,
+        source_question_id=None,
+    )
+    db.add(copied)
+    db.flush()
+    for option in source.options:
+        db.add(Option(question_id=copied.id, option_text=option.option_text, is_correct=option.is_correct))
+    return copied
+
+
+@router.patch("/{bank_id}/questions/{question_id}")
+def update_bank_question(
+    bank_id: int,
+    question_id: int,
+    data: QuestionCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("admin", "examiner")),
+):
+    bank = _get_owned_bank(db, bank_id, current_user.id)
+    question = db.query(Question).join(
+        QuestionCollectionItem, QuestionCollectionItem.question_id == Question.id
+    ).filter(
+        QuestionCollectionItem.collection_id == bank.id,
+        Question.id == question_id,
+        Question.created_by == current_user.id,
+    ).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found in your question bank.")
+
+    question_type = getattr(data.question_type, "value", data.question_type)
+    options = data.options or []
+    try:
+        validate_question(question_type, data.question_text, data.marks, options,
+            data.negative_marks, data.correct_option_index, data.correct_option_indices)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    if bank.subject and (data.subject or "").casefold() != bank.subject.casefold():
+        raise HTTPException(status_code=400, detail="The question subject must match this question bank.")
+
+    # Older examinations may still point directly to a bank question. Give
+    # those examinations their own copy before changing the original question.
+    linked_rows = db.query(ExamQuestion).filter(ExamQuestion.question_id == question.id).all()
+    for linked_row in linked_rows:
+        if db.query(ExamSession.id).filter(ExamSession.exam_id == linked_row.exam_id).first():
+            raise HTTPException(status_code=409, detail="This question is used by an examination that already has student sessions and cannot be changed safely.")
+        linked_row.question_id = _copy_question_for_exam(db, question, current_user.id).id
+
+    tags = list(data.tags or [])
+    if data.topic and data.topic not in tags:
+        tags.append(data.topic)
+    question.question_text = data.question_text
+    question.question_type = question_type
+    question.subject = data.subject
+    question.difficulty = data.difficulty.value
+    question.expected_answer = data.expected_answer
+    question.model_answer_text = data.model_answer_text
+    question.marks = data.marks
+    question.negative_marks = data.negative_marks
+    question.tags = tags
+    db.query(Option).filter(Option.question_id == question.id).delete(synchronize_session=False)
+    for index, option_text in enumerate(options):
+        correct = (question_type == "MCQ" and index == data.correct_option_index) or (question_type == "multi_select" and index in (data.correct_option_indices or []))
+        db.add(Option(question_id=question.id, option_text=option_text, is_correct=correct))
+    db.commit()
+    return {"message": "Question updated in your question bank.", "question_id": question.id}
+
+
+@router.delete("/{bank_id}/questions/{question_id}/delete")
+def delete_bank_question(
+    bank_id: int,
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("admin", "examiner")),
+):
+    bank = _get_owned_bank(db, bank_id, current_user.id)
+    question = db.query(Question).join(
+        QuestionCollectionItem, QuestionCollectionItem.question_id == Question.id
+    ).filter(
+        QuestionCollectionItem.collection_id == bank.id,
+        Question.id == question_id,
+        Question.created_by == current_user.id,
+    ).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found in your question bank.")
+    if db.query(Answer.id).filter(Answer.question_id == question.id).first():
+        raise HTTPException(status_code=409, detail="This question is linked to student answers and cannot be deleted.")
+
+    linked_rows = db.query(ExamQuestion).filter(ExamQuestion.question_id == question.id).all()
+    for linked_row in linked_rows:
+        if db.query(ExamSession.id).filter(ExamSession.exam_id == linked_row.exam_id).first():
+            raise HTTPException(status_code=409, detail="This question is used by an examination that already has student sessions and cannot be deleted safely.")
+        linked_row.question_id = _copy_question_for_exam(db, question, current_user.id).id
+
+    # Older snapshots may keep a source reference. The copied question stays
+    # unchanged, while the original can be deleted from the question banks.
+    db.query(Question).filter(Question.source_question_id == question.id).update(
+        {Question.source_question_id: None}, synchronize_session=False
+    )
+    db.query(QuestionCollectionItem).filter(
+        QuestionCollectionItem.question_id == question.id
+    ).delete(synchronize_session=False)
+    db.delete(question)
+    db.commit()
+    return {"message": "Question deleted from your question banks. Existing examination copies were kept."}
+
+
 @router.post("/{bank_id}/questions", status_code=status.HTTP_201_CREATED)
 def add_question_to_bank(
     bank_id: int,
