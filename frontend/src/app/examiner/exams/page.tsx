@@ -109,32 +109,6 @@ export default function ExaminerExamsPage() {
     loadExams();
   }, [loadExams]);
 
-  async function deleteExam(exam: Exam) {
-    const confirmed = window.confirm(
-      `Permanently delete "${exam.title}" and all its assignments, student sessions, answers, marks, results, and proctoring records? Shared question-bank questions will be kept. This cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setError("");
-    setMessage("");
-    try {
-      const headers = getHeaders();
-      if (!headers) return;
-      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
-        method: "DELETE",
-        headers,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Unable to delete this examination.");
-      }
-      setMessage(`"${exam.title}" and its related records were deleted.`);
-      await loadExams();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to delete this examination.");
-    }
-  }
-
   function resetForm() {
     setTitle("");
     setSubject("");
