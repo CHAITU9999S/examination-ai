@@ -839,15 +839,11 @@ def reuse_questions_from_previous_banks(
                 getattr(source.question_type, "value", source.question_type),
                 source.difficulty,
             )
-            source_marks = float(source.marks or 0)
-            if group_key in marks_by_group and not math.isclose(
-                marks_by_group[group_key], source_marks, rel_tol=0, abs_tol=0.0001
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Maximum marks must match every question in the same type and difficulty group.",
-                )
-            marks_by_group[group_key] = source_marks
+            # Marks are configured by the creator of the destination exam.
+            # Preserve an existing exam-specific value for this group; otherwise
+            # use a temporary 1-mark default that the creator can change below.
+            exam_marks = marks_by_group.get(group_key, 1.0)
+            marks_by_group[group_key] = exam_marks
 
             copied = QuestionBank(
                 question_text=source.question_text,
@@ -861,7 +857,7 @@ def reuse_questions_from_previous_banks(
                 question_image_mime_type=source.question_image_mime_type,
                 expected_answer_image_data=source.expected_answer_image_data,
                 expected_answer_image_mime_type=source.expected_answer_image_mime_type,
-                marks=source.marks,
+                marks=exam_marks,
                 negative_marks=source.negative_marks,
                 tags=list(source.tags or []),
                 created_by=current_user.id,
