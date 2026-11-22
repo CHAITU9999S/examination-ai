@@ -52,7 +52,7 @@ const navigation = [
   {
     title: "Examinations",
     description: "View all examinations created by Admins and Examiners.",
-    href: "/admin/exams",
+    href: "/staff/examinations",
   },
   {
     title: "Manage Examination",
