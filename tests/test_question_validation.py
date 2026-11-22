@@ -20,6 +20,29 @@ def test_rejects_empty_question():
         validate_question("short_answer", "", 2)
 
 
+def test_image_only_prompt_is_valid_when_image_is_present():
+    assert validate_question(
+        "short_answer",
+        "",
+        2,
+        has_question_image=True,
+    ) is True
+
+
+def test_text_and_image_prompt_is_valid():
+    assert validate_question(
+        "short_answer",
+        "Describe the diagram.",
+        2,
+        has_question_image=True,
+    ) is True
+
+
+def test_empty_prompt_is_rejected_without_image():
+    with pytest.raises(ValueError, match="text or upload a question image"):
+        validate_question("short_answer", "", 2)
+
+
 def test_rejects_invalid_marks():
     with pytest.raises(ValueError):
         validate_question("short_answer", "Explain Python", 0)
