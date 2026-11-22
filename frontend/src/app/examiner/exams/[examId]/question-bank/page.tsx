@@ -354,7 +354,7 @@ export default function ExamQuestionBankPage() {
         body: JSON.stringify({ question_ids: selectedSources }),
       });
       setSelectedSources([]);
-      setMessage("Selected questions copied as independent snapshots. Changes to source questions will not affect this exam.");
+      setMessage("Selected question content and answers were copied as independent snapshots. Source marks were not copied; set the maximum marks for this examination in Question Paper Marks Settings. Changes to source questions will not affect this exam.");
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reuse selected questions.");
@@ -571,7 +571,7 @@ export default function ExamQuestionBankPage() {
             <h2 className="text-xl font-semibold">Examination Questions ({questions.length})</h2>
             {questions.map((question) => (
               <article key={question.question_id} className="mt-4 rounded-xl border border-white/10 bg-slate-800/60 p-5">
-                <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
+                <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · Source exam: {question.marks} marks (not copied)</p>
                 <p className="mt-3 whitespace-pre-wrap">{question.question_text}</p>
                 {question.options?.map((option) => <p key={option.id} className="mt-2 text-sm text-slate-300">{option.option_text}{option.is_correct ? " (Correct answer)" : ""}</p>)}
                 {question.expected_answer && <p className="mt-3 text-sm text-slate-400">Expected answer: {question.expected_answer}</p>}
@@ -722,7 +722,7 @@ export default function ExamQuestionBankPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Question Paper Marks Settings</h2>
-              <p className="mt-1 text-sm text-slate-400">Change the maximum marks for each type and difficulty group. This has its own three-revision limit and is separate from exam settings and student answer marks.</p>
+              <p className="mt-1 text-sm text-slate-400">Set the maximum marks for this examination's questions by type and difficulty. These values belong only to this examination, not to the source question banks. This has its own three-revision limit and is separate from exam settings and student answer marks.</p>
             </div>
             <span className="text-xs text-cyan-300">{questionMarksRevisionsUsed}/3 revisions used</span>
           </div>
@@ -885,7 +885,7 @@ export default function ExamQuestionBankPage() {
 
         <section className={cardClass}>
           <h2 className="text-xl font-semibold">Reuse Previous Question Banks</h2>
-          <p className="mt-1 text-sm text-slate-400">Choose questions from earlier examinations. Each selected question is copied into this bank, so later edits to the source will not alter this exam.</p>
+          <p className="mt-1 text-sm text-slate-400">Choose questions from earlier examinations. Question text, correct answers, expected answers, options and images are copied as independent snapshots. Source maximum marks are not reused; this examination uses its own marks settings.</p>
           {sourceBanks.length === 0 ? <p className="py-6 text-sm text-slate-400">No reusable question banks are available.</p> : (
             <div className="mt-4 space-y-4">
               {sourceBanks.map((bank) => (
