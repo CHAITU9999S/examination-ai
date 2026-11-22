@@ -16,8 +16,6 @@ const defaultGroupCounts: Record<string, string> = Object.fromEntries(
   )
 );
 
-const INDIA_TIME_ZONE = "Asia/Kolkata";
-
 function istDateTimeToIso(value: string) {
   const withSeconds = value.length === 16 ? `${value}:00` : value;
   const date = new Date(`${withSeconds}+05:30`);
@@ -25,25 +23,10 @@ function istDateTimeToIso(value: string) {
   return date.toISOString();
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "Not scheduled";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "Invalid date";
-
-  return date.toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: INDIA_TIME_ZONE,
-  }) + " IST";
-}
-
 export default function ExaminerExamsPage() {
   const router = useRouter();
 
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -77,8 +60,7 @@ export default function ExaminerExamsPage() {
     };
   }, [router]);
 
-  const loadExams = useCallback(async () => {
-    setLoading(true);
+  const loadProfile = useCallback(async () => {
     setError("");
 
     try {
@@ -92,7 +74,11 @@ export default function ExaminerExamsPage() {
       });
       if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
       const profile = await profileResponse.json();
-      setStaffRole(profile.role === "admin" ? "admin" : "examiner");
+      if (profile.role !== "admin" && profile.role !== "examiner") {
+        router.replace("/login");
+        return;
+      }
+      setStaffRole(profile.role);
 
     } catch (err) {
       setError(
@@ -100,14 +86,12 @@ export default function ExaminerExamsPage() {
           ? err.message
           : "Unable to load examinations."
       );
-    } finally {
-      setLoading(false);
     }
   }, [getHeaders, router]);
 
   useEffect(() => {
-    loadExams();
-  }, [loadExams]);
+    loadProfile();
+  }, [loadProfile]);
 
   function resetForm() {
     setTitle("");
