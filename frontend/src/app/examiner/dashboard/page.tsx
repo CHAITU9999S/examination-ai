@@ -29,9 +29,14 @@ interface Exam {
 
 const navigation = [
   {
-    title: "Question Bank",
-    description: "Create, view, and manage examination questions.",
-    href: "/examiner/questions",
+    title: "Question Banks",
+    description: "Browse question banks created by all Admins and Examiners.",
+    href: "/staff/question-banks",
+  },
+  {
+    title: "Manage Question Bank",
+    description: "Create and manage your own question banks and questions.",
+    href: "/examiner/question-banks",
   },
   {
     title: "Examinations",
