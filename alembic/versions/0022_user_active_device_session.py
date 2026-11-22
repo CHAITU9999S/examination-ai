@@ -1,7 +1,7 @@
 """Add one-active-device session identifier to users.
 
 Revision ID: 0022_user_active_device_session
-Revises: 0021_exam_question_marks_revisions
+Revises: 0023_expected_answer_image
 """
 import secrets
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0022_user_active_device_session"
-down_revision = "0021_exam_question_marks_revisions"
+down_revision = "0023_expected_answer_image"
 branch_labels = None
 depends_on = None
 
