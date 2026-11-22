@@ -131,9 +131,33 @@ async function request<T>(
 
   if (!response.ok) {
     const detail = await getErrorDetails(response);
+    const message = getErrorMessage(detail, response.status);
+
+    if (
+      response.status === 401 &&
+      /another device|login session is no longer active/i.test(message) &&
+      typeof window !== "undefined"
+    ) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem("examguard_user");
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (
+          key &&
+          (
+            key.startsWith("examguard_exam_token_") ||
+            key.startsWith("examguard_exam_refresh_") ||
+            key.startsWith("examguard_exam_id_")
+          )
+        ) {
+          sessionStorage.removeItem(key);
+        }
+      }
+      window.location.replace("/login?reason=session_replaced");
+    }
 
     throw new ApiError(
-      getErrorMessage(detail, response.status),
+      message,
       response.status,
       detail
     );
