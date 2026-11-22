@@ -22,7 +22,7 @@ def upgrade():
         "ix_users_active_session_id",
         "users",
         ["active_session_id"],
-        unique=True,
+        unique=False,
     )
 
 
