@@ -177,6 +177,10 @@ class Question(Base):
     question_image_data = Column(LargeBinary, nullable=True)
     question_image_mime_type = Column(String(50), nullable=True)
 
+    # Optional expected/model answer image, stored directly in PostgreSQL.
+    expected_answer_image_data = Column(LargeBinary, nullable=True)
+    expected_answer_image_mime_type = Column(String(50), nullable=True)
+
     # Compatibility with existing code using model_answer.
     model_answer = synonym("model_answer_text")
 
