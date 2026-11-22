@@ -38,6 +38,18 @@ def test_valid_question():
     assert len(question.options) == 2
 
 
+def test_question_schema_accepts_image_only_prompt():
+    question = QuestionCreate(
+        question_text=None,
+        question_type="short_answer",
+        subject="Programming",
+        difficulty="easy",
+        marks=2,
+    )
+
+    assert question.question_text is None
+
+
 def test_question_rejects_zero_marks():
     with pytest.raises(ValidationError):
         QuestionCreate(
