@@ -533,6 +533,44 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
+  if (examConfig && !examConfig.can_edit) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white">
+        <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <div><Link href="/staff/examinations" className="text-2xl font-bold">ExamGuard <span className="text-cyan-400">AI</span></Link><p className="text-sm text-slate-400">View Examination</p></div>
+            <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Back to Examinations</Link>
+          </div>
+        </header>
+        <div className="mx-auto max-w-7xl space-y-6 px-6 py-10">
+          <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <h1 className="text-3xl font-bold">{examConfig.title}</h1>
+            <p className="mt-2 text-slate-400">{examConfig.subject || "No subject"}</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum time</p><p className="mt-1 font-semibold">{examConfig.duration_minutes} minutes</p></div>
+              <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Questions</p><p className="mt-1 font-semibold">{questions.length}</p></div>
+              <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Owner</p><p className="mt-1 font-semibold">Another staff account</p></div>
+            </div>
+            <p className="mt-4 text-sm text-slate-400">This examination belongs to another creator. You can view its questions, but you cannot change its settings or records.</p>
+          </section>
+          <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <h2 className="text-xl font-semibold">Examination Questions ({questions.length})</h2>
+            {questions.map((question) => (
+              <article key={question.question_id} className="mt-4 rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
+                <p className="mt-3 whitespace-pre-wrap">{question.question_text}</p>
+                {question.options?.map((option) => <p key={option.id} className="mt-2 text-sm text-slate-300">{option.option_text}{option.is_correct ? " (Correct answer)" : ""}</p>)}
+                {question.expected_answer && <p className="mt-3 text-sm text-slate-400">Expected answer: {question.expected_answer}</p>}
+                {question.model_answer_text && <p className="mt-2 text-sm text-slate-400">Model answer: {question.model_answer_text}</p>}
+              </article>
+            ))}
+            {questions.length === 0 && <p className="py-8 text-slate-400">No questions have been added yet.</p>}
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
