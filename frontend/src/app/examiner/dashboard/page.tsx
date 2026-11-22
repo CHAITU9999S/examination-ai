@@ -34,8 +34,18 @@ const navigation = [
     href: "/examiner/questions",
   },
   {
-    title: "My Examinations",
-    description: "Create examinations and manage their configurations.",
+    title: "Examinations",
+    description: "View examinations created by your account.",
+    href: "/staff/examinations",
+  },
+  {
+    title: "Manage Examination",
+    description: "Edit, delete, and manage examinations you created.",
+    href: "/staff/manage-exams",
+  },
+  {
+    title: "Create Examination",
+    description: "Create a new examination.",
     href: "/examiner/exams",
   },
   {
