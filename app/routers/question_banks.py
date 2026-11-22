@@ -238,7 +238,7 @@ def list_bank_questions(
     return result
 
 
-@router.post("/select-for-exam/{exam_id}")
+@router.post("/select-for-exam/{exam_id}", status_code=status.HTTP_201_CREATED)
 def copy_selected_bank_questions_to_exam(
     exam_id: int,
     data: ExamQuestionSelection,
