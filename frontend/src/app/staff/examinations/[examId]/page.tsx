@@ -86,7 +86,7 @@ export default function ExaminationDetailsPage() {
             <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
               <h1 className="text-3xl font-bold">{exam.title}</h1>
               <p className="mt-2 text-slate-400">{exam.subject || "No subject entered"}</p>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Created by</p><p className="mt-1 font-semibold">{exam.created_by_name || "Unknown"}</p><p className="text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</p></div>
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Maximum time</p><p className="mt-1 font-semibold">{exam.duration_minutes} minutes</p></div>
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Questions</p><p className="mt-1 font-semibold">{exam.total_questions}</p></div>
