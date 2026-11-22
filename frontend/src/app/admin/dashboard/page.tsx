@@ -60,6 +60,16 @@ const navigation = [
     href: "/staff/manage-exams",
   },
   {
+    title: "Question Banks",
+    description: "Browse question banks created by all Admins and Examiners.",
+    href: "/staff/question-banks",
+  },
+  {
+    title: "Manage Question Bank",
+    description: "Create and manage your own question banks and questions.",
+    href: "/examiner/question-banks",
+  },
+  {
     title: "Create Examination",
     description: "Create a new examination.",
     href: "/examiner/exams",
