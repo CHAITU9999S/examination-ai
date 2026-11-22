@@ -178,6 +178,31 @@ def validate_exam_token(
             detail="Student account is invalid or inactive.",
         )
 
+    token_auth_session_id = payload.get("auth_session_id")
+    if student.active_session_id:
+        if (
+            not isinstance(token_auth_session_id, str)
+            or not hmac.compare_digest(
+                token_auth_session_id,
+                student.active_session_id,
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "This examination was signed out because your account "
+                    "was used to sign in on another device. Your saved answers "
+                    "are preserved. Please sign in again to continue."
+                ),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    elif token_auth_session_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This examination login session is no longer active.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     session = db.query(ExamSession).filter(
         ExamSession.id == session_id,
         ExamSession.exam_id == exam_id,
@@ -380,6 +405,7 @@ def start_exam(
         expires_at=normalize_to_naive_utc(
             session.expires_at
         ),
+        auth_session_id=current_user.active_session_id,
     )
 
     current_time = get_current_utc_time()
@@ -495,6 +521,7 @@ def refresh_exam_access_token(
         student_id=session.student_id,
         session_id=session.id,
         expires_at=normalize_to_naive_utc(session.expires_at),
+        auth_session_id=student.active_session_id,
     )
 
     return {
