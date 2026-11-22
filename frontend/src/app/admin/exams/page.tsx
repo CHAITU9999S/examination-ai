@@ -152,6 +152,10 @@ export default function AdminExamsPage() {
       if (sortBy === "title-desc") return second.title.localeCompare(first.title);
       if (sortBy === "duration-short") return first.duration_minutes - second.duration_minutes;
       if (sortBy === "duration-long") return second.duration_minutes - first.duration_minutes;
+      if (sortBy === "questions-low") return first.total_questions - second.total_questions;
+      if (sortBy === "questions-high") return second.total_questions - first.total_questions;
+      if (sortBy === "marks-low") return (first.max_marks ?? -1) - (second.max_marks ?? -1);
+      if (sortBy === "marks-high") return (second.max_marks ?? -1) - (first.max_marks ?? -1);
       if (sortBy === "oldest") return first.id - second.id;
       return second.id - first.id;
     });
@@ -259,6 +263,10 @@ export default function AdminExamsPage() {
                 <option value="title-desc">Name Z to A</option>
                 <option value="duration-short">Shortest time</option>
                 <option value="duration-long">Longest time</option>
+                <option value="questions-low">Fewest questions</option>
+                <option value="questions-high">Most questions</option>
+                <option value="marks-low">Lowest maximum marks</option>
+                <option value="marks-high">Highest maximum marks</option>
               </select>
             </div>
           </div>
