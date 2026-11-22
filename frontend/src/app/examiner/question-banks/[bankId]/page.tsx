@@ -142,7 +142,7 @@ export default function QuestionBankDetailPage() {
     setError("");
 
     const isChoice = type === "MCQ" || type === "multi_select";
-    if (!text.trim() && !questionImage) {
+    if (!text.trim() && !questionImage && !editingQuestion?.question_image_available) {
       setError("Enter question text or upload a question image.");
       return;
     }
