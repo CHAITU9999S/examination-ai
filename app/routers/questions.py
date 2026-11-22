@@ -384,7 +384,9 @@ async def upload_expected_answer_image(
     try:
         validate_image_bytes(image_bytes)
         image_format = Image.open(io.BytesIO(image_bytes)).format
-    except (HTTPException, OSError, ValueError):
+    except HTTPException:
+        raise
+    except (OSError, ValueError):
         raise HTTPException(status_code=400, detail="Upload a valid image file.")
 
     mime_types = {
