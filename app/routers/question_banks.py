@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_role
-from app.models import Question, Option, ExamQuestion, ExamSession, Answer
+from app.models import Question, Option, ExamQuestion, ExamSession, Answer, Exam, User, AdminActivityLog
 from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 from app.schemas import QuestionCreate
 from app.services.question_validation import validate_question
@@ -18,6 +18,17 @@ class QuestionBankCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: str | None = Field(default=None, max_length=500)
     subject: str | None = Field(default=None, max_length=100)
+
+
+class ExamQuestionSelection(BaseModel):
+    question_ids: list[int] = Field(min_length=1)
+
+
+def _get_bank(db: Session, bank_id: int):
+    bank = db.query(QuestionCollection).filter(QuestionCollection.id == bank_id).first()
+    if bank is None:
+        raise HTTPException(status_code=404, detail="Question bank not found.")
+    return bank
 
 
 def _get_owned_bank(db: Session, bank_id: int, user_id: int):
@@ -46,6 +57,34 @@ def create_question_bank(
     db.commit()
     db.refresh(bank)
     return {"message": "Question bank created.", "bank_id": bank.id}
+
+
+@router.get("/browse")
+def browse_question_banks(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("admin", "examiner")),
+):
+    """Show all question banks without giving permission to change them."""
+    rows = db.query(QuestionCollection, User).join(
+        User, User.id == QuestionCollection.created_by
+    ).order_by(QuestionCollection.id.desc()).all()
+    result = []
+    for bank, owner in rows:
+        type_rows = db.query(Question.question_type).join(
+            QuestionCollectionItem, QuestionCollectionItem.question_id == Question.id
+        ).filter(QuestionCollectionItem.collection_id == bank.id).all()
+        type_counts = {}
+        for (question_type,) in type_rows:
+            value = getattr(question_type, "value", question_type)
+            type_counts[value] = type_counts.get(value, 0) + 1
+        result.append({
+            "id": bank.id, "name": bank.name, "description": bank.description,
+            "subject": bank.subject, "question_count": len(type_rows),
+            "question_types": type_counts, "created_by": owner.id,
+            "created_by_name": owner.full_name, "created_by_role": owner.role,
+            "created_at": bank.created_at,
+        })
+    return result
 
 
 @router.get("/")
@@ -108,7 +147,7 @@ def list_bank_questions(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("admin", "examiner")),
 ):
-    bank = _get_owned_bank(db, bank_id, current_user.id)
+    bank = _get_bank(db, bank_id)
     rows = db.query(QuestionCollectionItem, Question).join(
         Question, Question.id == QuestionCollectionItem.question_id
     ).filter(QuestionCollectionItem.collection_id == bank.id).order_by(
@@ -136,6 +175,78 @@ def list_bank_questions(
             ],
         })
     return result
+
+
+@router.post("/select-for-exam/{exam_id}")
+def copy_selected_bank_questions_to_exam(
+    exam_id: int,
+    data: ExamQuestionSelection,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("admin", "examiner")),
+):
+    """Copy selected questions from any staff question banks into an exam."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the examination creator can change its questions.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam.id).first():
+        raise HTTPException(status_code=409, detail="Questions cannot change after a student exam session has been created.")
+    question_ids = data.question_ids
+    if len(question_ids) != len(set(question_ids)):
+        raise HTTPException(status_code=400, detail="Choose each question only once.")
+    if len(question_ids) != exam.total_questions:
+        raise HTTPException(status_code=400, detail=f"Choose exactly {exam.total_questions} questions for this examination.")
+    bank_question_ids = {row[0] for row in db.query(QuestionCollectionItem.question_id).filter(QuestionCollectionItem.question_id.in_(question_ids)).distinct().all()}
+    if bank_question_ids != set(question_ids):
+        raise HTTPException(status_code=400, detail="Some selected questions are not in a question bank.")
+    source_rows = db.query(Question).filter(Question.id.in_(question_ids)).all()
+    source_by_id = {question.id: question for question in source_rows}
+    if len(source_by_id) != len(question_ids):
+        raise HTTPException(status_code=404, detail="One or more selected questions could not be found.")
+    selected_questions = [source_by_id[question_id] for question_id in question_ids]
+    if exam.subject and any((question.subject or "").casefold() != exam.subject.casefold() for question in selected_questions):
+        raise HTTPException(status_code=400, detail="All selected questions must match the examination subject.")
+    group_counts = {}
+    marks_by_group = {}
+    for question in selected_questions:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        group = f"{question.difficulty}|{question_type}"
+        group_counts[group] = group_counts.get(group, 0) + 1
+        marks = float(question.marks or 0)
+        if group in marks_by_group and marks_by_group[group] != marks:
+            raise HTTPException(status_code=400, detail="Questions of the same type and difficulty must have equal marks.")
+        marks_by_group[group] = marks
+    configured_counts = (exam.selection_rules or {}).get("group_counts") if isinstance(exam.selection_rules, dict) else None
+    if isinstance(configured_counts, dict):
+        normalized_config = {key: int(value) for key, value in configured_counts.items() if int(value) > 0}
+        if group_counts != normalized_config:
+            raise HTTPException(status_code=400, detail="The selected questions do not match the examination's question type and difficulty counts.")
+    try:
+        db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).delete(synchronize_session=False)
+        for order, source in enumerate(selected_questions, start=1):
+            copied = Question(
+                question_text=source.question_text, question_type=source.question_type,
+                subject=source.subject, difficulty=source.difficulty,
+                expected_answer=source.expected_answer, model_answer_text=source.model_answer_text,
+                question_image_path=source.question_image_path,
+                question_image_data=source.question_image_data,
+                question_image_mime_type=source.question_image_mime_type,
+                marks=source.marks, negative_marks=source.negative_marks,
+                tags=list(source.tags or []), created_by=current_user.id,
+                source_question_id=None,
+            )
+            db.add(copied)
+            db.flush()
+            for option in source.options:
+                db.add(Option(question_id=copied.id, option_text=option.option_text, is_correct=option.is_correct))
+            db.add(ExamQuestion(exam_id=exam.id, question_id=copied.id, question_order=order))
+        db.add(AdminActivityLog(actor_user_id=current_user.id, action="exam_questions_copied_from_banks", details={"exam_id": exam.id, "source_question_ids": question_ids, "question_count": len(question_ids)}))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"message": "Selected questions were copied into this examination.", "exam_id": exam.id, "question_count": len(question_ids)}
 
 
 @router.post("/{bank_id}/questions", status_code=status.HTTP_201_CREATED)
