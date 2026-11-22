@@ -209,7 +209,22 @@ def login(
     # lock ensures the last committed login is the only active device.
     user = db.query(User).filter(
         User.id == user.id
-    ).with_for_update().one()
+    ).with_for_update().populate_existing().one()
+
+    # Re-check account state and password after acquiring the lock so an
+    # account deactivation or password change racing with login is respected.
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is inactive. Contact an Admin."
+        )
+
+    if not verify_password(login_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
     active_session_id = secrets.token_urlsafe(32)
     user.active_session_id = active_session_id
