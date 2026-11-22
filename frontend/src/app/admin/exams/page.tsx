@@ -268,15 +268,9 @@ export default function AdminExamsPage() {
               Loading examinations...
             </p>
           ) : visibleExams.length === 0 ? (
-            <p className="py-12 text-center text-slate-400">No examinations match your search.</p>
-          ) : (
             <div className="py-12 text-center">
               <p className="font-semibold text-slate-300">
-                No examinations found.
-              </p>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Examinations created by authorized examiners will appear here.
+                {exams.length === 0 ? "No examinations found." : "No examinations match your search."}
               </p>
             </div>
           ) : (
@@ -361,22 +355,12 @@ export default function AdminExamsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          {Number(exam.created_by) === currentUserId ? (
-                            <Link
-                              href={`/examiner/exams/${exam.id}/question-bank`}
-                              className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-500/10"
-                            >
-                              Manage Questions & Students
-                            </Link>
-                          ) : (
-                            <Link
-                              href={`/staff/examinations/${exam.id}`}
-                              className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
-                            >
-                              View Questions
-                            </Link>
-                          )}
-                          
+                          <Link
+                            href={`/staff/examinations/${exam.id}`}
+                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
+                          >
+                            View Questions
+                          </Link>
                         </div>
                       </td>
                     </tr>
