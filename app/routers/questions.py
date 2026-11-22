@@ -347,6 +347,103 @@ def get_question_image(
 
 
 # ==========================================
+# EXPECTED ANSWER IMAGE
+# ==========================================
+
+@router.post("/{question_id}/expected-answer-image", status_code=status.HTTP_201_CREATED)
+async def upload_expected_answer_image(
+    question_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Store an optional model-answer image for staff evaluation."""
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    if question.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the question creator can change its expected-answer image.")
+
+    linked_exam_ids = [
+        row[0] for row in db.query(ExamQuestion.exam_id).filter(
+            ExamQuestion.question_id == question_id
+        ).all()
+    ]
+    if linked_exam_ids and db.query(ExamSession.id).filter(
+        ExamSession.exam_id.in_(linked_exam_ids)
+    ).first():
+        raise HTTPException(
+            status_code=409,
+            detail="The expected-answer image cannot be changed after a linked examination session has been created.",
+        )
+
+    image_bytes = await file.read(10 * 1024 * 1024 + 1)
+    try:
+        validate_image_bytes(image_bytes)
+        image_format = Image.open(io.BytesIO(image_bytes)).format
+    except (HTTPException, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="Upload a valid image file.")
+
+    mime_types = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "WEBP": "image/webp",
+        "TIFF": "image/tiff",
+        "BMP": "image/bmp",
+    }
+    media_type = mime_types.get(image_format)
+    if media_type is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Supported image formats are JPEG, PNG, WEBP, TIFF and BMP.",
+        )
+
+    question.expected_answer_image_data = image_bytes
+    question.expected_answer_image_mime_type = media_type
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to save the expected-answer image in Neon.")
+
+    return {
+        "message": "Expected-answer image stored in Neon successfully.",
+        "question_id": question.id,
+        "image_uploaded": True,
+        "storage": "neon_postgresql",
+    }
+
+
+@router.get("/{question_id}/expected-answer-image")
+def get_expected_answer_image(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Serve the model-answer image to the question creator only."""
+
+    question = db.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first()
+    if question is None or not question.expected_answer_image_data:
+        raise HTTPException(status_code=404, detail="Expected-answer image not found.")
+    if question.created_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the question creator can view its expected-answer image.",
+        )
+
+    return Response(
+        content=question.expected_answer_image_data,
+        media_type=question.expected_answer_image_mime_type or "application/octet-stream",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+# ==========================================
 # DELETE QUESTION
 # ==========================================
 
