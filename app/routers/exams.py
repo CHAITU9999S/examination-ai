@@ -1750,6 +1750,7 @@ def get_exam_details(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if current_user.role == UserRole.EXAMINER.value and exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can view only your own examination configuration.")
+    creator = db.query(User).filter(User.id == exam.created_by).first()
     return {
         "id": exam.id,
         "title": exam.title,
@@ -1765,5 +1766,7 @@ def get_exam_details(
         "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
         "max_tab_switch_warnings": exam.max_tab_switch_warnings,
         "created_by": exam.created_by,
+        "created_by_name": creator.full_name if creator else "Unknown",
+        "created_by_role": creator.role if creator else None,
         "can_edit": exam.created_by == current_user.id,
     }
