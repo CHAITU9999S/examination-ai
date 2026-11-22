@@ -76,6 +76,9 @@ export default function StudentExamPage() {
     if (
       normalizedMessage.includes(
         "signed out because your account was used to sign in on another device"
+      ) ||
+      normalizedMessage.includes(
+        "exam refresh token is invalid or has already been rotated"
       )
     ) {
       localStorage.removeItem("examguard_access_token");
@@ -178,7 +181,7 @@ export default function StudentExamPage() {
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [examRefreshTokenKey, examTokenKey, sessionId]);
+  }, [examRefreshTokenKey, examTokenKey, sessionId, setError]);
 
   const handleProctoringEvent = useCallback((event: {
     event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error";
