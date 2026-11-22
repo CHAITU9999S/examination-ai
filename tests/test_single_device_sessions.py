@@ -174,3 +174,41 @@ def test_new_login_revokes_old_exam_credentials_but_preserves_exam_and_answers(
         headers={"Authorization": f"Bearer {resumed.json()['access_token']}"},
     )
     assert new_exam_access.status_code == 200
+
+def test_logging_in_to_one_account_does_not_invalidate_another_account(
+    client, db_session
+):
+    create_account(
+        db_session,
+        role="student",
+        email="first-independent-account@test.com",
+    )
+    create_account(
+        db_session,
+        role="examiner",
+        email="second-independent-account@test.com",
+    )
+
+    first_login = login(client, "first-independent-account@test.com")
+    second_login = login(client, "second-independent-account@test.com")
+    assert first_login.status_code == 200
+    assert second_login.status_code == 200
+
+    replacement_login = login(client, "first-independent-account@test.com")
+    assert replacement_login.status_code == 200
+
+    first_old_device = client.get(
+        "/users/me",
+        headers={
+            "Authorization": f"Bearer {first_login.json()['access_token']}"
+        },
+    )
+    second_account_device = client.get(
+        "/users/me",
+        headers={
+            "Authorization": f"Bearer {second_login.json()['access_token']}"
+        },
+    )
+
+    assert first_old_device.status_code == 401
+    assert second_account_device.status_code == 200
