@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -30,6 +30,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionReplaced, setSessionReplaced] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSessionReplaced(params.get("reason") === "session_replaced");
+  }, []);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -140,6 +146,15 @@ export default function LoginPage() {
           onSubmit={handleLogin}
           className="rounded-2xl border border-white/10 bg-slate-900 p-7 shadow-2xl"
         >
+          {sessionReplaced && (
+            <div
+              role="status"
+              className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+            >
+              This account was signed in on another device, so this device was signed out. Sign in again to continue.
+            </div>
+          )}
+
           {error && (
             <div
               role="alert"
