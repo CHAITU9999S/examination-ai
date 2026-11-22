@@ -78,7 +78,7 @@ export default function QuestionBanksPage() {
   }
 
   async function deleteBank(id: number) {
-    if (!window.confirm("Delete this question bank? Saved questions and examination records will be kept.")) return;
+    if (!window.confirm("Delete this question bank? Unused questions will also be deleted. Questions used in other banks, examinations, or student records will be kept.")) return;
     const auth = headers(); if (!auth) return;
     const response = await fetch(`${API_URL}/question-banks/${id}`, { method: "DELETE", headers: auth });
     const data = await response.json().catch(() => ({}));
