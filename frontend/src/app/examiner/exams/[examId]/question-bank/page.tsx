@@ -61,6 +61,8 @@ interface ExamConfiguration {
   gaze_tracking_sensitivity: number | null;
   max_tab_switch_warnings: number | null;
   can_edit: boolean;
+  created_by_name?: string;
+  created_by_role?: string;
 }
 interface ConfigRevision {
   revision_number: number;
@@ -172,7 +174,7 @@ export default function ExamQuestionBankPage() {
   }, [getHeaders, router]);
 
   const loadAll = useCallback(async () => {
-    if (!/^\d+$/.test(examId)) {
+    if (!/^\\d+$/.test(examId)) {
       setError("Invalid examination ID.");
       setLoading(false);
       return;
@@ -180,14 +182,10 @@ export default function ExamQuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      const [profile, bank, sources, eligible, assigned, config, revisions, marksSettings] = await Promise.all([
+      const [profile, bank, config, marksSettings] = await Promise.all([
         request("/users/me"),
         request(`/exams/${examId}/questions`),
-        request(`/exams/${examId}/question-bank/sources`),
-        request(`/exams/${examId}/eligible-students`),
-        request(`/exams/${examId}/assignments`),
         request(`/exams/${examId}`),
-        request(`/exams/${examId}/configuration-revisions`),
         request(`/exams/${examId}/question-marks`),
       ]);
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
@@ -206,8 +204,6 @@ export default function ExamQuestionBankPage() {
           ? Object.fromEntries(Object.entries(savedGroupCounts).map(([key, value]) => [key, String(value)]))
           : {}),
       });
-      setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
-      setRevisionsUsed(Number(revisions.revisions_used || 0));
       setQuestionMarksByGroup(
         Object.fromEntries(
           Object.entries(marksSettings.marks_by_group || {}).map(([key, value]) => [key, String(value)])
@@ -218,11 +214,29 @@ export default function ExamQuestionBankPage() {
       setQuestionMarksCanEdit(Boolean(marksSettings.can_edit));
       setQuestionMarksLocked(Boolean(marksSettings.has_sessions));
       setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
+
+      if (!config.can_edit) {
+        setConfigRevisions([]);
+        setRevisionsUsed(0);
+        setSourceBanks([]);
+        setStudents([]);
+        setAssignedStudents([]);
+        return;
+      }
+
+      const [sources, eligible, assigned, revisions] = await Promise.all([
+        request(`/exams/${examId}/question-bank/sources`),
+        request(`/exams/${examId}/eligible-students`),
+        request(`/exams/${examId}/assignments`),
+        request(`/exams/${examId}/configuration-revisions`),
+      ]);
+      setConfigRevisions(Array.isArray(revisions.revisions) ? revisions.revisions : []);
+      setRevisionsUsed(Number(revisions.revisions_used || 0));
       setSourceBanks(Array.isArray(sources.banks) ? sources.banks : []);
       setStudents(Array.isArray(eligible.students) ? eligible.students : []);
       setAssignedStudents(Array.isArray(assigned.students) ? assigned.students : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load the question bank.");
+      setError(err instanceof Error ? err.message : "Unable to load the examination.");
     } finally {
       setLoading(false);
     }
@@ -549,7 +563,7 @@ export default function ExamQuestionBankPage() {
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum time</p><p className="mt-1 font-semibold">{examConfig.duration_minutes} minutes</p></div>
               <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Questions</p><p className="mt-1 font-semibold">{questions.length}</p></div>
-              <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Owner</p><p className="mt-1 font-semibold">Another staff account</p></div>
+              <div className="rounded-lg bg-slate-800 p-4"><p className="text-xs text-slate-400">Owner</p><p className="mt-1 font-semibold">{examConfig.created_by_name || "Another staff account"}</p><p className="text-xs capitalize text-slate-400">{examConfig.created_by_role || ""}</p></div>
             </div>
             <p className="mt-4 text-sm text-slate-400">This examination belongs to another creator. You can view its questions, but you cannot change its settings or records.</p>
           </section>
