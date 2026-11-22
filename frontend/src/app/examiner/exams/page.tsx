@@ -16,21 +16,6 @@ const defaultGroupCounts: Record<string, string> = Object.fromEntries(
   )
 );
 
-interface Exam {
-  id: number;
-  title: string;
-  subject?: string | null;
-  duration_minutes: number;
-  total_questions: number;
-  start_time?: string | null;
-  end_time?: string | null;
-  negative_marking?: boolean;
-  proctoring_enabled?: boolean;
-  created_by?: number | null;
-  created_by_name?: string | null;
-  created_by_role?: string | null;
-}
-
 const INDIA_TIME_ZONE = "Asia/Kolkata";
 
 function istDateTimeToIso(value: string) {
@@ -57,9 +42,7 @@ function formatDate(value?: string | null) {
 export default function ExaminerExamsPage() {
   const router = useRouter();
 
-  const [exams, setExams] = useState<Exam[]>([]);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -110,35 +93,7 @@ export default function ExaminerExamsPage() {
       if (!profileResponse.ok) throw new Error("Unable to load your staff account.");
       const profile = await profileResponse.json();
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
-      setCurrentUserId(Number(profile.id));
 
-      const response = await fetch(`${API_URL}/exams`, {
-        method: "GET",
-        headers,
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        router.replace("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error("Unable to load examinations.");
-      }
-
-      const data = await response.json();
-
-      const examList = Array.isArray(data)
-        ? data
-        : Array.isArray(data.exams)
-          ? data.exams
-          : null;
-
-      if (!examList) {
-        throw new Error("Unexpected examination data returned by the server.");
-      }
-
-      setExams(examList);
     } catch (err) {
       setError(
         err instanceof Error
@@ -327,7 +282,6 @@ export default function ExaminerExamsPage() {
 
       setMessage("Examination created successfully.");
       resetForm();
-      await loadExams();
       if (data.exam_id) {
         router.push(`/examiner/exams/${data.exam_id}/select-question-bank`);
       }
@@ -359,18 +313,22 @@ export default function ExaminerExamsPage() {
             </p>
           </div>
 
-          <Link
-            href="/examiner/dashboard"
-            className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
-          >
-            ← Dashboard
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={staffRole === "admin" ? "/admin/exams" : "/staff/examinations"} className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10">Examinations</Link>
+            <Link href="/staff/manage-exams" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10">Manage Examination</Link>
+            <Link
+              href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"}
+              className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
+            >
+              ← Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-10">
         <h1 className="text-3xl font-bold">
-          Examination Management
+          Create Examination
         </h1>
 
         <p className="mt-2 text-slate-400">
@@ -661,112 +619,6 @@ export default function ExaminerExamsPage() {
           </form>
         </section>
 
-        <section className="mt-10 rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold">{staffRole === "admin" ? "All Examinations" : "My Examinations"}</h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {exams.length} examination(s)
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={loadExams}
-              disabled={loading}
-              className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-50"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {loading ? (
-            <p className="py-10 text-center text-slate-400">
-              Loading examinations...
-            </p>
-          ) : exams.length === 0 ? (
-            <p className="py-10 text-center text-slate-400">
-              {staffRole === "admin" ? "No examinations have been created yet." : "You have not created any examinations yet."}
-            </p>
-          ) : (
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full min-w-[850px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-slate-400">
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Subject</th>
-                    {staffRole === "admin" && <th className="px-4 py-3">Created By</th>}
-                    <th className="px-4 py-3">Duration</th>
-                    <th className="px-4 py-3">Questions</th>
-                    <th className="px-4 py-3">Start Time</th>
-                    <th className="px-4 py-3">End Time</th>
-                    <th className="px-4 py-3">Manage</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {exams.map((exam) => (
-                    <tr
-                      key={exam.id}
-                      className="border-b border-white/5 last:border-0"
-                    >
-                      <td className="px-4 py-4 font-semibold">
-                        {exam.title}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.subject || "—"}
-                      </td>
-
-                      {staffRole === "admin" && (
-                        <td className="px-4 py-4 text-slate-300">
-                          <span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span>
-                          <span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span>
-                        </td>
-                      )}
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.duration_minutes} minutes
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.total_questions}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {formatDate(exam.start_time)}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {formatDate(exam.end_time)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/examiner/exams/${exam.id}/question-bank`}
-                            className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30"
-                          >
-                            Manage Bank & Students
-                          </Link>
-                          {(staffRole === "admin" || staffRole === "examiner" || Number(exam.created_by) === currentUserId) && (
-                            <button
-                              type="button"
-                              onClick={() => deleteExam(exam)}
-                              className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
       </div>
     </main>
   );
