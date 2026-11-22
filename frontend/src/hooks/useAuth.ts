@@ -117,7 +117,21 @@ export function useAuth(): UseAuthReturn {
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
+          const failureData: unknown = await response.json().catch(() => ({}));
+          const failureMessage = getErrorMessage(
+            failureData,
+            "Unable to verify your account."
+          );
+
           logout();
+
+          if (
+            response.status === 401 &&
+            failureMessage.toLowerCase().includes("another device")
+          ) {
+            window.location.replace("/login?reason=session_replaced");
+          }
+
           return null;
         }
 
