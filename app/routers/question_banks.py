@@ -268,16 +268,13 @@ def copy_selected_bank_questions_to_exam(
     selected_questions = [source_by_id[question_id] for question_id in question_ids]
     if exam.subject and any((question.subject or "").casefold() != exam.subject.casefold() for question in selected_questions):
         raise HTTPException(status_code=400, detail="All selected questions must match the examination subject.")
+    # The source bank's marks belong to its original creator. They must
+    # never determine the maximum marks in this new examination.
     group_counts = {}
-    marks_by_group = {}
     for question in selected_questions:
         question_type = getattr(question.question_type, "value", question.question_type)
         group = f"{question.difficulty}|{question_type}"
         group_counts[group] = group_counts.get(group, 0) + 1
-        marks = float(question.marks or 0)
-        if group in marks_by_group and marks_by_group[group] != marks:
-            raise HTTPException(status_code=400, detail="Questions of the same type and difficulty must have equal marks.")
-        marks_by_group[group] = marks
     configured_counts = (exam.selection_rules or {}).get("group_counts") if isinstance(exam.selection_rules, dict) else None
     if isinstance(configured_counts, dict):
         normalized_config = {key: int(value) for key, value in configured_counts.items() if int(value) > 0}
@@ -295,7 +292,9 @@ def copy_selected_bank_questions_to_exam(
                 question_image_mime_type=source.question_image_mime_type,
                 expected_answer_image_data=source.expected_answer_image_data,
                 expected_answer_image_mime_type=source.expected_answer_image_mime_type,
-                marks=source.marks, negative_marks=source.negative_marks,
+                # Start each copied group at 1 mark. The examination creator
+                # sets the actual exam-specific marks in Question Paper Marks Settings.
+                marks=1.0, negative_marks=source.negative_marks,
                 tags=list(source.tags or []), created_by=current_user.id,
                 source_question_id=None,
             )
