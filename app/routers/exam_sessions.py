@@ -448,7 +448,7 @@ def refresh_exam_access_token(
 
     session = db.query(ExamSession).filter(
         ExamSession.id == session_id,
-    ).with_for_update().first()
+    ).with_for_update().populate_existing().first()
 
     if session is None:
         raise HTTPException(
