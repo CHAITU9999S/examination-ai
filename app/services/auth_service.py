@@ -112,6 +112,7 @@ def create_user_access_token(
         data={
             "sub": str(user.id),
             "role": user.role,
+            "auth_session_id": user.active_session_id,
             "token_type": "access",
         },
     )
