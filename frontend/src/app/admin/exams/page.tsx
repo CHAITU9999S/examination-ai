@@ -173,7 +173,7 @@ export default function AdminExamsPage() {
             </Link>
 
             <p className="mt-1 text-sm text-slate-400">
-              Administrator / Examination Management
+              Administrator / Examinations
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -204,7 +204,7 @@ export default function AdminExamsPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">
-              Examination Management
+              Examinations
             </h1>
 
             <p className="mt-2 text-slate-400">
