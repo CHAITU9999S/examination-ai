@@ -35,9 +35,10 @@ def upgrade():
         sa.column("id", sa.Integer()),
         sa.column("active_session_id", sa.String(length=64)),
     )
-    for user_id in connection.execute(
+    existing_user_ids = connection.execute(
         sa.select(users.c.id)
-    ).scalars():
+    ).scalars().all()
+    for user_id in existing_user_ids:
         connection.execute(
             users.update()
             .where(users.c.id == user_id)
