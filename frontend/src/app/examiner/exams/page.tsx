@@ -274,6 +274,8 @@ export default function ExaminerExamsPage() {
           <div className="flex flex-wrap gap-2">
             <Link href={staffRole === "admin" ? "/admin/exams" : "/staff/examinations"} className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10">Examinations</Link>
             <Link href="/staff/manage-exams" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10">Manage Examination</Link>
+            <Link href="/staff/question-banks" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Question Banks</Link>
+            <Link href="/examiner/question-banks" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300">Manage Question Bank</Link>
             <Link
               href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"}
               className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
