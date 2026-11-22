@@ -44,7 +44,7 @@ export default function ManageExamsPage() {
       if (!headers) return;
       const [profileResponse, examsResponse] = await Promise.all([
         fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
-        fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams?mine=true`, { headers, cache: "no-store" }),
       ]);
       if (profileResponse.status === 401 || examsResponse.status === 401) {
         router.replace("/login");
