@@ -150,12 +150,51 @@ def delete_question_bank(
     current_user=Depends(require_role("admin", "examiner")),
 ):
     bank = _get_owned_bank(db, bank_id, current_user.id)
+    question_ids = [
+        row[0] for row in db.query(QuestionCollectionItem.question_id).filter(
+            QuestionCollectionItem.collection_id == bank.id
+        ).all()
+    ]
     db.query(QuestionCollectionItem).filter(
         QuestionCollectionItem.collection_id == bank.id
     ).delete(synchronize_session=False)
+
+    for question_id in question_ids:
+        question = db.query(Question).filter(Question.id == question_id).first()
+        if question is None or question.created_by != current_user.id:
+            continue
+        if db.query(QuestionCollectionItem.id).filter(
+            QuestionCollectionItem.question_id == question_id
+        ).first():
+            continue
+
+        linked_rows = db.query(ExamQuestion).filter(
+            ExamQuestion.question_id == question_id
+        ).all()
+        can_remove = True
+        for linked_row in linked_rows:
+            if db.query(ExamSession.id).filter(
+                ExamSession.exam_id == linked_row.exam_id
+            ).first():
+                can_remove = False
+                break
+            linked_row.question_id = _copy_question_for_exam(
+                db, question, current_user.id
+            ).id
+
+        if not can_remove or db.query(Answer.id).filter(
+            Answer.question_id == question_id
+        ).first():
+            continue
+
+        db.query(Question).filter(
+            Question.source_question_id == question_id
+        ).update({Question.source_question_id: None}, synchronize_session=False)
+        db.delete(question)
+
     db.delete(bank)
     db.commit()
-    return {"message": "Question bank deleted. Saved questions and examination records were kept."}
+    return {"message": "Question bank deleted. Questions used in other banks, examinations, or student records were kept."}
 
 
 @router.get("/{bank_id}/questions")
