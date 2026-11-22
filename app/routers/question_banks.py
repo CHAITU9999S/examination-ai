@@ -105,6 +105,18 @@ def list_question_banks(
             "question_count": db.query(QuestionCollectionItem.id).filter(
                 QuestionCollectionItem.collection_id == bank.id
             ).count(),
+            "question_types": {
+                getattr(question_type, "value", question_type): count
+                for question_type, count in db.query(
+                    Question.question_type,
+                    __import__("sqlalchemy").func.count(Question.id),
+                ).join(
+                    QuestionCollectionItem,
+                    QuestionCollectionItem.question_id == Question.id,
+                ).filter(
+                    QuestionCollectionItem.collection_id == bank.id,
+                ).group_by(Question.question_type).all()
+            },
             "created_at": bank.created_at,
         }
         for bank in banks
