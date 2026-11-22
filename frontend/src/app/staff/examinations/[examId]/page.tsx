@@ -12,6 +12,7 @@ interface ExamDetails {
   subject?: string | null;
   duration_minutes: number;
   total_questions: number;
+  max_marks?: number | null;
   created_by_name?: string | null;
   created_by_role?: string | null;
   can_edit?: boolean;
@@ -45,17 +46,21 @@ export default function ExaminationDetailsPage() {
     setLoading(true);
     setError("");
     try {
-      const [examResponse, questionsResponse] = await Promise.all([
+      const [examResponse, questionsResponse, listResponse] = await Promise.all([
         fetch(`${API_URL}/exams/${examId}`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams/${examId}/questions`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
       ]);
-      if (examResponse.status === 401 || questionsResponse.status === 401) { router.replace("/login"); return; }
+      if ([examResponse, questionsResponse, listResponse].some((response) => response.status === 401)) { router.replace("/login"); return; }
       const examData = await examResponse.json().catch(() => ({}));
       const questionData = await questionsResponse.json().catch(() => ({}));
-      if (!examResponse.ok || !questionsResponse.ok) {
+      const listData = await listResponse.json().catch(() => []);
+      if (!examResponse.ok || !questionsResponse.ok || !listResponse.ok) {
         throw new Error(examData.detail || questionData.detail || "Unable to open this examination.");
       }
-      setExam(examData);
+      const examList = Array.isArray(listData) ? listData : Array.isArray(listData.exams) ? listData.exams : [];
+      const listedExam = examList.find((item: { id: number }) => Number(item.id) === Number(examId));
+      setExam({ ...examData, max_marks: listedExam?.max_marks ?? null });
       setQuestions(Array.isArray(questionData.questions) ? questionData.questions : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to open this examination.");
@@ -85,6 +90,7 @@ export default function ExaminationDetailsPage() {
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Created by</p><p className="mt-1 font-semibold">{exam.created_by_name || "Unknown"}</p><p className="text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</p></div>
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Maximum time</p><p className="mt-1 font-semibold">{exam.duration_minutes} minutes</p></div>
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Questions</p><p className="mt-1 font-semibold">{exam.total_questions}</p></div>
+                <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Maximum marks</p><p className="mt-1 font-semibold">{exam.max_marks === null || exam.max_marks === undefined ? "Not available yet" : exam.max_marks}</p></div>
                 <div className="rounded-xl bg-slate-800/70 p-4"><p className="text-xs text-slate-400">Assigned questions</p><p className="mt-1 font-semibold">{questions.length}</p></div>
               </div>
               {exam.can_edit && <Link href={`/examiner/exams/${exam.id}/question-bank`} className="mt-5 inline-flex rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold hover:bg-cyan-500">Manage My Examination</Link>}
