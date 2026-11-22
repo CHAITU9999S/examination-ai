@@ -50,9 +50,19 @@ const navigation = [
     href: "/admin/examiners",
   },
   {
-    title: "Examination Management",
-    description: "View all examination records and manage only examinations you created.",
+    title: "Examinations",
+    description: "View all examinations created by Admins and Examiners.",
     href: "/admin/exams",
+  },
+  {
+    title: "Manage Examination",
+    description: "View and manage only examinations you created.",
+    href: "/staff/manage-exams",
+  },
+  {
+    title: "Create Examination",
+    description: "Create a new examination.",
+    href: "/examiner/exams",
   },
   {
     title: "Answer Grading",
