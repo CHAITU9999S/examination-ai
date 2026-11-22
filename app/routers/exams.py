@@ -859,6 +859,8 @@ def reuse_questions_from_previous_banks(
                 question_image_path=source.question_image_path,
                 question_image_data=source.question_image_data,
                 question_image_mime_type=source.question_image_mime_type,
+                expected_answer_image_data=source.expected_answer_image_data,
+                expected_answer_image_mime_type=source.expected_answer_image_mime_type,
                 marks=source.marks,
                 negative_marks=source.negative_marks,
                 tags=list(source.tags or []),
