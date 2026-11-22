@@ -1,5 +1,6 @@
 import hmac
 import os
+import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import func
@@ -13,7 +14,7 @@ from app.auth import (
     verify_password,
 )
 from app.database import get_db
-from app.models import User
+from app.models import ExamSession, User
 from app.schemas import (
     InitialAdminBootstrapRequest,
     LoginRequest,
@@ -204,8 +205,32 @@ def login(
             detail="Your account is inactive. Contact an Admin."
         )
 
+    # Serialize concurrent logins for this account. On PostgreSQL, the row
+    # lock ensures the last committed login is the only active device.
+    user = db.query(User).filter(
+        User.id == user.id
+    ).with_for_update().one()
+
+    active_session_id = secrets.token_urlsafe(32)
+    user.active_session_id = active_session_id
+
+    # Exam papers and saved answers remain untouched. Only credentials issued
+    # to the previous device are revoked; a new device can resume the same
+    # in-progress exam and receive fresh exam credentials.
+    db.query(ExamSession).filter(
+        ExamSession.student_id == user.id,
+        ExamSession.status == "in_progress",
+    ).update(
+        {ExamSession.exam_token_refresh_hash: None},
+        synchronize_session=False,
+    )
+    db.commit()
+
     access_token = create_access_token(
-        subject=str(user.id)
+        data={
+            "sub": str(user.id),
+            "auth_session_id": active_session_id,
+        }
     )
 
     return TokenResponse(
