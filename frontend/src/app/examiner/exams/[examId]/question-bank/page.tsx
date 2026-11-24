@@ -623,7 +623,7 @@ export default function ExamQuestionBankPage() {
             <h1 className="text-3xl font-bold">Examination Question Bank</h1>
             <p className="mt-2 text-slate-400">Add new questions, copy questions from earlier banks, set timers, and assign students.</p>
           </div>
-          <button onClick={deleteEntireBank} disabled={working} className="rounded-lg border border-red-500/50 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-40">Delete Entire Bank</button>
+          <div className="flex flex-wrap gap-2"><Link href={`/examiner/exams/${examId}/select-question-bank`} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">+ Select from Question Banks</Link><button onClick={deleteEntireBank} disabled={working} className="rounded-lg border border-red-500/50 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-40">Delete Entire Bank</button></div>
         </div>
 
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
