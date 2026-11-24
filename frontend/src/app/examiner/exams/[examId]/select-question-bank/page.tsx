@@ -23,7 +23,14 @@ type Question = {
   marks: number;
   options: { id: number; option_text: string; is_correct: boolean }[];
 };
-type Exam = { title: string; total_questions: number; can_edit: boolean; current_question_count?: number };
+type Exam = {
+  title: string;
+  subject?: string | null;
+  total_questions: number;
+  can_edit: boolean;
+  current_question_count?: number;
+  selection_rules?: Record<string, unknown> | null;
+};
 
 export default function SelectBankForExamPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -106,6 +113,22 @@ export default function SelectBankForExamPage() {
     }
   }
 
+  function isQuestionEligible(question: Question) {
+    if (!exam) return false;
+    if (exam.subject && question.subject && question.subject.toLowerCase() !== exam.subject.toLowerCase()) return false;
+    const rules = exam.selection_rules || {};
+    const group = `${question.difficulty.toLowerCase()}|${question.question_type}`;
+    const groupCounts = rules.group_counts as Record<string, number> | undefined;
+    if (groupCounts) return Number(groupCounts[group] || 0) > 0;
+    const requiredDifficulty = rules.difficulty;
+    if (typeof requiredDifficulty === "string" && question.difficulty.toLowerCase() !== requiredDifficulty.toLowerCase()) return false;
+    const difficultyCounts = rules.difficulty_counts as Record<string, number> | undefined;
+    if (difficultyCounts && Number(difficultyCounts[question.difficulty.toLowerCase()] || 0) <= 0) return false;
+    const typeCounts = rules.question_type_counts as Record<string, number> | undefined;
+    if (typeCounts && Number(typeCounts[question.question_type] || 0) <= 0) return false;
+    return true;
+  }
+
   function toggleQuestion(id: number, checked: boolean) {
     setSelected((current) => checked
       ? (current.includes(id) ? current : [...current, id])
@@ -156,7 +179,7 @@ export default function SelectBankForExamPage() {
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-10">
         <div>
           <h1 className="text-3xl font-bold">Select Questions</h1>
-          <p className="mt-2 text-slate-400">{exam?.title || "Loading examination..."}. Open any question bank and select individual questions. You can select questions from more than one bank. Existing examination questions will be kept.</p>
+          <p className="mt-2 text-slate-400">{exam?.title || "Loading examination..."}. Open any question bank and select individual questions. You can select questions from more than one bank. Existing examination questions will be kept. Every selected question must match a question type and difficulty configured for this examination.</p>
           {exam && <p className="mt-2 text-sm text-cyan-300">Already in this examination: {exam.current_question_count || 0}. Newly selected: {selected.length}. After adding: {(exam.current_question_count || 0) + selected.length}. Each student receives {exam.total_questions} eligible questions.</p>}
         </div>
         {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</p>}
@@ -195,16 +218,20 @@ export default function SelectBankForExamPage() {
             </div>
             {loadingQuestions ? <p className="py-8 text-center text-slate-400">Loading questions...</p> : questions.length === 0 ? <p className="py-8 text-slate-400">This question bank has no questions yet.</p> : (
               <div className="mt-4 space-y-2">
-                {questions.map((question) => (
-                  <label key={question.id} className="flex items-start gap-3 rounded-lg bg-slate-800/70 p-4">
-                    <input type="checkbox" checked={selected.includes(question.id)} onChange={(event) => toggleQuestion(question.id, event.target.checked)} className="mt-1" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block whitespace-pre-wrap">{question.question_text}</span>
-                      <span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty} · Source bank: {question.marks} marks (not copied)</span>
-                      {question.options?.map((option) => <span key={option.id} className="mt-1 block text-sm text-slate-400">{option.option_text}</span>)}
-                    </span>
-                  </label>
-                ))}
+                {questions.map((question) => {
+                  const eligible = isQuestionEligible(question);
+                  return (
+                    <label key={question.id} className={"flex items-start gap-3 rounded-lg p-4 " + (eligible ? "bg-slate-800/70" : "bg-slate-900/70 opacity-60")}>
+                      <input type="checkbox" checked={selected.includes(question.id)} disabled={!eligible} onChange={(event) => toggleQuestion(question.id, event.target.checked)} className="mt-1" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block whitespace-pre-wrap">{question.question_text}</span>
+                        <span className="mt-1 block text-xs text-slate-400">{question.question_type} · {question.difficulty}</span>
+                        {!eligible && <span className="mt-1 block text-xs text-amber-300">Not eligible: this question type/difficulty is not configured for this examination.</span>}
+                        {question.options?.map((option) => <span key={option.id} className="mt-1 block text-sm text-slate-400">{option.option_text}</span>)}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -212,7 +239,7 @@ export default function SelectBankForExamPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5">
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-slate-400">Select additional questions from one or more banks. They will be added to the existing examination pool; existing questions will not be deleted. You can also add questions directly in the examination. The pool may be larger than each student's paper. Source-bank marks are not copied; set exam marks in Question Paper Marks Settings. Original banks remain unchanged.</p>
+            <p className="text-sm text-slate-400">Select additional eligible questions from one or more banks. They will be added to the existing examination pool; existing questions will not be deleted. You can add more questions than each student's paper requires, but every question must belong to a configured type/difficulty group. Source maximum marks and negative marks are not copied. Set maximum marks in Question Paper Marks Settings and configure negative marks and timers in the examination question list. Original banks remain unchanged.</p>
             {exam && (exam.current_question_count || 0) + selected.length < exam.total_questions && <p className="mt-2 text-xs text-amber-300">The combined pool is currently below the paper size of {exam.total_questions}. Add more eligible questions before students start.</p>}
           </div>
           <button type="button" disabled={working || !exam} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Adding questions..." : "Add selected questions"}</button>
