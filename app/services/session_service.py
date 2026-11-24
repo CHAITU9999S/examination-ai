@@ -204,8 +204,62 @@ def generate_session_question_ids(
     difficulty_counts = rules.get("difficulty_counts")
     question_type_counts = rules.get("question_type_counts")
 
-    # Preserve the configured fixed paper when randomization is disabled.
-    if not exam.randomize_questions:
+    # Give each student a different question set whenever the pool allows it.
+    # When question-order randomization is disabled, retain the exam's configured
+    # order within each student's unique selection.
+    previous_selections = db.query(
+        ExamSession.selected_question_ids,
+    ).filter(
+        ExamSession.exam_id == exam.id,
+        ExamSession.selected_question_ids.isnot(None),
+    ).all()
+
+    used_papers = {
+        frozenset(selection[0])
+        for selection in previous_selections
+        if isinstance(selection[0], list)
+        and len(selection[0]) == question_count
+    }
+
+    group_counts = rules.get("group_counts")
+    total_combinations = math.comb(len(question_ids), question_count)
+    if group_counts:
+        available_by_group = {}
+        for question_id in question_ids:
+            details = question_details.get(question_id) or {}
+            difficulty = _enum_value(details.get("difficulty"))
+            question_type = _enum_value(details.get("question_type"))
+            key = f"{difficulty}|{question_type}"
+            available_by_group[key] = available_by_group.get(key, 0) + 1
+        total_combinations = 1
+        for group, required in group_counts.items():
+            total_combinations *= math.comb(
+                available_by_group.get(group, 0),
+                required,
+            )
+
+    selected_ids = None
+    # Try many deterministic seeds to find an unused valid paper.
+    for seed_salt in range(10000):
+        candidate = generate_paper(
+            question_ids=question_ids,
+            student_id=student_id,
+            exam_id=exam.id,
+            number_of_questions=question_count,
+            question_details=question_details,
+            difficulty_counts=difficulty_counts,
+            question_type_counts=question_type_counts,
+            group_counts=group_counts,
+            randomize=True,
+            seed_salt=seed_salt,
+        )
+        if frozenset(candidate) not in used_papers:
+            selected_ids = candidate
+            break
+
+    if selected_ids is None:
+        # All valid combinations have been used (or the deterministic search
+        # could not find another). Do not block an otherwise eligible student.
         selected_ids = generate_paper(
             question_ids=question_ids,
             student_id=student_id,
@@ -214,97 +268,14 @@ def generate_session_question_ids(
             question_details=question_details,
             difficulty_counts=difficulty_counts,
             question_type_counts=question_type_counts,
-            group_counts=rules.get("group_counts"),
-            randomize=False,
+            group_counts=group_counts,
+            randomize=True,
+            seed_salt=10000,
         )
-    else:
-        # Avoid assigning the same question set to two different students
-        # whenever another valid combination exists.
-        previous_selections = db.query(
-            ExamSession.selected_question_ids,
-        ).filter(
-            ExamSession.exam_id == exam.id,
-            ExamSession.selected_question_ids.isnot(None),
-        ).all()
 
-        used_papers = {
-            frozenset(selection[0])
-            for selection in previous_selections
-            if isinstance(selection[0], list)
-            and len(selection[0]) == question_count
-        }
-
-        selected_ids = None
-        group_counts = rules.get("group_counts")
-        for seed_salt in range(1000):
-            candidate = generate_paper(
-                question_ids=question_ids,
-                student_id=student_id,
-                exam_id=exam.id,
-                number_of_questions=question_count,
-                question_details=question_details,
-                difficulty_counts=difficulty_counts,
-                question_type_counts=question_type_counts,
-                group_counts=group_counts,
-                randomize=True,
-                seed_salt=seed_salt,
-            )
-
-            if frozenset(candidate) not in used_papers:
-                selected_ids = candidate
-                break
-
-        if selected_ids is None:
-            # If the combinatorial space is exhausted, a repeated paper is
-            # preferable to blocking a legitimately assigned student. If
-            # combinations remain, search additional seeds before fallback.
-            total_combinations = math.comb(len(question_ids), question_count)
-            if group_counts:
-                available_by_group = {}
-                for question_id in question_ids:
-                    details = question_details.get(question_id) or {}
-                    difficulty = _enum_value(details.get("difficulty"))
-                    question_type = _enum_value(details.get("question_type"))
-                    key = f"{difficulty}|{question_type}"
-                    available_by_group[key] = available_by_group.get(key, 0) + 1
-                total_combinations = 1
-                for group, required in group_counts.items():
-                    total_combinations *= math.comb(
-                        available_by_group.get(group, 0),
-                        required,
-                    )
-
-            if total_combinations > len(used_papers):
-                for seed_salt in range(1000, 10000):
-                    candidate = generate_paper(
-                        question_ids=question_ids,
-                        student_id=student_id,
-                        exam_id=exam.id,
-                        number_of_questions=question_count,
-                        question_details=question_details,
-                        difficulty_counts=difficulty_counts,
-                        question_type_counts=question_type_counts,
-                        group_counts=group_counts,
-                        randomize=True,
-                        seed_salt=seed_salt,
-                    )
-                    if frozenset(candidate) not in used_papers:
-                        selected_ids = candidate
-                        break
-
-            if selected_ids is None:
-                selected_ids = generate_paper(
-                    question_ids=question_ids,
-                    student_id=student_id,
-                    exam_id=exam.id,
-                    number_of_questions=question_count,
-                    question_details=question_details,
-                    difficulty_counts=difficulty_counts,
-                    question_type_counts=question_type_counts,
-                    group_counts=group_counts,
-                    randomize=True,
-                    seed_salt=10000,
-                )
+    if not exam.randomize_questions:
+        question_order = {question_id: index for index, question_id in enumerate(question_ids)}
+        selected_ids.sort(key=lambda question_id: question_order[question_id])
 
     if len(selected_ids) != question_count:
         raise ValueError(
