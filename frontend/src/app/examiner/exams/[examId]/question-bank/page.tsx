@@ -593,7 +593,7 @@ export default function ExamQuestionBankPage() {
             <Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="text-2xl font-bold">ExamGuard <span className="text-cyan-400">AI</span></Link>
             <p className="mt-1 text-sm text-slate-400">Examination / Question Bank</p>
           </div>
-          <Link href="/staff/manage-exams" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Manage Examination</Link>
+          <div className="flex flex-wrap gap-2"><Link href="/staff/manage-exams" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Manage Examination</Link><Link href={staffRole === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link></div>
         </div>
       </header>
 
