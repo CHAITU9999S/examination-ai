@@ -912,3 +912,24 @@ def get_exam_paper(
         "questions": paper,
 }
     
+
+
+# Resolve the paper from the authenticated session rather than browser-stored exam metadata.
+# This also supports safe page reloads when sessionStorage's exam ID is missing.
+@router.get("/paper/session/{session_id}")
+def get_exam_paper_by_session(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, session = validate_exam_token(credentials, db)
+    if session.id != session_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token does not belong to this examination session.",
+        )
+    return get_exam_paper(
+        exam_id=session.exam_id,
+        credentials=credentials,
+        db=db,
+    )
