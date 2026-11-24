@@ -273,12 +273,8 @@ def copy_selected_bank_questions_to_exam(
         question_type = getattr(question.question_type, "value", question.question_type)
         group = f"{question.difficulty}|{question_type}"
         group_counts[group] = group_counts.get(group, 0) + 1
-    configured_counts = (exam.selection_rules or {}).get("group_counts") if isinstance(exam.selection_rules, dict) else None
-    if isinstance(configured_counts, dict):
-        normalized_config = {key: int(value) for key, value in configured_counts.items() if int(value) > 0}
-        for group, required_count in normalized_config.items():
-            if group_counts.get(group, 0) < required_count:
-                raise HTTPException(status_code=400, detail=f"The selected pool needs at least {required_count} question(s) in {group}; currently {group_counts.get(group, 0)} are selected.")
+    # The copied set is an examination question pool, not one student's paper.
+    # Minimum group counts are enforced when a student paper is generated.
     try:
         db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).delete(synchronize_session=False)
         for order, source in enumerate(selected_questions, start=1):
