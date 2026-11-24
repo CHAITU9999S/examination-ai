@@ -266,13 +266,21 @@ def copy_selected_bank_questions_to_exam(
     selected_questions = [source_by_id[question_id] for question_id in question_ids]
     if exam.subject and any((question.subject or "").casefold() != exam.subject.casefold() for question in selected_questions):
         raise HTTPException(status_code=400, detail="All selected questions must match the examination subject.")
-    # The source bank's marks belong to its original creator. They must
-    # never determine the maximum marks in this new examination.
-    # The copied set is an examination question pool, not one student's paper.
-    # Minimum group counts are enforced when a student paper is generated.
+    # Add to the existing examination pool; never remove questions already added.
+    existing_assignments = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).all()
+    existing_question_ids = [row.question_id for row in existing_assignments]
+    existing_source_ids = {
+        row[0] for row in db.query(Question.source_question_id).filter(
+            Question.id.in_(existing_question_ids),
+            Question.source_question_id.isnot(None),
+        ).all()
+    } if existing_question_ids else set()
+    questions_to_add = [question for question in selected_questions if question.id not in existing_source_ids]
+    next_order = max((row.question_order or 0 for row in existing_assignments), default=0) + 1
+    # Source-bank marks never determine the maximum marks in this examination.
+    # Minimum type/difficulty counts are enforced when student papers are generated.
     try:
-        db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).delete(synchronize_session=False)
-        for order, source in enumerate(selected_questions, start=1):
+        for order, source in enumerate(questions_to_add, start=next_order):
             copied = Question(
                 question_text=source.question_text, question_type=source.question_type,
                 subject=source.subject, difficulty=source.difficulty,
@@ -282,23 +290,30 @@ def copy_selected_bank_questions_to_exam(
                 question_image_mime_type=source.question_image_mime_type,
                 expected_answer_image_data=source.expected_answer_image_data,
                 expected_answer_image_mime_type=source.expected_answer_image_mime_type,
-                # Start each copied group at 1 mark. The examination creator
-                # sets the actual exam-specific marks in Question Paper Marks Settings.
                 marks=1.0, negative_marks=source.negative_marks,
                 tags=list(source.tags or []), created_by=current_user.id,
-                source_question_id=None,
+                source_question_id=source.id,
             )
             db.add(copied)
             db.flush()
             for option in source.options:
                 db.add(Option(question_id=copied.id, option_text=option.option_text, is_correct=option.is_correct))
             db.add(ExamQuestion(exam_id=exam.id, question_id=copied.id, question_order=order))
-        db.add(AdminActivityLog(actor_user_id=current_user.id, action="exam_questions_copied_from_banks", details={"exam_id": exam.id, "source_question_ids": question_ids, "question_count": len(question_ids)}))
+        db.add(AdminActivityLog(actor_user_id=current_user.id, action="exam_questions_copied_from_banks", details={"exam_id": exam.id, "source_question_ids": [question.id for question in questions_to_add], "question_count": len(questions_to_add)}))
         db.commit()
     except Exception:
         db.rollback()
         raise
-    return {"message": "Selected questions were copied into this examination.", "exam_id": exam.id, "question_count": len(question_ids)}
+    return {
+        "message": (
+            f"{len(questions_to_add)} question(s) added to this examination."
+            if questions_to_add else
+            "All selected questions are already present in this examination."
+        ),
+        "exam_id": exam.id,
+        "question_count": len(questions_to_add),
+        "total_question_count": len(existing_assignments) + len(questions_to_add),
+    }
 
 
 def _copy_question_for_exam(db: Session, source: Question, user_id: int):
