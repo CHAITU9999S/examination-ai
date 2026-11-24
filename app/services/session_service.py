@@ -233,10 +233,11 @@ def generate_session_question_ids(
             available_by_group[key] = available_by_group.get(key, 0) + 1
         total_combinations = 1
         for group, required in group_counts.items():
-            total_combinations *= math.comb(
-                available_by_group.get(group, 0),
-                required,
-            )
+            available = available_by_group.get(group, 0)
+            if required > available:
+                total_combinations = 0
+                break
+            total_combinations *= math.comb(available, required)
 
     selected_ids = None
     # Try many deterministic seeds to find an unused valid paper.
