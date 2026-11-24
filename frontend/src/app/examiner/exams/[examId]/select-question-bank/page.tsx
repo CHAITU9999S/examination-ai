@@ -209,7 +209,10 @@ export default function SelectBankForExamPage() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5">
-          <p className="text-sm text-slate-400">Question text, answers, options and images will be copied. Source-bank maximum marks will not be copied. The new examination starts at 1 mark per type/difficulty group; set your examination's marks in Question Paper Marks Settings after copying. Original banks remain unchanged.</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-slate-400">Select any number of questions from one or more banks, or select none and create questions directly in the examination. The pool may be larger than the paper. Each student paper uses the configured type/difficulty counts. Source-bank marks are not copied; set exam marks in Question Paper Marks Settings. Original banks remain unchanged.</p>
+            {exam && selected.length < exam.total_questions && <p className="mt-2 text-xs text-amber-300">The pool currently has fewer than {exam.total_questions} questions. Add more eligible questions before students start.</p>}
+          </div>
           <button type="button" disabled={working || !exam} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Copying questions..." : "Continue with selected questions"}</button>
         </div>
       </div>
