@@ -64,21 +64,43 @@ export default function Navbar() {
     user?.role === "admin"
       ? [
           { label: "Dashboard", href: "/admin/dashboard" },
-          { label: "Users", href: "/admin/users" },
-          { label: "Admins", href: "/admin/admins" },
-          { label: "Examiners", href: "/admin/examiners" },
-          { label: "Examinations", href: "/admin/exams" },
+          { label: "Manage Users", href: "/admin/users" },
+          { label: "Manage Students", href: "/admin/students" },
+          { label: "Manage Admins", href: "/admin/admins" },
+          { label: "Manage Examiners", href: "/admin/examiners" },
+          { label: "Examinations", href: "/staff/examinations" },
+          { label: "Manage Examination", href: "/staff/manage-exams" },
+          { label: "Create Examination", href: "/examiner/exams" },
+          { label: "Question Banks", href: "/staff/question-banks" },
+          { label: "Manage Question Bank", href: "/examiner/question-banks" },
+          { label: "Question Library", href: "/examiner/questions" },
+          { label: "Grading", href: "/examiner/grading" },
+          { label: "Result Review & Publication", href: "/examiner/results" },
+          { label: "Proctoring Review", href: "/staff/proctoring" },
+          { label: "Examination Schedules", href: "/admin/schedules" },
+          { label: "Student Performance History", href: "/admin/performance" },
+          { label: "Admin Activity Logs", href: "/admin/activity-logs" },
+          { label: "Account Security", href: "/account/security" },
         ]
       : user?.role === "examiner"
         ? [
             { label: "Dashboard", href: "/examiner/dashboard" },
-            { label: "Questions", href: "/examiner/questions" },
-            { label: "Examinations", href: "/examiner/exams" },
+            { label: "Examinations", href: "/staff/examinations" },
+            { label: "Manage Examination", href: "/staff/manage-exams" },
+            { label: "Create Examination", href: "/examiner/exams" },
+            { label: "Question Banks", href: "/staff/question-banks" },
+            { label: "Manage Question Bank", href: "/examiner/question-banks" },
+            { label: "Question Library", href: "/examiner/questions" },
             { label: "Grading", href: "/examiner/grading" },
+            { label: "Result Review & Publication", href: "/examiner/results" },
+            { label: "Proctoring Review", href: "/staff/proctoring" },
+            { label: "Account Security", href: "/account/security" },
           ]
         : [
             { label: "Dashboard", href: "/student/dashboard" },
             { label: "Examinations", href: "/student/exams" },
+            { label: "My Results", href: "/student/results" },
+            { label: "Account Security", href: "/account/security" },
           ];
 
   if (!mounted) {
@@ -121,7 +143,7 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={`text-sm transition hover:text-blue-400 ${
-                    pathname === link.href
+                    (pathname === link.href || pathname.startsWith(`${link.href}/`))
                       ? "font-semibold text-blue-400"
                       : "text-slate-300"
                   }`}
@@ -182,7 +204,7 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={`block rounded-lg px-4 py-3 text-sm transition hover:bg-white/10 ${
-                      pathname === link.href
+                      (pathname === link.href || pathname.startsWith(`${link.href}/`))
                         ? "bg-blue-500/10 text-blue-400"
                         : "text-slate-300"
                     }`}
