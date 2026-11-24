@@ -105,10 +105,7 @@ export default function SelectBankForExamPage() {
 
   async function saveSelection() {
     if (!exam) return;
-    if (selected.length !== exam.total_questions) {
-      setError("Select exactly " + exam.total_questions + " questions before continuing.");
-      return;
-    }
+    // Partial and empty pools are allowed during setup; eligibility is checked before an exam starts.
     setError("");
     setWorking(true);
     try {
@@ -150,7 +147,7 @@ export default function SelectBankForExamPage() {
         <div>
           <h1 className="text-3xl font-bold">Select Questions</h1>
           <p className="mt-2 text-slate-400">{exam?.title || "Loading examination..."}. Open any question bank and select individual questions. You can select questions from more than one bank.</p>
-          {exam && <p className="mt-2 text-sm text-cyan-300">Selected: {selected.length} of {exam.total_questions} questions</p>}
+          {exam && <p className="mt-2 text-sm text-cyan-300">Selected for the pool: {selected.length}. Each student receives {exam.total_questions} eligible questions.</p>}
         </div>
         {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</p>}
 
@@ -205,7 +202,7 @@ export default function SelectBankForExamPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5">
           <p className="text-sm text-slate-400">Question text, answers, options and images will be copied. Source-bank maximum marks will not be copied. The new examination starts at 1 mark per type/difficulty group; set your examination's marks in Question Paper Marks Settings after copying. Original banks remain unchanged.</p>
-          <button type="button" disabled={working || !exam || selected.length !== exam.total_questions} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Copying questions..." : "Copy selected questions into examination"}</button>
+          <button type="button" disabled={working || !exam} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Copying questions..." : "Continue with selected questions"}</button>
         </div>
       </div>
     </main>
