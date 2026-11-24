@@ -17,6 +17,7 @@ interface BankQuestion {
   subject?: string | null;
   difficulty: Difficulty;
   marks: number;
+  negative_marks?: number;
   tags?: string[];
   expected_answer?: string | null;
   model_answer_text?: string | null;
@@ -516,6 +517,24 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
+  async function saveNegativeMarks(questionId: number, value: string) {
+    setWorking(true); setError(""); setMessage("");
+    try {
+      const negativeMarks = Number(value);
+      if (!Number.isFinite(negativeMarks) || negativeMarks < 0) {
+        throw new Error("Negative marks must be a non-negative number.");
+      }
+      await request(`/exams/${examId}/questions/${questionId}/negative-marks`, {
+        method: "PATCH",
+        body: JSON.stringify({ negative_marks: negativeMarks }),
+      });
+      setMessage("Question penalty saved. It applies only when negative marking is enabled for this examination.");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save question penalty.");
+    } finally { setWorking(false); }
+  }
+
   async function assignSelectedStudents() {
     if (!selectedStudents.length) {
       setError("Select at least one student.");
@@ -862,6 +881,9 @@ export default function ExamQuestionBankPage() {
                     <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove from Bank</button>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <label className="text-xs text-slate-400">Negative marks for a wrong answer
+                      <input key={`negative-${question.question_id}-${question.negative_marks ?? 0}`} type="number" min="0" step="0.01" defaultValue={question.negative_marks ?? 0} onBlur={(e) => void saveNegativeMarks(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
+                    </label>
                     <label className="text-xs text-slate-400">Question timer (seconds; blank = no separate limit)
                       <input key={`timer-${question.question_id}-${question.question_time_limit_seconds}`} type="number" min="1" max="7200" defaultValue={question.question_time_limit_seconds ?? ""} onBlur={(e) => void saveTimer(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
                     </label>
