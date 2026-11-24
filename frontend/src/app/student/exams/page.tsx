@@ -58,7 +58,7 @@ function getExamStatus(exam: Exam) {
   if (
     end !== null &&
     !Number.isNaN(end) &&
-    now > end
+    now >= end
   ) {
     return "Ended";
   }
