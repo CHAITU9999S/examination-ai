@@ -982,6 +982,7 @@ def test_copying_questions_from_multiple_creators_uses_destination_exam_marks(cl
         expected_answer="First expected answer",
         model_answer_text="First model answer",
         marks=2,
+        negative_marks=0.75,
         question_image_data=b"first-prompt-image",
         question_image_mime_type="image/png",
         expected_answer_image_data=b"first-answer-image",
@@ -995,6 +996,7 @@ def test_copying_questions_from_multiple_creators_uses_destination_exam_marks(cl
         difficulty="easy",
         expected_answer="Second expected answer",
         marks=8,
+        negative_marks=1.25,
         created_by=second_owner.id,
     )
     db_session.add_all([first_question, second_question])
@@ -1025,6 +1027,12 @@ def test_copying_questions_from_multiple_creators_uses_destination_exam_marks(cl
     second_copy = copied_by_text["Question from second creator"]
     assert first_copy.marks == 1
     assert second_copy.marks == 1
+    assert first_copy.negative_marks == 0
+    assert second_copy.negative_marks == 0
+    assert copied_rows[0][0].question_time_limit_seconds is None
+    assert copied_rows[1][0].question_time_limit_seconds is None
+    assert first_question.negative_marks == 0.75
+    assert second_question.negative_marks == 1.25
     assert first_question.marks == 2
     assert second_question.marks == 8
     assert first_copy.expected_answer == "First expected answer"
@@ -1301,3 +1309,69 @@ def test_adding_questions_from_another_bank_preserves_existing_exam_pool(client,
     assert duplicate_response.status_code == 201
     assert duplicate_response.json()["question_count"] == 0
     assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 3
+
+
+def test_imported_questions_must_match_exam_configured_type_and_difficulty(client, db_session):
+    creator = create_user(db_session, "examiner", "eligible_import_creator@test.com")
+    bank_owner = create_user(db_session, "examiner", "eligible_import_bank_owner@test.com")
+    exam = Exam(
+        title="Configured Question Levels",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        selection_rules={"group_counts": {"easy|MCQ": 1}},
+        created_by=creator.id,
+    )
+    bank = QuestionCollection(name="Mixed Levels", created_by=bank_owner.id)
+    db_session.add_all([exam, bank])
+    db_session.flush()
+
+    eligible_questions = [
+        QuestionBank(
+            question_text=f"Eligible easy MCQ {index}",
+            question_type="MCQ",
+            subject="Science",
+            difficulty="easy",
+            marks=5 + index,
+            negative_marks=0.5,
+            created_by=bank_owner.id,
+        )
+        for index in range(2)
+    ]
+    ineligible_question = QuestionBank(
+        question_text="Ineligible medium MCQ",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="medium",
+        marks=9,
+        created_by=bank_owner.id,
+    )
+    db_session.add_all(eligible_questions + [ineligible_question])
+    db_session.flush()
+    for question in eligible_questions + [ineligible_question]:
+        db_session.add(QuestionCollectionItem(collection_id=bank.id, question_id=question.id))
+    db_session.commit()
+
+    rejected = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [eligible_questions[0].id, ineligible_question.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert rejected.status_code == 400
+    assert "configured for this examination" in rejected.json()["detail"]["message"]
+    assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 0
+
+    accepted = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [question.id for question in eligible_questions]},
+        headers=get_auth_headers(creator),
+    )
+    assert accepted.status_code == 201
+    assert accepted.json()["question_count"] == 2
+    copied_questions = db_session.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(ExamQuestion.exam_id == exam.id).all()
+    assert len(copied_questions) == 2
+    assert all(question.difficulty == "easy" and question.question_type == "MCQ" for question in copied_questions)
+    assert all(question.marks == 1 for question in copied_questions)
+    assert all(question.negative_marks == 0 for question in copied_questions)
