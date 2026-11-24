@@ -142,6 +142,22 @@ def test_new_login_revokes_old_exam_credentials_but_preserves_exam_and_answers(
     )
     assert old_exam_access.status_code == 401
 
+    # The replaced device must also be blocked from writing answers and
+    # sending proctoring events, not only from the timer/session endpoints.
+    old_answer_write = client.post(
+        f"/answers/{session.id}/{question.id}",
+        headers={"Authorization": f"Bearer {old_exam_token}"},
+        json={"answer_text": "1"},
+    )
+    assert old_answer_write.status_code == 401
+
+    old_proctoring_event = client.post(
+        f"/exam-sessions/{session.id}/proctoring/events",
+        headers={"Authorization": f"Bearer {old_exam_token}"},
+        json={"event_type": "tab_switch", "description": "stale device test"},
+    )
+    assert old_proctoring_event.status_code == 401
+
     old_exam_refresh = client.post(
         f"/exam-sessions/refresh/{session.id}",
         json={"refresh_token": old_refresh_token},
