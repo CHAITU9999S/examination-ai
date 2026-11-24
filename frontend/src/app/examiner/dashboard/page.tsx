@@ -39,6 +39,11 @@ const navigation = [
     href: "/examiner/question-banks",
   },
   {
+    title: "Question Library",
+    description: "Create and manage standalone questions for examination preparation.",
+    href: "/examiner/questions",
+  },
+  {
     title: "Examinations",
     description: "View examinations created by your account.",
     href: "/staff/examinations",
