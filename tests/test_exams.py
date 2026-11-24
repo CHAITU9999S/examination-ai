@@ -1180,3 +1180,39 @@ def test_question_pool_can_be_left_empty_during_exam_setup(client, db_session):
     )
     assert response.status_code == 201
     assert response.json()["question_count"] == 0
+
+
+def test_exam_creator_can_set_negative_marks_for_each_exam_question(client, db_session):
+    creator = create_user(db_session, "examiner", "question_penalty_creator@test.com")
+    exam = Exam(
+        title="Per Question Penalties",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        negative_marking=True,
+        created_by=creator.id,
+    )
+    question = QuestionBank(
+        question_text="Penalty test question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        negative_marks=0,
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1))
+    db_session.commit()
+
+    response = client.patch(
+        f"/exams/{exam.id}/questions/{question.id}/negative-marks",
+        json={"negative_marks": 0.75},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 200
+    assert response.json()["negative_marks"] == 0.75
+    db_session.refresh(question)
+    assert question.negative_marks == 0.75
+
