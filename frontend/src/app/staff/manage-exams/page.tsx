@@ -20,6 +20,7 @@ export default function ManageExamsPage() {
   const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
   const [userName, setUserName] = useState("");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -60,6 +61,7 @@ export default function ManageExamsPage() {
         return;
       }
       setUserName(profile.full_name || "");
+      setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
       const allExams = Array.isArray(data) ? data : Array.isArray(data.exams) ? data.exams : [];
       setExams(allExams.filter((exam: Exam) => Number(exam.created_by) === Number(profile.id)));
     } catch (err) {
@@ -127,7 +129,7 @@ export default function ManageExamsPage() {
           <div className="flex flex-wrap gap-2">
             <Link href="/examiner/exams" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">+ Create Examination</Link>
             <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">View Examinations</Link>
-            <Link href="/admin/dashboard" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link>
+            <Link href={dashboardHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link>
           </div>
         </div>
       </header>
