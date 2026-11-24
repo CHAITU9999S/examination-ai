@@ -650,6 +650,7 @@ def list_exam_questions(
                 "subject": question.subject,
                 "difficulty": question.difficulty,
                 "marks": question.marks,
+                "negative_marks": question.negative_marks,
                 "tags": question.tags or [],
                 "question_time_limit_seconds": assignment.question_time_limit_seconds,
                 "source_question_id": question.source_question_id,
@@ -686,6 +687,10 @@ class AssignStudentsRequest(BaseModel):
 
 class QuestionTimerRequest(BaseModel):
     seconds: int | None = Field(default=None, ge=1, le=7200)
+
+
+class QuestionNegativeMarksRequest(BaseModel):
+    negative_marks: float = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
 # ==========================================
@@ -1170,6 +1175,49 @@ def configure_question_timer(
     })
     db.commit()
     return {"exam_id": exam_id, "question_id": question_id, "question_time_limit_seconds": assignment.question_time_limit_seconds}
+
+
+# ==========================================
+# CONFIGURE PER-QUESTION NEGATIVE MARKS
+# ==========================================
+
+@router.patch("/{exam_id}/questions/{question_id}/negative-marks")
+def configure_question_negative_marks(
+    exam_id: int,
+    question_id: int,
+    data: QuestionNegativeMarksRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the exam creator can configure question penalties.")
+    if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
+        raise HTTPException(status_code=409, detail="Question penalties cannot change after an exam session is created.")
+    question = db.query(QuestionBank).join(
+        ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+    ).filter(
+        ExamQuestion.exam_id == exam_id,
+        QuestionBank.id == question_id,
+    ).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question is not in this examination bank.")
+    question.negative_marks = data.negative_marks
+    _audit_exam_action(db, current_user.id, "exam_question_negative_marks_configured", {
+        "exam_id": exam_id,
+        "question_id": question_id,
+        "negative_marks": data.negative_marks,
+        "negative_marking_enabled": bool(exam.negative_marking),
+    })
+    db.commit()
+    return {
+        "exam_id": exam_id,
+        "question_id": question_id,
+        "negative_marks": question.negative_marks,
+        "negative_marking_enabled": bool(exam.negative_marking),
+    }
 
 
 # ==========================================
