@@ -1112,3 +1112,71 @@ def test_reusing_previous_exam_questions_keeps_destination_exam_marks_independen
     db_session.refresh(copied)
     assert copied.marks == 4
     assert source_question.marks == 9
+
+
+def test_question_pool_can_contain_more_questions_than_each_student_paper(client, db_session):
+    exam_creator = create_user(db_session, "examiner", "flexible_pool_creator@test.com")
+    source_owner = create_user(db_session, "examiner", "flexible_pool_source@test.com")
+    exam = Exam(
+        title="Flexible Question Pool",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        selection_rules={"group_counts": {"easy|MCQ": 2}},
+        created_by=exam_creator.id,
+    )
+    bank = QuestionCollection(name="Large Science Pool", created_by=source_owner.id)
+    db_session.add_all([exam, bank])
+    db_session.flush()
+    source_questions = [
+        QuestionBank(
+            question_text=f"Pool question {index}",
+            question_type="MCQ",
+            subject="Science",
+            difficulty="easy",
+            marks=1,
+            negative_marks=0,
+            created_by=source_owner.id,
+        )
+        for index in range(3)
+    ]
+    db_session.add_all(source_questions)
+    db_session.flush()
+    for question in source_questions:
+        db_session.add(QuestionCollectionItem(
+            collection_id=bank.id,
+            question_id=question.id,
+        ))
+    db_session.commit()
+
+    response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [question.id for question in source_questions]},
+        headers=get_auth_headers(exam_creator),
+    )
+    assert response.status_code == 201
+    assert response.json()["question_count"] == 3
+    assert db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam.id
+    ).count() == 3
+
+
+def test_question_pool_can_be_left_empty_during_exam_setup(client, db_session):
+    creator = create_user(db_session, "examiner", "empty_pool_creator@test.com")
+    exam = Exam(
+        title="Build Questions Later",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+
+    response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": []},
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 201
+    assert response.json()["question_count"] == 0
