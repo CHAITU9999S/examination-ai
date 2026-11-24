@@ -26,7 +26,7 @@ class QuestionBankCreate(BaseModel):
 
 
 class ExamQuestionSelection(BaseModel):
-    question_ids: list[int] = Field(min_length=1)
+    question_ids: list[int] = Field(default_factory=list)
 
 
 def _get_bank(db: Session, bank_id: int):
@@ -256,8 +256,6 @@ def copy_selected_bank_questions_to_exam(
     question_ids = data.question_ids
     if len(question_ids) != len(set(question_ids)):
         raise HTTPException(status_code=400, detail="Choose each question only once.")
-    if len(question_ids) != exam.total_questions:
-        raise HTTPException(status_code=400, detail=f"Choose exactly {exam.total_questions} questions for this examination.")
     bank_question_ids = {row[0] for row in db.query(QuestionCollectionItem.question_id).filter(QuestionCollectionItem.question_id.in_(question_ids)).distinct().all()}
     if bank_question_ids != set(question_ids):
         raise HTTPException(status_code=400, detail="Some selected questions are not in a question bank.")
@@ -278,8 +276,9 @@ def copy_selected_bank_questions_to_exam(
     configured_counts = (exam.selection_rules or {}).get("group_counts") if isinstance(exam.selection_rules, dict) else None
     if isinstance(configured_counts, dict):
         normalized_config = {key: int(value) for key, value in configured_counts.items() if int(value) > 0}
-        if group_counts != normalized_config:
-            raise HTTPException(status_code=400, detail="The selected questions do not match the examination's question type and difficulty counts.")
+        for group, required_count in normalized_config.items():
+            if group_counts.get(group, 0) < required_count:
+                raise HTTPException(status_code=400, detail=f"The selected pool needs at least {required_count} question(s) in {group}; currently {group_counts.get(group, 0)} are selected.")
     try:
         db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).delete(synchronize_session=False)
         for order, source in enumerate(selected_questions, start=1):
