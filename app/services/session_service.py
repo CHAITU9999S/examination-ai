@@ -240,7 +240,8 @@ def generate_session_question_ids(
 
     selected_ids = None
     # Try many deterministic seeds to find an unused valid paper.
-    for seed_salt in range(10000):
+    seed_range = range(10000) if total_combinations > len(used_papers) else range(0)
+    for seed_salt in seed_range:
         candidate = generate_paper(
             question_ids=question_ids,
             student_id=student_id,
