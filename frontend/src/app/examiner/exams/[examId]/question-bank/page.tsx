@@ -332,6 +332,7 @@ export default function ExamQuestionBankPage() {
         if (!imageResponse.ok) throw new Error(imageData.detail || "Question saved, but its prompt image upload failed.");
       }
       setQuestionText("");
+      setNegativeMarks("0");
       setExpectedAnswer("");
       setModelAnswer("");
       setTags("");
