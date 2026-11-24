@@ -23,7 +23,7 @@ type Question = {
   marks: number;
   options: { id: number; option_text: string; is_correct: boolean }[];
 };
-type Exam = { title: string; total_questions: number; can_edit: boolean };
+type Exam = { title: string; total_questions: number; can_edit: boolean; current_question_count?: number };
 
 export default function SelectBankForExamPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -56,10 +56,12 @@ export default function SelectBankForExamPage() {
       fetch(API_URL + "/question-banks/browse", { headers, cache: "no-store" }),
       fetch(API_URL + "/exams/" + examId, { headers, cache: "no-store" }),
       fetch(API_URL + "/users/me", { headers, cache: "no-store" }),
-    ]).then(async ([banksResponse, examResponse, profileResponse]) => {
+      fetch(API_URL + "/exams/" + examId + "/questions", { headers, cache: "no-store" }),
+    ]).then(async ([banksResponse, examResponse, profileResponse, currentQuestionsResponse]) => {
       const bankData = await banksResponse.json().catch(() => []);
       const examData = await examResponse.json().catch(() => ({}));
       const profile = await profileResponse.json().catch(() => ({}));
+      const currentQuestions = await currentQuestionsResponse.json().catch(() => ({}));
       if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       if (!banksResponse.ok || !examResponse.ok) {
         throw new Error(bankData.detail || examData.detail || "Unable to load question banks.");
@@ -67,8 +69,11 @@ export default function SelectBankForExamPage() {
       if (!examData.can_edit) {
         throw new Error("Only the examination creator can select its questions.");
       }
+      if (!currentQuestionsResponse.ok) {
+        throw new Error(currentQuestions.detail || "Unable to load the current examination question pool.");
+      }
       setBanks(Array.isArray(bankData) ? bankData : []);
-      setExam(examData);
+      setExam({ ...examData, current_question_count: Number(currentQuestions.total_assigned || 0) });
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load question banks."));
   }, [examId, getHeaders]);
 
@@ -151,8 +156,8 @@ export default function SelectBankForExamPage() {
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-10">
         <div>
           <h1 className="text-3xl font-bold">Select Questions</h1>
-          <p className="mt-2 text-slate-400">{exam?.title || "Loading examination..."}. Open any question bank and select individual questions. You can select questions from more than one bank.</p>
-          {exam && <p className="mt-2 text-sm text-cyan-300">Selected for the pool: {selected.length}. Each student receives {exam.total_questions} eligible questions.</p>}
+          <p className="mt-2 text-slate-400">{exam?.title || "Loading examination..."}. Open any question bank and select individual questions. You can select questions from more than one bank. Existing examination questions will be kept.</p>
+          {exam && <p className="mt-2 text-sm text-cyan-300">Already in this examination: {exam.current_question_count || 0}. Newly selected: {selected.length}. After adding: {(exam.current_question_count || 0) + selected.length}. Each student receives {exam.total_questions} eligible questions.</p>}
         </div>
         {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</p>}
 
@@ -207,10 +212,10 @@ export default function SelectBankForExamPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5">
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-slate-400">Select any number of questions from one or more banks, or select none and create questions directly in the examination. The pool may be larger than the paper. Each student paper uses the configured type/difficulty counts. Source-bank marks are not copied; set exam marks in Question Paper Marks Settings. Original banks remain unchanged.</p>
-            {exam && selected.length < exam.total_questions && <p className="mt-2 text-xs text-amber-300">The pool currently has fewer than {exam.total_questions} questions. Add more eligible questions before students start.</p>}
+            <p className="text-sm text-slate-400">Select additional questions from one or more banks. They will be added to the existing examination pool; existing questions will not be deleted. You can also add questions directly in the examination. The pool may be larger than each student's paper. Source-bank marks are not copied; set exam marks in Question Paper Marks Settings. Original banks remain unchanged.</p>
+            {exam && (exam.current_question_count || 0) + selected.length < exam.total_questions && <p className="mt-2 text-xs text-amber-300">The combined pool is currently below the paper size of {exam.total_questions}. Add more eligible questions before students start.</p>}
           </div>
-          <button type="button" disabled={working || !exam} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Copying questions..." : "Continue with selected questions"}</button>
+          <button type="button" disabled={working || !exam} onClick={saveSelection} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold disabled:opacity-50">{working ? "Adding questions..." : "Add selected questions"}</button>
         </div>
       </div>
     </main>
