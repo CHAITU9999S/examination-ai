@@ -31,6 +31,7 @@ export default function SelectBankForExamPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [exam, setExam] = useState<Exam | null>(null);
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [activeBankId, setActiveBankId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
@@ -59,6 +60,8 @@ export default function SelectBankForExamPage() {
     ]).then(async ([banksResponse, examResponse, profileResponse]) => {
       const bankData = await banksResponse.json().catch(() => []);
       const examData = await examResponse.json().catch(() => ({}));
+      const profile = await profileResponse.json().catch(() => ({}));
+      if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       const profile = await profileResponse.json().catch(() => ({}));
       if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       if (!banksResponse.ok || !examResponse.ok) {
@@ -143,6 +146,7 @@ export default function SelectBankForExamPage() {
           <div className="flex flex-wrap gap-2">
             <Link href="/staff/question-banks" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Question Banks</Link>
             <Link href="/examiner/question-banks" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300">Manage Question Bank</Link>
+            <Link href={dashboardHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Dashboard</Link>
           </div>
         </div>
       </header>
