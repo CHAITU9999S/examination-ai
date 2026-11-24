@@ -1,4 +1,3 @@
-
 export type UserRole = "student" | "examiner" | "admin";
 
 export type Permission =
@@ -11,16 +10,23 @@ export type Permission =
   | "manage_own_answers"
   | "view_own_results"
   | "manage_questions"
+  | "view_question_banks"
+  | "manage_question_banks"
   | "create_exam"
   | "view_own_exams"
   | "manage_grading"
+  | "view_result_review"
   | "view_proctoring_events"
   | "manage_students"
   | "manage_examiners"
   | "manage_admins"
   | "manage_all_exams"
   | "view_platform_statistics"
-  | "manage_platform_settings";
+  | "manage_platform_settings"
+  | "view_exam_schedules"
+  | "view_student_performance_history"
+  | "view_admin_activity_logs"
+  | "manage_account_security";
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   student: [
@@ -30,26 +36,45 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "submit_exam",
     "manage_own_answers",
     "view_own_results",
+    "manage_account_security",
   ],
 
   examiner: [
     "view_examiner_dashboard",
     "manage_questions",
+    "view_question_banks",
+    "manage_question_banks",
     "create_exam",
     "view_own_exams",
     "manage_grading",
+    "view_result_review",
     "view_proctoring_events",
+    "manage_account_security",
   ],
 
   admin: [
+    // Administrators also have the examination-management capabilities
+    // available to Examiners, limited to examinations and banks they own
+    // when an operation is owner-scoped.
     "view_admin_dashboard",
+    "manage_questions",
+    "view_question_banks",
+    "manage_question_banks",
+    "create_exam",
+    "view_own_exams",
+    "manage_grading",
+    "view_result_review",
+    "view_proctoring_events",
+    "manage_account_security",
     "view_platform_statistics",
     "manage_students",
     "manage_examiners",
     "manage_admins",
     "manage_all_exams",
-    "view_proctoring_events",
     "manage_platform_settings",
+    "view_exam_schedules",
+    "view_student_performance_history",
+    "view_admin_activity_logs",
   ],
 };
 
@@ -64,21 +89,44 @@ export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
     "/student/dashboard",
     "/student/exams",
     "/student/exam",
+    "/student/results",
+    "/account/security",
   ],
 
   examiner: [
     "/examiner/dashboard",
     "/examiner/questions",
     "/examiner/exams",
+    "/examiner/question-banks",
     "/examiner/grading",
+    "/examiner/results",
+    "/staff/examinations",
+    "/staff/manage-exams",
+    "/staff/question-banks",
+    "/staff/proctoring",
+    "/account/security",
   ],
 
   admin: [
     "/admin/dashboard",
     "/admin/users",
+    "/admin/students",
     "/admin/admins",
     "/admin/examiners",
     "/admin/exams",
+    "/admin/schedules",
+    "/admin/performance",
+    "/admin/activity-logs",
+    "/examiner/questions",
+    "/examiner/exams",
+    "/examiner/question-banks",
+    "/examiner/grading",
+    "/examiner/results",
+    "/staff/examinations",
+    "/staff/manage-exams",
+    "/staff/question-banks",
+    "/staff/proctoring",
+    "/account/security",
   ],
 };
 
