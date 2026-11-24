@@ -316,15 +316,6 @@ export default function ExaminerExamsPage() {
           </div>
         )}
 
-        {message && (
-          <div
-            role="status"
-            className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300"
-          >
-            {message}
-          </div>
-        )}
-
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
           <h2 className="text-xl font-bold">Create Examination</h2>
 
@@ -477,12 +468,12 @@ export default function ExaminerExamsPage() {
                   onChange={(event) => setUseGroupCounts(event.target.checked)}
                   className="h-4 w-4"
                 />
-                Configure exact question counts by difficulty and question type
+                Configure each student's paper by question type and difficulty
               </label>
               {useGroupCounts && (
                 <div className="mt-4 overflow-x-auto">
                   <p className="mb-3 text-xs text-slate-400">
-                    Enter how many questions the system must select from each group. All cells together must equal the total question count.
+                    These counts define the exact distribution in each student's paper. The examination pool may contain additional eligible questions; every configured group must have at least this many.
                   </p>
                   <table className="w-full min-w-[720px] text-left text-xs">
                     <thead>
