@@ -3,6 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { canAccessPath, isValidRole } from "@/lib/permissions";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -35,26 +36,13 @@ export default function ProtectedRoute({
       try {
         const user = JSON.parse(storedUser);
 
-        const validRole = [
-          "student",
-          "examiner",
-          "admin",
-        ].includes(user?.role);
-
-        if (!validRole || !user?.id) {
+        if (!isValidRole(user?.role) || !user?.id) {
           throw new Error("Invalid user information");
         }
 
-        const role = user.role as string;
+        const role = user.role;
 
-        const allowedPath =
-          role === "admin"
-            ? pathname.startsWith("/admin/")
-            : role === "examiner"
-              ? pathname.startsWith("/examiner/")
-              : pathname.startsWith("/student/");
-
-        if (!allowedPath) {
+        if (!canAccessPath(role, pathname)) {
           const dashboard =
             role === "admin"
               ? "/admin/dashboard"
