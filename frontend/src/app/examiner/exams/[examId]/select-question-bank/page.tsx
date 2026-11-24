@@ -30,6 +30,7 @@ export default function SelectBankForExamPage() {
   const router = useRouter();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [exam, setExam] = useState<Exam | null>(null);
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [activeBankId, setActiveBankId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
@@ -54,9 +55,12 @@ export default function SelectBankForExamPage() {
     Promise.all([
       fetch(API_URL + "/question-banks/browse", { headers, cache: "no-store" }),
       fetch(API_URL + "/exams/" + examId, { headers, cache: "no-store" }),
-    ]).then(async ([banksResponse, examResponse]) => {
+      fetch(API_URL + "/users/me", { headers, cache: "no-store" }),
+    ]).then(async ([banksResponse, examResponse, profileResponse]) => {
       const bankData = await banksResponse.json().catch(() => []);
       const examData = await examResponse.json().catch(() => ({}));
+      const profile = await profileResponse.json().catch(() => ({}));
+      if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       if (!banksResponse.ok || !examResponse.ok) {
         throw new Error(bankData.detail || examData.detail || "Unable to load question banks.");
       }
