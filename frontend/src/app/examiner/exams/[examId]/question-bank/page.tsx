@@ -528,6 +528,7 @@ export default function ExamQuestionBankPage() {
       if (!Number.isFinite(maximumMarks) || maximumMarks <= 0) {
         throw new Error("Maximum marks must be a positive number.");
       }
+      if (Math.abs(Number(question.marks) - maximumMarks) < 0.0001) return;
       const parsedMarks = Object.fromEntries(questionMarkGroups.map((group) => [
         group.key,
         group.key === targetGroup
