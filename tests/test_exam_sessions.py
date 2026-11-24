@@ -763,3 +763,97 @@ def test_students_get_different_question_sets_when_pool_allows_it(db_session):
     assert second_paper == sorted(second_paper, key=lambda item: questions.index(
         next(question for question in questions if question.id == item)
     ))
+
+
+def test_student_can_load_exam_paper_using_session_id_without_browser_exam_id(
+    client,
+    db_session,
+):
+    student = create_student(db_session, email="paper-session-route@test.com")
+    exam = create_exam(db_session, title="Session ID Paper Route")
+    question = QuestionBank(
+        question_text="Which planet is known as the Red Planet?",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="easy",
+        marks=2,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add_all([
+        ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=1,
+        ),
+        Option(
+            question_id=question.id,
+            option_text="Mars",
+            is_correct=True,
+        ),
+        Option(
+            question_id=question.id,
+            option_text="Venus",
+            is_correct=False,
+        ),
+    ])
+    db_session.commit()
+
+    session = create_active_session(
+        db_session,
+        exam,
+        student,
+        selected_question_ids=[question.id],
+    )
+    token = create_exam_token(exam, student, session)
+
+    response = client.get(
+        f"/exam-sessions/paper/session/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    paper = response.json()
+    assert paper["session_id"] == session.id
+    assert paper["exam_id"] == exam.id
+    assert paper["exam_title"] == exam.title
+    assert len(paper["questions"]) == 1
+    assert paper["questions"][0]["id"] == question.id
+    assert {option["option_text"] for option in paper["questions"][0]["options"]} == {"Mars", "Venus"}
+
+
+def test_student_cannot_load_another_session_paper_by_session_id(
+    client,
+    db_session,
+):
+    student = create_student(db_session, email="paper-session-owner@test.com")
+    other_student = create_student(db_session, email="paper-session-other@test.com")
+    exam = create_exam(db_session, title="Session Ownership Check")
+    question = QuestionBank(
+        question_text="Session ownership question",
+        question_type="MCQ",
+        subject="General Knowledge",
+        difficulty="easy",
+        marks=1,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id))
+    db_session.commit()
+
+    owner_session = create_active_session(
+        db_session, exam, student, selected_question_ids=[question.id]
+    )
+    other_session = create_active_session(
+        db_session, exam, other_student, selected_question_ids=[question.id]
+    )
+    owner_token = create_exam_token(exam, student, owner_session)
+
+    response = client.get(
+        f"/exam-sessions/paper/session/{other_session.id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+
+    assert response.status_code == 403
