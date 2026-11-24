@@ -266,6 +266,47 @@ def copy_selected_bank_questions_to_exam(
     selected_questions = [source_by_id[question_id] for question_id in question_ids]
     if exam.subject and any((question.subject or "").casefold() != exam.subject.casefold() for question in selected_questions):
         raise HTTPException(status_code=400, detail="All selected questions must match the examination subject.")
+
+    # Imported questions must belong to a type/difficulty group allowed by
+    # the exam configuration. A positive configured count makes the group
+    # eligible; the pool may contain more questions than the required count.
+    rules = exam.selection_rules or {}
+    if not isinstance(rules, dict):
+        raise HTTPException(status_code=400, detail="The examination question-level configuration is invalid.")
+
+    def is_eligible_for_exam(question):
+        question_type = getattr(question.question_type, "value", question.question_type)
+        difficulty = (question.difficulty or "").casefold()
+        if "group_counts" in rules:
+            group_counts = rules.get("group_counts") or {}
+            return isinstance(group_counts, dict) and group_counts.get(f"{difficulty}|{question_type}", 0) > 0
+        if "difficulty" in rules and difficulty != rules["difficulty"]:
+            return False
+        difficulty_counts = rules.get("difficulty_counts")
+        if difficulty_counts is not None and difficulty_counts.get(difficulty, 0) <= 0:
+            return False
+        type_counts = rules.get("question_type_counts")
+        if type_counts is not None and type_counts.get(question_type, 0) <= 0:
+            return False
+        return True
+
+    ineligible = [
+        question for question in selected_questions
+        if not is_eligible_for_exam(question)
+    ]
+    if ineligible:
+        invalid_groups = sorted({
+            f"{(question.difficulty or 'unspecified').casefold()}|{getattr(question.question_type, 'value', question.question_type)}"
+            for question in ineligible
+        })
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Every selected question must match a question type and difficulty level configured for this examination.",
+                "ineligible_groups": invalid_groups,
+            },
+        )
+
     # Add to the existing examination pool; never remove questions already added.
     existing_assignments = db.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).all()
     existing_question_ids = [row.question_id for row in existing_assignments]
@@ -290,7 +331,7 @@ def copy_selected_bank_questions_to_exam(
                 question_image_mime_type=source.question_image_mime_type,
                 expected_answer_image_data=source.expected_answer_image_data,
                 expected_answer_image_mime_type=source.expected_answer_image_mime_type,
-                marks=1.0, negative_marks=source.negative_marks,
+                marks=1.0, negative_marks=0.0,
                 tags=list(source.tags or []), created_by=current_user.id,
                 source_question_id=source.id,
             )
