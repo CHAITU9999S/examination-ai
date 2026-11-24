@@ -710,3 +710,56 @@ def test_expired_exam_session_is_submitted_automatically(client, db_session):
     db_session.refresh(session)
     assert session.status == "submitted"
     assert session.submitted_at is not None
+
+
+def test_students_get_different_question_sets_when_pool_allows_it(db_session):
+    exam = Exam(
+        title="Distinct Student Papers",
+        subject="General Knowledge",
+        duration_minutes=30,
+        total_questions=2,
+        randomize_questions=False,
+        selection_rules={"group_counts": {"easy|MCQ": 2}},
+        created_by=None,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    questions = [
+        QuestionBank(
+            question_text=f"Distinct paper question {index}",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=1,
+            negative_marks=0,
+        )
+        for index in range(3)
+    ]
+    db_session.add_all(questions)
+    db_session.commit()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.commit()
+
+    first_student = create_student(db_session, email="paper-one@test.com")
+    second_student = create_student(db_session, email="paper-two@test.com")
+    first_session = create_active_session(db_session, exam, first_student)
+    first_paper = get_or_create_session_question_ids(first_session, exam, db_session)
+    second_session = create_active_session(db_session, exam, second_student)
+    second_paper = get_or_create_session_question_ids(second_session, exam, db_session)
+
+    assert len(first_paper) == 2
+    assert len(second_paper) == 2
+    assert set(first_paper) != set(second_paper)
+    assert first_paper == sorted(first_paper, key=lambda item: questions.index(
+        next(question for question in questions if question.id == item)
+    ))
+    assert second_paper == sorted(second_paper, key=lambda item: questions.index(
+        next(question for question in questions if question.id == item)
+    ))
