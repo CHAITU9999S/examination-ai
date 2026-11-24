@@ -259,13 +259,8 @@ export default function StudentExamPage() {
       const headers = getHeaders();
       if (!headers) return;
 
-      const examId = sessionStorage.getItem(examIdKey);
-      if (!examId || !/^\\d+$/.test(examId)) {
-        throw new Error("Exam details are missing for this session. Please return to the exam list and start again.");
-      }
-
       const response = await fetch(
-        `${API_URL}/exam-sessions/paper/${examId}`,
+        `${API_URL}/exam-sessions/paper/session/${sessionId}`,
         {
           method: "GET",
           headers,
@@ -295,6 +290,7 @@ export default function StudentExamPage() {
         questions,
       };
 
+      if (normalizedPaper.exam_id) sessionStorage.setItem(examIdKey, String(normalizedPaper.exam_id));
       setPaper(normalizedPaper);
 
       const imageQuestions = questions.filter(
@@ -644,38 +640,65 @@ export default function StudentExamPage() {
       return;
     }
 
-    loadPaper();
-    loadRemainingTime();
-    setExamAccessToken(sessionStorage.getItem(examTokenKey));
-    void refreshExamAccessToken();
+    let cancelled = false;
+    const initializeExam = async () => {
+      const initialToken = sessionStorage.getItem(examTokenKey);
+      if (!initialToken) {
+        router.replace("/student/exams");
+        return;
+      }
 
-    const token = sessionStorage.getItem(examTokenKey);
-    if (token) {
-      fetch(`${API_URL}/answers/${sessionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const data = await response.json();
-          const saved = Array.isArray(data.answers) ? data.answers : [];
-          const restored: Record<number, string> = {};
-          const restoredImages: number[] = [];
-          for (const answer of saved) {
-            if (!answer || !Number.isInteger(answer.question_id)) continue;
-            if (typeof answer.answer_text === "string" && answer.answer_text.length > 0) {
-              restored[answer.question_id] = answer.answer_text;
-            }
-            if (typeof answer.image_path === "string" && answer.image_path.length > 0) {
-              restoredImages.push(answer.question_id);
-            }
+      setExamAccessToken(initialToken);
+      await refreshExamAccessToken();
+      if (cancelled) return;
+
+      const token = sessionStorage.getItem(examTokenKey);
+      if (!token) {
+        router.replace("/student/exams");
+        return;
+      }
+      setExamAccessToken(token);
+
+      await loadPaper();
+      if (cancelled) return;
+      await loadRemainingTime();
+      if (cancelled) return;
+
+      try {
+        const response = await fetch(`${API_URL}/answers/${sessionId}`, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem(examTokenKey) || token}` },
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.detail || "Unable to restore saved answers.");
+        }
+        const data = await response.json();
+        const saved = Array.isArray(data.answers) ? data.answers : [];
+        const restored: Record<number, string> = {};
+        const restoredImages: number[] = [];
+        for (const answer of saved) {
+          if (!answer || !Number.isInteger(answer.question_id)) continue;
+          if (typeof answer.answer_text === "string" && answer.answer_text.length > 0) {
+            restored[answer.question_id] = answer.answer_text;
           }
+          if (typeof answer.image_path === "string" && answer.image_path.length > 0) {
+            restoredImages.push(answer.question_id);
+          }
+        }
+        if (!cancelled) {
           setUploadedImageQuestionIds(restoredImages);
           answersRef.current = restored;
           setAnswers(restored);
-        })
-        .catch(() => setError("Some previously saved answers could not be restored."));
-    }
+        }
+      } catch (restoreError) {
+        if (!cancelled) {
+          setError(restoreError instanceof Error ? restoreError.message : "Some previously saved answers could not be restored.");
+        }
+      }
+    };
+
+    void initializeExam();
 
     const timeInterval = setInterval(() => {
       loadRemainingTime();
@@ -684,17 +707,15 @@ export default function StudentExamPage() {
       void refreshExamAccessToken();
     }, 4 * 60 * 1000);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refreshExamAccessToken();
-      }
+      if (document.visibilityState === "visible") void refreshExamAccessToken();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      cancelled = true;
       clearInterval(timeInterval);
       clearInterval(tokenRefreshInterval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-
       Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
       saveTimeoutsRef.current = {};
     };
