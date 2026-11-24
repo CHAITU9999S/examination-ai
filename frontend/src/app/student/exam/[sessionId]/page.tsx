@@ -654,7 +654,7 @@ export default function StudentExamPage() {
 
       const token = sessionStorage.getItem(examTokenKey);
       if (!token) {
-        router.replace("/student/exams");
+        router.replace("/login?reason=session_replaced");
         return;
       }
       setExamAccessToken(token);
