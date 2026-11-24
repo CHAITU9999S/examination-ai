@@ -31,7 +31,6 @@ export default function SelectBankForExamPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [exam, setExam] = useState<Exam | null>(null);
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
-  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [activeBankId, setActiveBankId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
@@ -60,8 +59,6 @@ export default function SelectBankForExamPage() {
     ]).then(async ([banksResponse, examResponse, profileResponse]) => {
       const bankData = await banksResponse.json().catch(() => []);
       const examData = await examResponse.json().catch(() => ({}));
-      const profile = await profileResponse.json().catch(() => ({}));
-      if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       const profile = await profileResponse.json().catch(() => ({}));
       if (profileResponse.ok && profile.role === "admin") setDashboardHref("/admin/dashboard");
       if (!banksResponse.ok || !examResponse.ok) {
