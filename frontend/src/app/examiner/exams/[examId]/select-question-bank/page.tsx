@@ -20,6 +20,7 @@ type Question = {
   question_text: string;
   question_type: string;
   difficulty: string;
+  subject?: string | null;
   marks: number;
   options: { id: number; option_text: string; is_correct: boolean }[];
 };
@@ -115,7 +116,7 @@ export default function SelectBankForExamPage() {
 
   function isQuestionEligible(question: Question) {
     if (!exam) return false;
-    if (exam.subject && question.subject && question.subject.toLowerCase() !== exam.subject.toLowerCase()) return false;
+    if (exam.subject && (question.subject || "").toLowerCase() !== exam.subject.toLowerCase()) return false;
     const rules = exam.selection_rules || {};
     const group = `${question.difficulty.toLowerCase()}|${question.question_type}`;
     const groupCounts = rules.group_counts as Record<string, number> | undefined;
