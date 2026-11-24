@@ -27,6 +27,7 @@ const navigation: Record<string, NavigationItem[]> = {
   admin: [
     { label: "Dashboard", href: "/admin/dashboard", icon: "⌂" },
     { label: "Manage Users", href: "/admin/users", icon: "♙" },
+    { label: "Manage Students", href: "/admin/students", icon: "♙" },
     { label: "Manage Admins", href: "/admin/admins", icon: "♧" },
     { label: "Manage Examiners", href: "/admin/examiners", icon: "♧" },
     { label: "Examinations", href: "/staff/examinations", icon: "▤" },
@@ -34,6 +35,14 @@ const navigation: Record<string, NavigationItem[]> = {
     { label: "Create Examination", href: "/examiner/exams", icon: "+" },
     { label: "Question Banks", href: "/staff/question-banks", icon: "▤" },
     { label: "Manage Question Bank", href: "/examiner/question-banks", icon: "▣" },
+    { label: "Question Library", href: "/examiner/questions", icon: "☷" },
+    { label: "Grading", href: "/examiner/grading", icon: "✓" },
+    { label: "Result Review & Publication", href: "/examiner/results", icon: "▤" },
+    { label: "Proctoring Review", href: "/staff/proctoring", icon: "◉" },
+    { label: "Examination Schedules", href: "/admin/schedules", icon: "▦" },
+    { label: "Student Performance History", href: "/admin/performance", icon: "▥" },
+    { label: "Admin Activity Logs", href: "/admin/activity-logs", icon: "☷" },
+    { label: "Account Security", href: "/account/security", icon: "⚿" },
   ],
   examiner: [
     { label: "Dashboard", href: "/examiner/dashboard", icon: "⌂" },
@@ -42,11 +51,17 @@ const navigation: Record<string, NavigationItem[]> = {
     { label: "Create Examination", href: "/examiner/exams", icon: "+" },
     { label: "Question Banks", href: "/staff/question-banks", icon: "▤" },
     { label: "Manage Question Bank", href: "/examiner/question-banks", icon: "▣" },
+    { label: "Question Library", href: "/examiner/questions", icon: "☷" },
     { label: "Grading", href: "/examiner/grading", icon: "✓" },
+    { label: "Result Review & Publication", href: "/examiner/results", icon: "▤" },
+    { label: "Proctoring Review", href: "/staff/proctoring", icon: "◉" },
+    { label: "Account Security", href: "/account/security", icon: "⚿" },
   ],
   student: [
     { label: "Dashboard", href: "/student/dashboard", icon: "⌂" },
     { label: "Examinations", href: "/student/exams", icon: "▣" },
+    { label: "My Results", href: "/student/results", icon: "▤" },
+    { label: "Account Security", href: "/account/security", icon: "⚿" },
   ],
 };
 
