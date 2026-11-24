@@ -52,7 +52,7 @@ function getExamStatus(exam: Exam) {
     return "Upcoming";
   }
 
-  if (end !== null && !Number.isNaN(end) && now > end) {
+  if (end !== null && !Number.isNaN(end) && now >= end) {
     return "Ended";
   }
 
