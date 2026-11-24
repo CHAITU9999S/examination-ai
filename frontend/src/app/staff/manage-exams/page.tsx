@@ -124,7 +124,11 @@ export default function ManageExamsPage() {
             <Link href="/" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
             <p className="mt-1 text-sm text-slate-400">Manage Examination</p>
           </div>
-          <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">View Examinations</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/examiner/exams" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">+ Create Examination</Link>
+            <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">View Examinations</Link>
+            <Link href="/admin/dashboard" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link>
+          </div>
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-6 py-10">
