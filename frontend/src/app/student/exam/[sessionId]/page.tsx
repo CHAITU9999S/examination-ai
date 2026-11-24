@@ -851,6 +851,18 @@ export default function StudentExamPage() {
     const currentAnswer = answers[question.id] || "";
 
     if (question.question_type === "MCQ") {
+      // The API stores MCQ selections as a one-item JSON array. Normalize
+      // that persisted value so the selected radio option remains checked
+      // after refresh, while keeping the in-memory value as a plain ID.
+      let selectedMcqOption = currentAnswer;
+      try {
+        const parsed = JSON.parse(currentAnswer);
+        if (Array.isArray(parsed) && parsed.length === 1) {
+          selectedMcqOption = String(parsed[0]);
+        }
+      } catch {
+        // Fresh answers are stored as a plain option ID in component state.
+      }
       return (
         <div className="mt-5 space-y-3">
           {(question.options || []).map((option) => (
@@ -861,7 +873,7 @@ export default function StudentExamPage() {
               <input
                 type="radio"
                 name={`question-${question.id}`}
-                checked={currentAnswer === String(option.id)}
+                checked={selectedMcqOption === String(option.id)}
                 onChange={() =>
                   updateAnswer(question.id, String(option.id))
                 }
