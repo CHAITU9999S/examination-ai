@@ -615,30 +615,25 @@ async def proctoring_heartbeat(
 
             db.expire_all()
 
-            session = db.query(ExamSession).filter(
-                ExamSession.id == session_id,
-            ).first()
-
-            if session is None:
-                await websocket.close(
-                    code=4404,
-                    reason="Exam session not found.",
-                )
-                break
-
+            # Revalidate the login identity and assignment on every heartbeat.
+            # This closes an already-open socket if the student signs in on
+            # another device or the examination assignment is revoked.
             try:
+                session = validate_proctoring_token(
+                    token=token,
+                    session_id=session_id,
+                    db=db,
+                )
                 validate_active_proctoring_session(session)
                 validate_proctoring_enabled(session, db)
-
-            except HTTPException:
+            except HTTPException as error:
                 await websocket.send_json({
                     "type": "session_expired",
-                    "message": "The examination session is no longer active.",
+                    "message": error.detail,
                 })
-
                 await websocket.close(
-                    code=4403,
-                    reason="Exam session is inactive or expired.",
+                    code=4401 if error.status_code == 401 else 4403,
+                    reason=error.detail,
                 )
                 break
 
