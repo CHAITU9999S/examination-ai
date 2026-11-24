@@ -186,7 +186,7 @@ export default function Sidebar({
         </p>
 
         {navigation[user.role].map((item) => {
-          const active = pathname === item.href;
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
