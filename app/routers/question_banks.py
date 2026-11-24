@@ -268,11 +268,6 @@ def copy_selected_bank_questions_to_exam(
         raise HTTPException(status_code=400, detail="All selected questions must match the examination subject.")
     # The source bank's marks belong to its original creator. They must
     # never determine the maximum marks in this new examination.
-    group_counts = {}
-    for question in selected_questions:
-        question_type = getattr(question.question_type, "value", question.question_type)
-        group = f"{question.difficulty}|{question_type}"
-        group_counts[group] = group_counts.get(group, 0) + 1
     # The copied set is an examination question pool, not one student's paper.
     # Minimum group counts are enforced when a student paper is generated.
     try:
