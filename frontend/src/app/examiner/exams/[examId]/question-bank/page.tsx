@@ -518,6 +518,36 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
+  async function saveQuestionMaximumMarks(questionId: number, value: string) {
+    setWorking(true); setError(""); setMessage("");
+    try {
+      const question = questions.find((item) => item.question_id === questionId);
+      if (!question) throw new Error("Question not found in this examination.");
+      const targetGroup = `${question.difficulty}|${question.question_type}`;
+      const maximumMarks = Number(value);
+      if (!Number.isFinite(maximumMarks) || maximumMarks <= 0) {
+        throw new Error("Maximum marks must be a positive number.");
+      }
+      const parsedMarks = Object.fromEntries(questionMarkGroups.map((group) => [
+        group.key,
+        group.key === targetGroup
+          ? maximumMarks
+          : Number(questionMarksByGroup[group.key] ?? questions.find((item) => `${item.difficulty}|${item.question_type}` === group.key)?.marks ?? 1),
+      ]));
+      if (Object.values(parsedMarks).some((item) => !Number.isFinite(item) || item <= 0)) {
+        throw new Error("Enter a positive maximum mark for every question group.");
+      }
+      await request(`/exams/${examId}/question-marks`, {
+        method: "PUT",
+        body: JSON.stringify({ marks_by_group: parsedMarks }),
+      });
+      setMessage(`Maximum marks updated to ${maximumMarks} for all ${question.difficulty} ${question.question_type.replaceAll("_", " ")} questions in this examination.`);
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save question maximum marks.");
+    } finally { setWorking(false); }
+  }
+
   async function saveNegativeMarks(questionId: number, value: string) {
     setWorking(true); setError(""); setMessage("");
     try {
@@ -742,7 +772,7 @@ export default function ExamQuestionBankPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Question Paper Marks Settings</h2>
-              <p className="mt-1 text-sm text-slate-400">Set the maximum marks for this examination's questions by type and difficulty. These values belong only to this examination, not to the source question banks. This has its own three-revision limit and is separate from exam settings and student answer marks.</p>
+              <p className="mt-1 text-sm text-slate-400">Set the maximum marks for this examination's questions by type and difficulty. The per-question field below updates the whole matching type/difficulty group so every question in that group keeps the same maximum marks. These values belong only to this examination, not to the source question banks. This has its own three-revision limit.</p>
             </div>
             <span className="text-xs text-cyan-300">{questionMarksRevisionsUsed}/3 revisions used</span>
           </div>
@@ -882,6 +912,9 @@ export default function ExamQuestionBankPage() {
                     <button onClick={() => removeQuestion(question.question_id)} disabled={working} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40">Remove from Bank</button>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <label className="text-xs text-slate-400">Maximum marks for this question
+                      <input key={`marks-${question.question_id}-${question.marks}`} type="number" min="0.01" step="0.01" defaultValue={question.marks} disabled={working || questionMarksLocked || !questionMarksCanEdit || questionMarksRevisionsUsed >= 3} onBlur={(e) => void saveQuestionMaximumMarks(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white disabled:opacity-50" />
+                    </label>
                     <label className="text-xs text-slate-400">Negative marks for a wrong answer
                       <input key={`negative-${question.question_id}-${question.negative_marks ?? 0}`} type="number" min="0" step="0.01" defaultValue={question.negative_marks ?? 0} onBlur={(e) => void saveNegativeMarks(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
                     </label>
