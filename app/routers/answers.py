@@ -1,4 +1,5 @@
 
+import hmac
 import io
 import json
 import os
@@ -29,6 +30,7 @@ from app.auth import verify_token
 from app.database import get_db
 from app.models import (
     Answer,
+    ExamAssignment,
     ExamSession,
     ExamQuestion,
     Option,
@@ -146,6 +148,40 @@ def validate_student_exam_token(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Student account is invalid or inactive.",
+        )
+
+    # Enforce the same single-device login rule on every answer endpoint.
+    token_auth_session_id = payload.get("auth_session_id")
+    if student.active_session_id:
+        if (
+            not isinstance(token_auth_session_id, str)
+            or not hmac.compare_digest(token_auth_session_id, student.active_session_id)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "This examination was signed out because your account "
+                    "was used to sign in on another device. Your saved answers "
+                    "are preserved. Please sign in again to continue."
+                ),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    elif token_auth_session_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This examination login session is no longer active.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    assignment = db.query(ExamAssignment.id).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your access to this examination has been revoked.",
         )
 
     session = db.query(ExamSession).filter(
