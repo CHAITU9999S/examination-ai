@@ -150,7 +150,7 @@ export default function SelectBankForExamPage() {
         body: JSON.stringify({ question_ids: selected }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Unable to copy the selected questions.");
+      if (!response.ok) throw new Error(data.detail?.message || data.detail || "Unable to copy the selected questions.");
       router.push("/examiner/exams/" + examId + "/question-bank");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to copy the selected questions.");
