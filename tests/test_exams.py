@@ -1216,3 +1216,88 @@ def test_exam_creator_can_set_negative_marks_for_each_exam_question(client, db_s
     db_session.refresh(question)
     assert question.negative_marks == 0.75
 
+
+
+def test_adding_questions_from_another_bank_preserves_existing_exam_pool(client, db_session):
+    creator = create_user(db_session, "examiner", "append_bank_creator@test.com")
+    bank_owner = create_user(db_session, "examiner", "append_bank_owner@test.com")
+    exam = Exam(
+        title="Edit Existing Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=creator.id,
+    )
+    existing_question = QuestionBank(
+        question_text="Question already in the exam",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    first_bank = QuestionCollection(name="First source bank", created_by=bank_owner.id)
+    second_bank = QuestionCollection(name="Second source bank", created_by=bank_owner.id)
+    db_session.add_all([exam, existing_question, first_bank, second_bank])
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=existing_question.id, question_order=1))
+    first_source = QuestionBank(
+        question_text="Question from first bank",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=5,
+        created_by=bank_owner.id,
+    )
+    second_source = QuestionBank(
+        question_text="Question from second bank",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=8,
+        created_by=bank_owner.id,
+    )
+    db_session.add_all([first_source, second_source])
+    db_session.flush()
+    db_session.add_all([
+        QuestionCollectionItem(collection_id=first_bank.id, question_id=first_source.id),
+        QuestionCollectionItem(collection_id=second_bank.id, question_id=second_source.id),
+    ])
+    db_session.commit()
+
+    first_response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [first_source.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert first_response.status_code == 201
+    assert first_response.json()["total_question_count"] == 2
+
+    second_response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [second_source.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert second_response.status_code == 201
+    assert second_response.json()["question_count"] == 1
+    assert second_response.json()["total_question_count"] == 3
+
+    copied_rows = db_session.query(ExamQuestion, QuestionBank).join(
+        QuestionBank, QuestionBank.id == ExamQuestion.question_id
+    ).filter(ExamQuestion.exam_id == exam.id).order_by(ExamQuestion.question_order).all()
+    assert [question.question_text for _, question in copied_rows] == [
+        "Question already in the exam",
+        "Question from first bank",
+        "Question from second bank",
+    ]
+    assert copied_rows[1][1].source_question_id == first_source.id
+    assert copied_rows[2][1].source_question_id == second_source.id
+
+    duplicate_response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [second_source.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert duplicate_response.status_code == 201
+    assert duplicate_response.json()["question_count"] == 0
+    assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 3
