@@ -177,7 +177,7 @@ def test_examiner_and_admin_can_delete_questions(
     
 
 
-def test_admin_can_delete_another_users_question(client, db_session):
+def test_admin_cannot_delete_another_users_question(client, db_session):
     examiner = create_user(
         db_session, "examiner", "question_owner@test.com"
     )
@@ -191,7 +191,9 @@ def test_admin_can_delete_another_users_question(client, db_session):
         headers=get_auth_headers(admin),
     )
 
-    assert response.status_code == 200
-    assert db_session.query(QuestionBank).filter(
+    assert response.status_code == 403
+    remaining_question = db_session.query(QuestionBank).filter(
         QuestionBank.id == question.id
-    ).first() is None
+    ).first()
+    assert remaining_question is not None
+    assert remaining_question.created_by == examiner.id
