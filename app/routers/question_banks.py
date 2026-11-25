@@ -643,6 +643,7 @@ def add_question_to_bank(
             )
             db.add(Option(question_id=question.id, option_text=option_text, is_correct=correct))
         db.add(QuestionCollectionItem(collection_id=bank.id, question_id=question.id))
+        db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_added_to_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question.id}))
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -669,6 +670,7 @@ def add_existing_question_to_bank(
     if db.query(QuestionCollectionItem.id).filter_by(collection_id=bank.id, question_id=question.id).first():
         raise HTTPException(status_code=409, detail="This question is already in the question bank.")
     db.add(QuestionCollectionItem(collection_id=bank.id, question_id=question.id))
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_added_to_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question.id}))
     db.commit()
     return {"message": "Question added to the question bank."}
 
