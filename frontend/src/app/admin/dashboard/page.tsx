@@ -28,7 +28,20 @@ interface Statistics {
   total_sessions: number;
 }
 
-const navigationGroups = [
+interface NavigationItem {
+  title: string;
+  description: string;
+  href: string;
+  related?: NavigationItem[];
+}
+
+interface NavigationGroup {
+  title: string;
+  description: string;
+  items: NavigationItem[];
+}
+
+const navigationGroups: NavigationGroup[] = [
   {
     title: "User Management",
     description: "Manage all platform accounts and review user-related activity.",
