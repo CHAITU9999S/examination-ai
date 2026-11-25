@@ -46,7 +46,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
    if(!profileR.ok||!examR.ok||!assignmentR.ok)throw new Error(e.detail||a.detail||"Unable to load examination details.");
    if(readOnly&&profile.role!=="admin"){router.replace("/login");return;}
    if(!readOnly&&Number(e.created_by)!==Number(profile.id)){throw new Error("Only the examination creator can manage this examination.");}
-   const admin=profile.role==="admin";setDashboardHref(admin?"/admin/dashboard":"/examiner/dashboard");setPreviousHref(admin?"/admin/sections/examinations":"/examiner/dashboard");
+   const admin=profile.role==="admin";setDashboardHref(admin?"/admin/dashboard":"/examiner/dashboard");setPreviousHref(readOnly?"/admin/exams":admin?"/staff/manage-exams":"/examiner/dashboard");
    setExam(e);setStudents(Array.isArray(a.students)?a.students:[]);setAssignmentClosed(Boolean(a.assignment_closed));
    setResults(Array.isArray(r.results)?r.results:[]);
    if(!readOnly&&!a.assignment_closed){const er=await fetch(`${API_URL}/exams/${examId}/eligible-students`,{headers:h,cache:"no-store"});const ed=await er.json().catch(()=>({}));if(er.ok)setEligible(Array.isArray(ed.students)?ed.students:[]);else if(er.status===409){setAssignmentClosed(true);setEligible([]);}else throw new Error(ed.detail||"Unable to load unassigned students.");}
@@ -115,7 +115,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
        {student.session_id&&<Link href="/staff/proctoring" className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Proctoring Review</Link>}
       </div></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
-       <div className="rounded-lg bg-slate-900/70 p-3"><p className="text-xs text-slate-500">Evaluation</p><p className="mt-1 font-medium">{evaluationLabel}</p>{graded.map((q,i)=><p key={q.question_order} className="mt-1 text-xs text-slate-400">Q{q.question_order}: {q.evaluation_history.map(h=>h.marks).join(" → ")||q.awarded_marks} / {q.maximum_marks}{q.evaluation_count===latestEvaluation?" · Latest":""}</p>)}</div>
+       <div className="rounded-lg bg-slate-900/70 p-3"><p className="text-xs text-slate-500">Evaluation</p><p className="mt-1 font-medium">{evaluationLabel}</p>{graded.map((q,i)=><p key={q.question_order} className="mt-1 text-xs text-slate-400">Q{q.question_order}: {q.evaluation_history.map(h=>h.marks).join(" → ")||q.awarded_marks} / {q.maximum_marks} · Latest: {q.awarded_marks}</p>)}</div>
        <div className="rounded-lg bg-slate-900/70 p-3"><p className="text-xs text-slate-500">Grade</p><p className="mt-1 font-medium">{gradeLabel}</p></div>
        <div className="rounded-lg bg-slate-900/70 p-3"><p className="text-xs text-slate-500">Result</p><p className="mt-1 font-medium">{result?.result_published?"Result published":result?"Evaluated — awaiting publication":"Not evaluated"}</p>{result&&<p className="mt-1 text-xs text-slate-400">Latest: {result.obtained_marks??"—"} / {result.total_marks??"—"}</p>}</div>
       </div>
