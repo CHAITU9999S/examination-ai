@@ -1,3 +1,4 @@
+import json
 import math
 import mimetypes
 import os
@@ -829,11 +830,27 @@ def get_session_answer_review(
             ).order_by(AnswerMarkRevision.revision_number.asc()).all()
         current_marks = answer.awarded_marks if answer is not None else None
         evaluation_count = (1 + len(revisions)) if current_marks is not None else 0
+        question_type_value = getattr(question.question_type, "value", question.question_type)
+        selected_options = []
+        if answer is not None and question_type_value in {"MCQ", "multi_select"}:
+            try:
+                selected_option_ids = json.loads(answer.answer_text or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                selected_option_ids = []
+            if isinstance(selected_option_ids, int):
+                selected_option_ids = [selected_option_ids]
+            if isinstance(selected_option_ids, list):
+                option_by_id = {option.id: option for option in question.options}
+                selected_options = [
+                    option_by_id[option_id].option_text
+                    for option_id in selected_option_ids
+                    if option_id in option_by_id
+                ]
         review_items.append({
             "question_id": question.id,
             "question_order": order,
             "question_text": question.question_text,
-            "question_type": getattr(question.question_type, "value", question.question_type),
+            "question_type": question_type_value,
             "difficulty": question.difficulty,
             "maximum_marks": question.marks,
             "expected_answer": question.expected_answer,
@@ -844,6 +861,7 @@ def get_session_answer_review(
             ],
             "answer_id": answer.id if answer is not None else None,
             "answer_text": answer.answer_text if answer is not None else None,
+            "selected_options": selected_options,
             "answer_image_url": f"/grading/answers/{answer.id}/image" if answer is not None and (answer.image_data or answer.image_path) else None,
             "ai_suggested_marks": answer.ai_suggested_marks if answer is not None else None,
             "ai_justification": answer.ai_justification if answer is not None else None,
