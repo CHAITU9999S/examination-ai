@@ -1179,6 +1179,13 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             )
         )
         status_value = session.status if session is not None else "not_started"
+        if (
+            session is not None
+            and status_value == "in_progress"
+            and exam.end_time is not None
+            and datetime.utcnow() >= exam.end_time
+        ):
+            status_value = "expired"
         status_labels = {
             "not_started": "Not Started",
             "in_progress": "In Progress",
