@@ -49,9 +49,11 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
     <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h3 className="text-lg font-bold">{exam.title}</h3><p className="mt-1 text-sm text-slate-400">{exam.subject || "Subject not specified"}</p></div>
-        {expiringSoon(exam) ? <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Expiring Soon</span> :
-          exam.is_pending ? <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Pending</span> :
-          <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs capitalize text-blue-300">{exam.category}</span>}
+        <div className="flex flex-wrap gap-2">
+          {expiringSoon(exam) && <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Expiring Soon</span>}
+          {exam.is_pending && <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Pending</span>}
+          {!expiringSoon(exam) && !exam.is_pending && <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs capitalize text-blue-300">{exam.category}</span>}
+        </div>
       </div>
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         <p><span className="text-slate-500">Created by:</span> {exam.creator_name} {exam.creator_role ? "(" + exam.creator_role + ")" : ""}</p>
