@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type Bank = {
@@ -60,10 +61,7 @@ export default function QuestionBanksPage() {
       <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
           <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">Question Banks</p></div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/examiner/question-banks" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300">Manage Question Bank</Link>
-            <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Examinations</Link>
-          </div>
+          <AdminSectionNavigation previousHref="/admin/sections/question-banks" previousLabel="Question Bank" dashboardHref={dashboardHref} />
         </div>
       </header>
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-10">
