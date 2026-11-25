@@ -26,6 +26,7 @@ interface ReviewSession {
   student_id: number;
   student_name: string;
   submitted_at?: string | null;
+  face_photo_url?: string | null;
   result_ready: boolean;
   is_published: boolean;
   obtained_marks?: number | null;
@@ -53,6 +54,7 @@ export default function ExaminerResultsPage() {
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [facePhotoUrls, setFacePhotoUrls] = useState<Record<number, string>>({});
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -95,6 +97,31 @@ export default function ExaminerResultsPage() {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token || sessions.length === 0) { setFacePhotoUrls({}); return; }
+    Promise.all(sessions.filter((session) => session.face_photo_url).map(async (session) => {
+      try {
+        const response = await fetch(API_URL + session.face_photo_url, {
+          headers: { Authorization: "Bearer " + token }, cache: "no-store",
+        });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        createdUrls.push(url);
+        return [session.session_id, url] as const;
+      } catch { return null; }
+    })).then((items) => {
+      if (cancelled) return;
+      const next: Record<number, string> = {};
+      for (const item of items) if (item) next[item[0]] = item[1];
+      setFacePhotoUrls(next);
+    });
+    return () => { cancelled = true; createdUrls.forEach((url) => URL.revokeObjectURL(url)); };
+  }, [sessions]);
 
   async function publishResult(sessionId: number) {
     if (!window.confirm("Publish this result so the student can view it?")) {
@@ -179,6 +206,7 @@ export default function ExaminerResultsPage() {
                   <tr className="border-b border-white/10 text-slate-400">
                     <th className="px-4 py-3">Examination</th>
                     <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Candidate photo</th>
                     <th className="px-4 py-3">Submitted</th>
                     <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Publication</th>
@@ -190,6 +218,7 @@ export default function ExaminerResultsPage() {
                     <tr key={session.session_id} className="border-b border-white/5 last:border-0">
                       <td className="px-4 py-4 font-semibold">{session.exam_title}</td>
                       <td className="px-4 py-4">{session.student_name}</td>
+                      <td className="px-4 py-4">{facePhotoUrls[session.session_id] ? <img src={facePhotoUrls[session.session_id]} alt="Candidate face captured before the examination" className="h-14 w-14 rounded-lg object-cover" /> : "—"}</td>
                       <td className="px-4 py-4 text-slate-400">{formatDate(session.submitted_at)}</td>
                       <td className="px-4 py-4 tabular-nums">
                         {session.result_ready
