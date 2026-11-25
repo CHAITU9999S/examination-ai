@@ -103,13 +103,16 @@ class UserResponse(BaseSchema):
     full_name: str
     email: EmailStr
     department: str | None = None
+    role: UserRole
+    is_active: bool | None = True
+
+
+class UserProfileResponse(UserResponse):
     date_of_birth: date | None = None
     full_name_edit_count: int = 0
     email_edit_count: int = 0
     department_edit_count: int = 0
     date_of_birth_edit_count: int = 0
-    role: UserRole
-    is_active: bool | None = True
 
 
 # ==========================================
