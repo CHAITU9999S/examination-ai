@@ -34,16 +34,21 @@ export default function StaffExaminationsPage() {
     if (!token) { router.replace("/login"); return; }
     const headers = { Authorization: `Bearer ${token}` };
     try {
-      const [profileResponse, examsResponse] = await Promise.all([
-        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
-        fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
-      ]);
-      if (profileResponse.status === 401 || examsResponse.status === 401) { router.replace("/login"); return; }
+      const profileResponse = await fetch(`${API_URL}/users/me`, { headers, cache: "no-store" });
+      if (profileResponse.status === 401 || profileResponse.status === 403) { router.replace("/login"); return; }
       const profile = await profileResponse.json().catch(() => ({}));
+      if (!profileResponse.ok) throw new Error(profile.detail || "Unable to verify your account.");
+      if (profile.role !== "admin") {
+        router.replace(profile.role === "examiner" ? "/staff/manage-exams" : "/login");
+        return;
+      }
+
+      // The all-examinations view (Section C) is Admin-only.
+      const examsResponse = await fetch(`${API_URL}/exams`, { headers, cache: "no-store" });
+      if (examsResponse.status === 401 || examsResponse.status === 403) { router.replace("/login"); return; }
       const data = await examsResponse.json().catch(() => []);
-      if (!profileResponse.ok || !examsResponse.ok) throw new Error(data.detail || "Unable to load examinations.");
-      if (profile.role !== "admin" && profile.role !== "examiner") { router.replace("/login"); return; }
-      setRole(profile.role);
+      if (!examsResponse.ok) throw new Error(data.detail || "Unable to load examinations.");
+      setRole("admin");
       setExams(Array.isArray(data) ? data : Array.isArray(data.exams) ? data.exams : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load examinations.");
