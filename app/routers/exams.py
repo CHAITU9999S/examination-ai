@@ -1114,7 +1114,7 @@ def list_exam_assignments(
 
     def student_exam_status(session):
         if session is None:
-            if exam.start_time is not None and now < exam.start_time:
+            if exam.start_time is None or now < exam.start_time:
                 return "schedule_not_started"
             return "not_taken"
         if session.status == "in_progress":
