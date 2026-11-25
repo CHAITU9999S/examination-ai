@@ -50,6 +50,7 @@ interface ResultDetails {
   percentile: number;
   cohort_distribution?: CohortDistribution;
   published_at?: string | null;
+  face_photo_url?: string | null;
   question_results: QuestionResult[];
 }
 
@@ -61,6 +62,7 @@ export default function StudentResultDetailPage() {
   const [result, setResult] = useState<ResultDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [facePhotoUrl, setFacePhotoUrl] = useState("");
 
   const loadResult = useCallback(async () => {
     setLoading(true);
@@ -96,6 +98,26 @@ export default function StudentResultDetailPage() {
     if (sessionId) loadResult();
   }, [loadResult, sessionId]);
 
+  useEffect(() => {
+    if (!result?.face_photo_url) { setFacePhotoUrl(""); return; }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) return;
+    fetch(API_URL + result.face_photo_url, { headers: { Authorization: "Bearer " + token }, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load the examination face photo.");
+        return response.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setFacePhotoUrl(objectUrl);
+        else URL.revokeObjectURL(objectUrl);
+      })
+      .catch(() => { if (!cancelled) setFacePhotoUrl(""); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [result?.face_photo_url]);
+
   const percentage = Math.max(0, Math.min(100, Number(result?.percentage || 0)));
 
   return (
@@ -124,6 +146,14 @@ export default function StudentResultDetailPage() {
         ) : result ? (
           <>
             <h1 className="text-3xl font-bold">{result.exam_title}</h1>
+            {result.face_photo_url && (
+              <section className="mt-6 flex justify-end">
+                <figure className="w-32 rounded-xl border border-white/10 bg-slate-900 p-3 text-center">
+                  {facePhotoUrl ? <img src={facePhotoUrl} alt="Your face photo captured before the examination" className="h-28 w-full rounded-lg object-cover" /> : <div className="flex h-28 items-center justify-center text-xs text-slate-400">Loading photo...</div>}
+                  <figcaption className="mt-2 text-xs text-slate-400">Your examination photo</figcaption>
+                </figure>
+              </section>
+            )}
             <section className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               <article className="rounded-2xl border border-white/10 bg-slate-900 p-6">
                 <p className="text-sm text-slate-400">Overall score</p>
