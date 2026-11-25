@@ -201,6 +201,7 @@ def test_expired_student_session_is_not_reported_as_completed(
         headers=headers,
     )
     exams_response = client.get("/exams?mine=true", headers=headers)
+    performance_response = client.get("/admin/performance", headers=headers)
 
     assert assignments_response.status_code == 200
     assignment_statuses = {
@@ -211,6 +212,19 @@ def test_expired_student_session_is_not_reported_as_completed(
     assert assignment_statuses[unattempted_student.id] == "expired"
     assert assignment_statuses[paused_student.id] == "expired"
     assert exams_response.status_code == 200
+    assert performance_response.status_code == 200
+    performance_students = {
+        item["student_id"]: item
+        for item in performance_response.json()["students"]
+    }
+    unattempted_attempt = performance_students[unattempted_student.id]["attempts"][0]
+    paused_attempt = performance_students[paused_student.id]["attempts"][0]
+    assert unattempted_attempt["status_label"] == "Expired"
+    assert unattempted_attempt["is_started"] is False
+    assert unattempted_attempt["is_taken"] is False
+    assert paused_attempt["status_label"] == "Expired"
+    assert paused_attempt["is_started"] is True
+    assert paused_attempt["is_taken"] is True
     exam_row = exams_response.json()[0]
     assert exam_row["completed_session_count"] == 0
     assert exam_row["expired_session_count"] == 1
