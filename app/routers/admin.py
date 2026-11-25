@@ -418,7 +418,9 @@ def _delete_account_preserving_history(
                 if question is None:
                     continue
                 if used:
-                    question.created_by = None
+                    # Keep ownership attribution on the deleted-account tombstone.
+                    # Retained questions appear in Admin > Retained Data.
+                    pass
                 else:
                     db.query(Option).filter(
                         Option.question_id == question_id
@@ -549,6 +551,21 @@ def list_retained_data(
                     "description": f"Completed student submission (session #{session.id})",
                 })
 
+        if deleted_user.role in {UserRole.ADMIN.value, UserRole.EXAMINER.value}:
+            retained_questions = db.query(QuestionBank).filter(
+                QuestionBank.created_by == deleted_user.id
+            ).order_by(QuestionBank.id.desc()).all()
+            for question in retained_questions:
+                items.append({
+                    "kind": "retained_question",
+                    "id": question.id,
+                    "title": question.question_text[:120],
+                    "owner_id": deleted_user.id,
+                    "owner_name": deleted_user.full_name,
+                    "owner_role": deleted_user.role,
+                    "description": "Question retained because examination or answer records still reference it. It can be deleted after those references are removed.",
+                })
+
         for revision_model, kind, label in (
             (ExamConfigurationRevision, "exam_configuration_revision", "Examination configuration history"),
             (ExamQuestionMarksRevision, "exam_question_marks_revision", "Question-paper marks history"),
@@ -610,6 +627,37 @@ def delete_retained_data(
             if session is None or not _session_is_completed(db, session):
                 raise HTTPException(status_code=404, detail="Retained submission not found.")
             _delete_session_history(db, [session.id])
+
+        elif kind == "retained_question":
+            question = db.query(QuestionBank).filter(
+                QuestionBank.id == record_id,
+                QuestionBank.creator.has(User.is_deleted.is_(True)),
+            ).first()
+            if question is None:
+                raise HTTPException(status_code=404, detail="Retained question not found.")
+            still_used = any((
+                db.query(ExamQuestion.id).filter(
+                    ExamQuestion.question_id == question.id
+                ).first(),
+                db.query(Answer.id).filter(
+                    Answer.question_id == question.id
+                ).first(),
+                db.query(QuestionCollectionItem.id).filter(
+                    QuestionCollectionItem.question_id == question.id
+                ).first(),
+                db.query(QuestionBank.id).filter(
+                    QuestionBank.source_question_id == question.id
+                ).first(),
+            ))
+            if still_used:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This question is still used by another examination, answer, or question bank. Delete those records first, then try again.",
+                )
+            db.query(Option).filter(
+                Option.question_id == question.id
+            ).delete(synchronize_session=False)
+            db.delete(question)
 
         elif kind in {
             "exam_configuration_revision",
