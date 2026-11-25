@@ -873,10 +873,13 @@ def get_all_questions_reset_status(
         PlatformSetting.setting_key == "all_questions_deleted_once",
     ).first()
     used = bool(setting and setting.setting_value == "true")
+    available = setting is not None and not used
     return {
-        "available": not used,
+        "available": available,
         "used": used,
         "message": (
+            "The database migration for the one-time question deletion has not been applied."
+            if setting is None else
             "The one-time question deletion has already been used."
             if used else
             "The one-time question deletion is available to an Admin."
