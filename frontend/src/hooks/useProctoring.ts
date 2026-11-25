@@ -10,7 +10,8 @@ export type ProctoringEventType =
   | "face_not_detected"
   | "multiple_faces"
   | "gaze_away"
-  | "webcam_error";
+  | "webcam_error"
+  | "fullscreen_exit";
 
 export interface ProctoringEvent {
   event_type: ProctoringEventType;
