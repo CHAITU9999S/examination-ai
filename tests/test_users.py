@@ -218,3 +218,123 @@ def test_inactive_student_cannot_login(
     )
 
     assert response.status_code == 403
+
+def _login_token(client, email, password="StudentPass123!"):
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
+def test_profile_fields_have_independent_three_edit_limits(client, student):
+    token = _login_token(client, student.email)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for name in ("First Updated Name", "Second Updated Name", "Third Updated Name"):
+        response = client.patch(
+            "/users/me/profile",
+            headers=headers,
+            json={"full_name": name},
+        )
+        assert response.status_code == 200
+
+    fourth_name = client.patch(
+        "/users/me/profile",
+        headers=headers,
+        json={"full_name": "Fourth Updated Name"},
+    )
+    assert fourth_name.status_code == 400
+    assert "3 edit chances" in fourth_name.json()["detail"]
+
+    # Exhausting the name allowance does not consume the email allowance.
+    email_update = client.patch(
+        "/users/me/profile",
+        headers=headers,
+        json={"email": "updated.student@example.com"},
+    )
+    assert email_update.status_code == 200
+    assert email_update.json()["full_name_edit_count"] == 3
+    assert email_update.json()["email_edit_count"] == 1
+
+
+def test_profile_optional_fields_can_be_set_and_cleared(client, student):
+    token = _login_token(client, student.email)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.patch(
+        "/users/me/profile",
+        headers=headers,
+        json={
+            "department": "Computer Science",
+            "date_of_birth": "2002-04-15",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["department"] == "Computer Science"
+    assert response.json()["date_of_birth"] == "2002-04-15"
+    assert response.json()["department_edit_count"] == 1
+    assert response.json()["date_of_birth_edit_count"] == 1
+
+    clear_response = client.patch(
+        "/users/me/profile",
+        headers=headers,
+        json={"department": None, "date_of_birth": None},
+    )
+    assert clear_response.status_code == 200
+    assert clear_response.json()["department"] is None
+    assert clear_response.json()["date_of_birth"] is None
+    assert clear_response.json()["department_edit_count"] == 2
+    assert clear_response.json()["date_of_birth_edit_count"] == 2
+
+
+def test_profile_update_rejects_duplicate_email(client, student, db_session):
+    other_user = User(
+        full_name="Other Student",
+        email="other.student@example.com",
+        password_hash=hash_password("OtherPass123!"),
+        role="student",
+        is_active=True,
+    )
+    db_session.add(other_user)
+    db_session.commit()
+
+    token = _login_token(client, student.email)
+    response = client.patch(
+        "/users/me/profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": other_user.email},
+    )
+    assert response.status_code == 409
+
+
+def test_login_history_returns_only_latest_ten_successful_logins(client, student):
+    token = None
+    for index in range(12):
+        response = client.post(
+            "/auth/login",
+            json={"email": student.email, "password": "StudentPass123!"},
+            headers={"User-Agent": f"ExamGuard Test Browser {index}"},
+        )
+        assert response.status_code == 200
+        token = response.json()["access_token"]
+
+    history_response = client.get(
+        "/users/me/login-history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert len(history) == 10
+    assert history[0]["user_agent"] == "ExamGuard Test Browser 11"
+    assert history[-1]["user_agent"] == "ExamGuard Test Browser 2"
+    assert all(item["logged_in_at"] for item in history)
+    assert all(item["ip_address"] for item in history)
+
+
+def test_login_history_requires_authentication(client):
+    response = client.get("/users/me/login-history")
+    assert response.status_code in (401, 403)
+
