@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -151,10 +152,31 @@ def get_my_published_results(
                     exam.id,
                     float(result.obtained_marks or 0),
                 ),
+                "face_photo_url": f"/results/sessions/{session.id}/face-photo" if session.face_capture_data else None,
             }
             for result, session, exam in rows
         ]
     }
+
+
+@router.get("/sessions/{session_id}/face-photo")
+def get_my_result_face_photo(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serve a captured face photo only to the student with a published result."""
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Examination session not found.")
+    _require_student_result_access(session, current_user, db)
+    if not session.face_capture_data:
+        raise HTTPException(status_code=404, detail="No face capture is available for this result.")
+    return Response(
+        content=session.face_capture_data,
+        media_type=session.face_capture_mime_type or "image/jpeg",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.get("/{session_id}")
@@ -246,6 +268,7 @@ def get_my_result_details(
         "exam_title": exam.title if exam else None,
         "submitted_at": session.submitted_at,
         "published_at": result.published_at,
+        "face_photo_url": f"/results/sessions/{session.id}/face-photo" if session.face_capture_data else None,
         "total_marks": result.total_marks,
         "obtained_marks": result.obtained_marks,
         "percentage": result.percentage,
@@ -314,6 +337,8 @@ def get_exam_results_for_staff(
                 "student_name": student.full_name,
                 "session_status": session.status,
                 "submitted_at": session.submitted_at,
+                "face_photo_available": bool(session.face_capture_data),
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
                 "result_published": bool(result and result.is_published),
                 "total_marks": result.total_marks if result else None,
                 "obtained_marks": result.obtained_marks if result else None,
