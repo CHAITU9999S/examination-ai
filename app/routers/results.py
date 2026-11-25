@@ -146,7 +146,7 @@ def get_my_published_results(
                 "total_marks": result.total_marks,
                 "obtained_marks": result.obtained_marks,
                 "percentage": result.percentage,
-                "grade": _letter_grade(result.percentage),
+                "grade": result.grade or _letter_grade(result.percentage),
                 "percentile": _get_percentile(
                     db,
                     exam.id,
@@ -272,7 +272,7 @@ def get_my_result_details(
         "total_marks": result.total_marks,
         "obtained_marks": result.obtained_marks,
         "percentage": result.percentage,
-        "grade": _letter_grade(result.percentage),
+        "grade": result.grade or _letter_grade(result.percentage),
         "percentile": percentile,
         "cohort_distribution": _get_cohort_distribution(
             db,
@@ -343,7 +343,7 @@ def get_exam_results_for_staff(
                 "total_marks": result.total_marks if result else None,
                 "obtained_marks": result.obtained_marks if result else None,
                 "percentage": result.percentage if result else None,
-                "grade": _letter_grade(result.percentage) if result and result.is_published else None,
+                "grade": (result.grade or _letter_grade(result.percentage)) if result and result.is_published else None,
             }
             for session, student, result in rows
         ],
@@ -390,7 +390,7 @@ def get_staff_result_history(
                 "total_marks": result.total_marks,
                 "obtained_marks": result.obtained_marks,
                 "percentage": result.percentage,
-                "grade": _letter_grade(result.percentage) if result.is_published else None,
+                "grade": (result.grade or _letter_grade(result.percentage)) if result.is_published else None,
             }
             for result, session, exam, student in rows
         ],
