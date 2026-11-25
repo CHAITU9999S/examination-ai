@@ -327,8 +327,6 @@ def _delete_account_preserving_history(
 
     original = {
         "target_user_id": target.id,
-        "full_name": target.full_name,
-        "email": target.email,
         "role": target.role,
     }
     try:
@@ -566,6 +564,23 @@ def list_retained_data(
                     "description": "Question retained because examination or answer records still reference it. It can be deleted after those references are removed.",
                 })
 
+        activity_rows = db.query(AdminActivityLog).filter(
+            or_(
+                AdminActivityLog.actor_user_id == deleted_user.id,
+                AdminActivityLog.target_user_id == deleted_user.id,
+            )
+        ).order_by(AdminActivityLog.id.desc()).all()
+        for activity in activity_rows:
+            items.append({
+                "kind": "admin_activity_log",
+                "id": activity.id,
+                "title": f"Admin activity: {activity.action}",
+                "owner_id": deleted_user.id,
+                "owner_name": deleted_user.full_name,
+                "owner_role": deleted_user.role,
+                "description": "Audit entry linked to this deleted account",
+            })
+
         for revision_model, kind, label in (
             (ExamConfigurationRevision, "exam_configuration_revision", "Examination configuration history"),
             (ExamQuestionMarksRevision, "exam_question_marks_revision", "Question-paper marks history"),
@@ -627,6 +642,21 @@ def delete_retained_data(
             if session is None or not _session_is_completed(db, session):
                 raise HTTPException(status_code=404, detail="Retained submission not found.")
             _delete_session_history(db, [session.id])
+
+        elif kind == "admin_activity_log":
+            activity = db.query(AdminActivityLog).join(
+                User,
+                or_(
+                    AdminActivityLog.actor_user_id == User.id,
+                    AdminActivityLog.target_user_id == User.id,
+                ),
+            ).filter(
+                AdminActivityLog.id == record_id,
+                User.is_deleted.is_(True),
+            ).first()
+            if activity is None:
+                raise HTTPException(status_code=404, detail="Retained activity log not found.")
+            db.delete(activity)
 
         elif kind == "retained_question":
             question = db.query(QuestionBank).filter(
