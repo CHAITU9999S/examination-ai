@@ -1059,8 +1059,8 @@ def list_exam_assignments(
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found.")
-    if exam.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the exam creator can view its assignments.")
+    if current_user.role != UserRole.ADMIN.value and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can view assignments only for examinations you created.")
     rows = db.query(ExamAssignment, User).join(
         User, User.id == ExamAssignment.student_id
     ).filter(
