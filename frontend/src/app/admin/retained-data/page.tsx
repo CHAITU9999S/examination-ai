@@ -19,6 +19,7 @@ type RetainedItem = {
 const KIND_LABELS: Record<string, string> = {
   completed_exam: "Completed examination",
   completed_submission: "Completed student submission",
+  retained_question: "Retained question",
   exam_configuration_revision: "Examination configuration history",
   exam_question_marks_revision: "Question-paper marks history",
   answer_mark_revision: "Answer grading history",
@@ -137,7 +138,7 @@ export default function RetainedDataPage() {
       <div className="mx-auto max-w-7xl px-6 py-10">
         <h1 className="text-3xl font-bold">Retained Data</h1>
         <p className="mt-2 max-w-3xl text-slate-400">
-          Completed examinations, student submissions, and grading history are preserved when an account is deleted.
+          Completed examinations, student submissions, grading history, and questions still referenced by other records are preserved when an account is deleted.
           Review these records here and permanently delete an individual record whenever it is no longer needed.
         </p>
 
