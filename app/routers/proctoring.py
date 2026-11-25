@@ -502,6 +502,8 @@ def get_staff_proctoring_history(
         "student_id": history["student_id"],
         "student_name": student.full_name if student else "Unknown student",
         "session_status": history["session_status"],
+        "started_at": session.started_at if session else None,
+        "submitted_at": session.submitted_at if session else None,
         "suspicion_score": history["suspicion_score"],
         "last_heartbeat_at": history["last_heartbeat_at"],
         "last_heartbeat_signals": history["last_heartbeat_signals"],
