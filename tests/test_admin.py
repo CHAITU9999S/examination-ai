@@ -748,11 +748,12 @@ def test_student_performance_includes_assignments_from_all_staff_but_tracking_is
     assert [item["exam_title"] for item in tracking_student["attempts"]] == [
         admin_exam.title
     ]
+    assert tracking_student["attempts"][0]["assigned_by_name"] == admin.full_name
     assert platform_student["total_assigned_examinations"] == 2
-    assert {item["exam_title"] for item in platform_student["attempts"]} == {
-        admin_exam.title,
-        examiner_exam.title,
-    }
+    platform_attempts = {item["exam_title"]: item for item in platform_student["attempts"]}
+    assert set(platform_attempts) == {admin_exam.title, examiner_exam.title}
+    assert platform_attempts[admin_exam.title]["assigned_by_name"] == admin.full_name
+    assert platform_attempts[examiner_exam.title]["assigned_by_name"] == examiner.full_name
 
 
 
