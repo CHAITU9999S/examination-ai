@@ -701,3 +701,39 @@ def test_answer_marks_allow_three_revisions_only(client, db_session, grading_dat
     assert history.status_code == 200
     assert history.json()["revisions_used"] == 3
     assert [item["revision_number"] for item in history.json()["history"]] == [1, 2, 3]
+
+
+def test_examiner_can_view_face_photo_for_their_own_exam(client, db_session, grading_data):
+    data = grading_data
+    data["session"].face_capture_data = b"candidate-face-photo"
+    data["session"].face_capture_mime_type = "image/jpeg"
+    db_session.commit()
+
+    response = client.get(
+        f"/grading/sessions/{data['session'].id}/face-photo",
+        headers=auth_headers(data["examiner"]),
+    )
+    assert response.status_code == 200
+    assert response.content == b"candidate-face-photo"
+    assert response.headers.get("cache-control") == "private, no-store"
+
+
+def test_other_examiner_cannot_view_candidate_face_photo(client, db_session, grading_data):
+    data = grading_data
+    data["session"].face_capture_data = b"candidate-face-photo"
+    data["session"].face_capture_mime_type = "image/jpeg"
+    other_examiner = User(
+        full_name="Other Examiner",
+        email="other-grading-examiner@example.com",
+        password_hash="test-password-hash",
+        role="examiner",
+        is_active=True,
+    )
+    db_session.add(other_examiner)
+    db_session.commit()
+
+    response = client.get(
+        f"/grading/sessions/{data['session'].id}/face-photo",
+        headers=auth_headers(other_examiner),
+    )
+    assert response.status_code == 403
