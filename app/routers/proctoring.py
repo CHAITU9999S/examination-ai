@@ -303,6 +303,24 @@ def record_proctoring_event(
         "recorded": True,
     }
 
+def _exam_attribution(exam: Exam, student_id: int, db: Session) -> dict:
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == student_id,
+    ).first()
+    assigner = (
+        db.query(User).filter(User.id == assignment.assigned_by).first()
+        if assignment is not None else None
+    )
+    return {
+        "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
+        "assigned_by_name": assigner.full_name if assigner else "Unknown",
+        "assigned_by_role": assigner.role if assigner else None,
+    }
+
+
 # ==========================================
 # LIST FLAGGED EXAMINATION SESSIONS
 # ==========================================
@@ -384,6 +402,7 @@ def list_flagged_proctoring_sessions(
             "session_id": session.id,
             "exam_id": exam.id,
             "exam_title": exam.title,
+            **_exam_attribution(exam, student.id, db),
             "student_id": student.id,
             "student_name": student.full_name,
             "session_status": session.status,
@@ -499,6 +518,7 @@ def get_staff_proctoring_history(
         "session_id": session_id,
         "exam_id": history["exam_id"],
         "exam_title": exam.title if exam else "Unknown examination",
+        **_exam_attribution(exam, history["student_id"], db) if exam else {},
         "student_id": history["student_id"],
         "student_name": student.full_name if student else "Unknown student",
         "session_status": history["session_status"],
