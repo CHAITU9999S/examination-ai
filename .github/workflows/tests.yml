@@ -6,15 +6,29 @@ on:
     branches: [main]
     paths:
       - "app/**"
-      - "tests/test_admin_bootstrap.py"
+      - "frontend/**"
+      - "tests/**"
+      - "alembic/**"
+      - "alembic.ini"
       - "requirements.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".env.example"
+      - "pyproject.toml"
       - ".github/workflows/tests.yml"
   pull_request:
     branches: [main]
     paths:
       - "app/**"
-      - "tests/test_admin_bootstrap.py"
+      - "frontend/**"
+      - "tests/**"
+      - "alembic/**"
+      - "alembic.ini"
       - "requirements.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".env.example"
+      - "pyproject.toml"
       - ".github/workflows/tests.yml"
 
 permissions:
