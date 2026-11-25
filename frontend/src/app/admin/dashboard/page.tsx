@@ -166,6 +166,7 @@ export default function AdminDashboardPage() {
         if (resetStatusResponse.ok) {
           const resetStatus = await resetStatusResponse.json();
           setQuestionResetAvailable(Boolean(resetStatus.available));
+          if (!resetStatus.available) setQuestionResetMessage(resetStatus.message || "The one-time question deletion is unavailable.");
         } else {
           setQuestionResetAvailable(false);
         }
