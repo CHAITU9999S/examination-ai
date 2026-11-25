@@ -518,7 +518,7 @@ def get_staff_proctoring_history(
         "session_id": session_id,
         "exam_id": history["exam_id"],
         "exam_title": exam.title if exam else "Unknown examination",
-        **_exam_attribution(exam, history["student_id"], db) if exam else {},
+        **(_exam_attribution(exam, history["student_id"], db) if exam else {}),
         "student_id": history["student_id"],
         "student_name": student.full_name if student else "Unknown student",
         "session_status": history["session_status"],
