@@ -50,6 +50,8 @@ export default function StaffProctoringReviewPage() {
   const router = useRouter();
   const [requestedSessionId, setRequestedSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<FlaggedSession[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [selected, setSelected] = useState<FlaggedSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -107,6 +109,16 @@ export default function StaffProctoringReviewPage() {
     loadFlaggedSessions();
   }, [loadFlaggedSessions]);
 
+  const visibleSessions = [...sessions]
+    .filter((session) => !searchTerm.trim() || [session.exam_title, session.student_name, session.session_id].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "student") return a.student_name.localeCompare(b.student_name);
+      if (sortBy === "score-high") return b.suspicion_score - a.suspicion_score;
+      if (sortBy === "score-low") return a.suspicion_score - b.suspicion_score;
+      if (sortBy === "oldest") return String(a.started_at || "").localeCompare(String(b.started_at || ""));
+      return String(b.started_at || "").localeCompare(String(a.started_at || ""));
+    });
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -133,6 +145,9 @@ export default function StaffProctoringReviewPage() {
               Review server-recorded events and suspicion scores. Webcam frames remain in the student's browser and are not stored.
             </p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search student or examination" aria-label="Search flagged sessions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort flagged sessions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="student">Student name</option><option value="score-high">Highest suspicion score</option><option value="score-low">Lowest suspicion score</option></select>
           <button
             type="button"
             onClick={loadFlaggedSessions}
@@ -141,6 +156,7 @@ export default function StaffProctoringReviewPage() {
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
+          </div>
         </div>
 
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
@@ -149,9 +165,9 @@ export default function StaffProctoringReviewPage() {
           <section className="space-y-3">
             {loading ? (
               <p className="py-10 text-center text-slate-400">Loading flagged sessions...</p>
-            ) : sessions.length === 0 ? (
+            ) : visibleSessions.length === 0 ? (
               <p className="rounded-xl border border-white/10 bg-slate-900 p-8 text-center text-slate-400">No flagged sessions found.</p>
-            ) : sessions.map((session) => (
+            ) : visibleSessions.map((session) => (
               <button
                 type="button"
                 key={session.session_id}
