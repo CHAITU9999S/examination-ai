@@ -17,6 +17,7 @@ export default function QuestionBanksPage() {
   const [working, setWorking] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
 
   const headers = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -27,8 +28,17 @@ export default function QuestionBanksPage() {
   const loadBanks = useCallback(async () => {
     const auth = headers();
     if (!auth) return;
-    const response = await fetch(`${API_URL}/question-banks`, { headers: auth, cache: "no-store" });
-    if (!response.ok) throw new Error("Unable to load question banks.");
+    const [profileResponse, response] = await Promise.all([
+      fetch(`${API_URL}/users/me`, { headers: auth, cache: "no-store" }),
+      fetch(`${API_URL}/question-banks`, { headers: auth, cache: "no-store" }),
+    ]);
+    if (!profileResponse.ok || !response.ok) throw new Error("Unable to load your account and question banks.");
+    const profile = await profileResponse.json();
+    if (profile.role !== "admin" && profile.role !== "examiner") {
+      router.replace("/login");
+      return;
+    }
+    setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
     setBanks(await response.json());
   }, [headers]);
 
@@ -89,7 +99,7 @@ export default function QuestionBanksPage() {
   return <main className="min-h-screen bg-slate-950 text-white">
     <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <div><Link href="/examiner/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">My Question Banks</p></div>
+        <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">My Question Banks</p></div>
         <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Examinations</Link>
       </div>
     </header>
