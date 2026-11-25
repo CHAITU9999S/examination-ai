@@ -354,8 +354,8 @@ def test_student_cannot_use_global_question_deletion(client, student):
     assert response.status_code == 403
 
 
-def test_deleting_examiner_preserves_completed_attempt_and_allows_later_cleanup(
-    client, db_session, admin, examiner
+def test_deleting_student_preserves_completed_attempt_and_allows_later_cleanup(
+    client, db_session, admin, student
 ):
     exam = Exam(
         title="Admin-owned examination",
@@ -374,7 +374,7 @@ def test_deleting_examiner_preserves_completed_attempt_and_allows_later_cleanup(
     db_session.flush()
     db_session.add_all([
         ExamQuestion(exam_id=exam.id, question_id=question.id),
-        ExamAssignment(exam_id=exam.id, student_id=examiner.id, assigned_by=admin.id, is_active=True),
+        ExamAssignment(exam_id=exam.id, student_id=student.id, assigned_by=admin.id, is_active=True),
     ])
     session = ExamSession(
         exam_id=exam.id,
@@ -407,12 +407,12 @@ def test_deleting_examiner_preserves_completed_attempt_and_allows_later_cleanup(
     db_session.commit()
 
     headers = get_auth_headers(client, admin.email, "AdminPass123!")
-    response = client.delete(f"/admin/users/{examiner.id}", headers=headers)
+    response = client.delete(f"/admin/users/{student.id}", headers=headers)
     assert response.status_code == 200
 
-    db_session.refresh(examiner)
-    assert examiner.is_deleted is True
-    assert examiner.is_active is False
+    db_session.refresh(student)
+    assert student.is_deleted is True
+    assert student.is_active is False
     assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
     assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 1
     assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 1
