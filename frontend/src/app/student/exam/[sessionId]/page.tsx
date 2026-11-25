@@ -155,6 +155,7 @@ export default function StudentExamPage() {
   const refreshInFlightRef = useRef(false);
   const activePaperLoadedRef = useRef(false);
   const fullscreenExitLoggedRef = useRef(false);
+  const flushCurrentQuestionRef = useRef<() => Promise<boolean>>(async () => true);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
   const examRefreshTokenKey = `examguard_exam_refresh_${sessionId}`;
@@ -654,7 +655,11 @@ export default function StudentExamPage() {
     setError("");
     try {
       const currentQuestion = paper?.questions[currentIndex];
-      if (!isPaused && currentQuestion) await pauseQuestionTimer(currentQuestion.id);
+      if (!isPaused && currentQuestion) {
+        const flushed = await flushCurrentQuestionRef.current();
+        if (!flushed) return;
+        await pauseQuestionTimer(currentQuestion.id);
+      }
       const action = isPaused ? "resume" : "pause";
       const response = await fetch(
         `${API_URL}/exam-sessions/${action}/${sessionId}`,
@@ -761,6 +766,10 @@ export default function StudentExamPage() {
       return false;
     }
   }, [paper, currentIndex, imageUploading, pendingImageFiles, uploadedImageQuestionIds, questionTimerLocked, savedAnswerQuestionIds, saveAnswer, setError]);
+
+  useEffect(() => {
+    flushCurrentQuestionRef.current = saveCurrentQuestion;
+  }, [saveCurrentQuestion]);
 
   const handleQuestionNavigation = useCallback(async (nextIndex: number) => {
     if (!paper || nextIndex < 0 || nextIndex >= paper.questions.length) return;
