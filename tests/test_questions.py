@@ -391,7 +391,7 @@ def test_student_cannot_list_questions(client, db_session):
 
 
 
-def test_admin_can_delete_question_created_by_another_user(client, db_session):
+def test_admin_cannot_delete_question_created_by_another_user(client, db_session):
     owner = create_user(db_session, "examiner", "question_owner_for_admin_delete@test.com")
     admin = create_user(db_session, "admin", "question_admin_delete@test.com")
 
@@ -408,7 +408,7 @@ def test_admin_can_delete_question_created_by_another_user(client, db_session):
         headers=get_auth_headers(admin),
     )
 
-    assert deleted.status_code == 200
+    assert deleted.status_code == 403
     assert db_session.query(QuestionBank).filter(
         QuestionBank.id == question_id
-    ).first() is None
+    ).first() is not None
