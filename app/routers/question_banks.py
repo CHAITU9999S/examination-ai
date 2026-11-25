@@ -73,6 +73,7 @@ def create_question_bank(
         created_by=current_user.id,
     )
     db.add(bank)
+    db.flush()
     db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_bank_created", details={"bank_id": bank.id, "bank_name": bank.name}))
     db.commit()
     db.refresh(bank)
