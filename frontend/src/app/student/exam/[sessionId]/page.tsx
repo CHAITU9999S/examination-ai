@@ -51,7 +51,8 @@ interface ExamPaper {
     exam_title: string; subject?: string | null; creator_name: string; student_name: string;
     student_email?: string | null; student_department?: string | null; total_questions: number;
     question_type_breakdown: Record<string, number>; duration_minutes: number; maximum_marks: number;
-    negative_marking_enabled: boolean; total_possible_negative_marks: number; instructions?: string[] | string;
+    negative_marking_enabled: boolean; total_possible_negative_marks: number;
+    proctoring_enabled: boolean; randomize_questions: boolean; instructions?: string[] | string;
   };
 }
 
@@ -1219,6 +1220,8 @@ export default function StudentExamPage() {
                     ["Duration", summary.duration_minutes + " minutes"], ["Maximum marks", String(summary.maximum_marks)],
                     ["Negative marking", summary.negative_marking_enabled ? "Enabled" : "Disabled"],
                     ["Possible negative marks", String(summary.total_possible_negative_marks)],
+                    ["AI proctoring", summary.proctoring_enabled ? "Enabled" : "Disabled"],
+                    ["Question order", summary.randomize_questions ? "Randomized" : "Configured order"],
                   ].map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}
                 </div>
                 <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
