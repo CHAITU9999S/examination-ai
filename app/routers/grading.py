@@ -827,6 +827,7 @@ def list_submitted_sessions_for_review(
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "session_status": session.status,
+                "can_manage": exam.created_by == current_user.id,
                 "submitted_at": session.submitted_at,
                 "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
                 "result_ready": result is not None,
