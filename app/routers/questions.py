@@ -469,10 +469,10 @@ def delete_question(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found."
         )
-    if current_user.role != "admin" and question.created_by != current_user.id:
+    if question.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the question creator or an Admin can delete this question.",
+            detail="Only the question creator can delete this question.",
         )
 
     if db.query(ExamQuestion.id).filter(
