@@ -62,6 +62,73 @@ def valid_exam_data():
     }
 
 
+
+def test_student_overview_returns_creator_and_assigner_and_only_own_assignments(
+    client, db_session
+):
+    creator = create_user(db_session, "examiner", "overview_creator@test.com")
+    student = create_user(db_session, "student", "overview_student@test.com")
+    other_student = create_user(db_session, "student", "overview_other@test.com")
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    exam = Exam(
+        title="Student overview attribution test",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        randomize_questions=False,
+        selection_rules={"instructions": ["Read each question carefully."]},
+        start_time=start,
+        end_time=start + timedelta(hours=2),
+        negative_marking=True,
+        created_by=creator.id,
+    )
+    question = QuestionBank(
+        question_text="What is gravity?",
+        question_type="MCQ",
+        difficulty="easy",
+        marks=5,
+        negative_marks=1,
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=exam.id,
+        question_id=question.id,
+        question_order=1,
+    ))
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=creator.id,
+        is_active=True,
+    ))
+    db_session.commit()
+
+    response = client.get(
+        "/exams/student-overview",
+        headers=get_auth_headers(student),
+    )
+    other_response = client.get(
+        "/exams/student-overview",
+        headers=get_auth_headers(other_student),
+    )
+
+    assert response.status_code == 200
+    items = response.json()["examinations"]
+    assert len(items) == 1
+    assert items[0]["title"] == exam.title
+    assert items[0]["creator_name"] == creator.full_name
+    assert items[0]["assigned_by_name"] == creator.full_name
+    assert items[0]["category"] == "available"
+    assert items[0]["can_start"] is False
+    assert items[0]["question_breakdown"][0]["count"] == 1
+    assert items[0]["instructions"] == ["Read each question carefully."]
+    assert other_response.status_code == 200
+    assert other_response.json()["examinations"] == []
+
+
+
 def test_examiner_can_create_exam(client, db_session):
     examiner = create_user(
         db_session,
