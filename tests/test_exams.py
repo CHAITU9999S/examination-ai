@@ -1555,3 +1555,133 @@ def test_exam_question_bank_cannot_be_changed_after_scheduled_start(client, db_s
         ExamQuestion.exam_id == exam.id,
         ExamQuestion.question_id == question.id,
     ).first() is not None
+
+
+def test_exam_creator_can_publish_and_publication_time_is_returned(client, db_session):
+    creator = create_user(db_session, "examiner", "publish_exam_creator@test.com")
+    start = datetime.now(timezone.utc) + timedelta(days=1)
+    exam = Exam(
+        title="Ready to Publish",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=start.replace(tzinfo=None),
+        end_time=(start + timedelta(hours=1)).replace(tzinfo=None),
+        created_by=creator.id,
+    )
+    question = QuestionBank(
+        question_text="Published exam question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=5,
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=exam.id,
+        question_id=question.id,
+        question_order=1,
+    ))
+    db_session.commit()
+
+    response = client.post(
+        f"/exams/{exam.id}/publish",
+        headers=get_auth_headers(creator),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Examination published successfully."
+    assert response.json()["published_at"]
+
+    listing = client.get("/exams/", headers=get_auth_headers(creator))
+    listed_exam = next(item for item in listing.json() if item["id"] == exam.id)
+    assert listed_exam["published_at"] == response.json()["published_at"]
+
+
+def test_exam_cannot_be_published_without_schedule_or_enough_questions(client, db_session):
+    creator = create_user(db_session, "examiner", "publish_exam_incomplete@test.com")
+    exam = Exam(
+        title="Incomplete Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+
+    response = client.post(
+        f"/exams/{exam.id}/publish",
+        headers=get_auth_headers(creator),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Set the examination start and end times before publishing."
+    )
+
+
+def test_only_exam_creator_can_publish_an_examination(client, db_session):
+    owner = create_user(db_session, "examiner", "publish_exam_owner@test.com")
+    other_creator = create_user(db_session, "admin", "publish_exam_other@test.com")
+    start = datetime.now(timezone.utc) + timedelta(days=1)
+    exam = Exam(
+        title="Owned Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=start.replace(tzinfo=None),
+        end_time=(start + timedelta(hours=1)).replace(tzinfo=None),
+        created_by=owner.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+
+    response = client.post(
+        f"/exams/{exam.id}/publish",
+        headers=get_auth_headers(other_creator),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == (
+        "Only the examination creator can publish this exam."
+    )
+
+
+def test_publishing_an_exam_twice_keeps_the_original_publication_time(client, db_session):
+    creator = create_user(db_session, "admin", "publish_exam_idempotent@test.com")
+    start = datetime.now(timezone.utc) + timedelta(days=1)
+    exam = Exam(
+        title="Idempotent Publication",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=start.replace(tzinfo=None),
+        end_time=(start + timedelta(hours=1)).replace(tzinfo=None),
+        created_by=creator.id,
+    )
+    question = QuestionBank(
+        question_text="One required question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=5,
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=exam.id,
+        question_id=question.id,
+        question_order=1,
+    ))
+    db_session.commit()
+
+    first = client.post(f"/exams/{exam.id}/publish", headers=get_auth_headers(creator))
+    second = client.post(f"/exams/{exam.id}/publish", headers=get_auth_headers(creator))
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["published_at"] == first.json()["published_at"]
