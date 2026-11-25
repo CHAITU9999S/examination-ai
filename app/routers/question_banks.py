@@ -1,4 +1,5 @@
 import io
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field, ValidationError
@@ -14,6 +15,7 @@ from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 from app.schemas import QuestionCreate
 from app.services.question_validation import validate_question
 from app.services.ocr_service import validate_image_bytes
+from app.services.exam_config import normalize_to_naive_utc
 
 
 router = APIRouter(prefix="/question-banks", tags=["Question Banks"])
@@ -44,6 +46,16 @@ def _get_owned_bank(db: Session, bank_id: int, user_id: int):
     if bank is None:
         raise HTTPException(status_code=404, detail="Question bank not found.")
     return bank
+
+
+def _ensure_exam_bank_not_started(exam: Exam):
+    scheduled_start = normalize_to_naive_utc(exam.start_time)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if scheduled_start is not None and now_utc >= scheduled_start:
+        raise HTTPException(
+            status_code=409,
+            detail="The examination has started. Its question bank can no longer be changed.",
+        )
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -252,6 +264,7 @@ def copy_selected_bank_questions_to_exam(
         raise HTTPException(status_code=404, detail="Examination not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the examination creator can change its questions.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam.id).first():
         raise HTTPException(status_code=409, detail="Questions cannot change after a student exam session has been created.")
     question_ids = data.question_ids
