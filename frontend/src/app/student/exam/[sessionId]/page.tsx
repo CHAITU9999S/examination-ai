@@ -35,6 +35,7 @@ interface ExamQuestion {
 
 interface ExamPaper {
   session_id: number;
+  remaining_seconds?: number | null;
   exam_id?: number;
   exam_title?: string;
   duration_minutes?: number;
