@@ -259,7 +259,7 @@ export default function StudentTrackingPage() {
                       <div className="border-t border-white/10 p-4">
                         <h2 className="font-semibold">Assigned examinations for {student.student_name}</h2>
                         {student.attempts.length === 0 ? (
-                          <p className="mt-3 rounded-lg bg-slate-900 p-4 text-sm text-slate-400">No examinations assigned by {role === "examiner" ? "your account" : "any Admin or Examiner"}.</p>
+                          <p className="mt-3 rounded-lg bg-slate-900 p-4 text-sm text-slate-400">No examinations assigned by your account.</p>
                         ) : (
                           <div className="mt-3 space-y-3">
                             {student.attempts.map((attempt) => {
