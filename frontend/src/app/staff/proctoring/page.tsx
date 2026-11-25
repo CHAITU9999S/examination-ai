@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AdminSectionNavigation from "../../admin/components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
 
 const API_URL =
@@ -105,13 +106,11 @@ export default function StaffProctoringReviewPage() {
             </Link>
             <p className="mt-1 text-sm text-slate-400">Staff / Proctoring Review</p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
-          >
-            ← Back
-          </button>
+          <AdminSectionNavigation
+            previousHref={dashboardHref === "/admin/dashboard" ? "/admin/sections/examinations" : "/examiner/dashboard"}
+            previousLabel="Previous Section"
+            dashboardHref={dashboardHref}
+          />
         </div>
       </header>
 
