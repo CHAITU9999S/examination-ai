@@ -21,6 +21,23 @@ export default function SessionEvaluationPage(){
  const router=useRouter();const search=useSearchParams();
  const examId=String(params.examId||"");const sessionId=String(params.sessionId||"");
  const readOnly=search.get("view")==="1";
+ const [viewerRole,setViewerRole]=useState<"admin"|"examiner"|null>(null);
+ const dashboardHref=viewerRole==="examiner"?"/examiner/dashboard":"/admin/dashboard";
+ useEffect(()=>{
+  if(!readOnly)return;
+  let cancelled=false;
+  const token=localStorage.getItem("examguard_access_token");
+  if(!token){router.replace("/login");return;}
+  fetch(`${API_URL}/users/me`,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"})
+   .then(response=>response.ok?response.json():null)
+   .then(profile=>{
+    if(cancelled)return;
+    if(profile?.role==="admin"||profile?.role==="examiner")setViewerRole(profile.role);
+    else if(profile)router.replace("/login");
+   })
+   .catch(()=>{if(!cancelled)setViewerRole(null);});
+  return()=>{cancelled=true;};
+ },[readOnly,router]);
  const requestedReturnTo=search.get("return_to");
  const previousHref=readOnly&&requestedReturnTo&&requestedReturnTo.startsWith("/admin/")&&!requestedReturnTo.startsWith("//")
   ? requestedReturnTo
@@ -88,8 +105,8 @@ export default function SessionEvaluationPage(){
  const canPublish=data.session_status==="submitted"||data.session_status==="auto_submitted";
  return <main className="min-h-screen bg-slate-950 text-white">
   <header className="border-b border-white/10 bg-slate-900"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
-   <div><Link href={readOnly?"/admin/dashboard":"/admin/dashboard"} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">{readOnly?"Admin / Read-only answer review":"Examination Evaluation"}</p></div>
-   <div className="flex flex-wrap gap-2"><Link href={previousHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Previous Section</Link><Link href="/admin/dashboard" className="rounded-lg border border-blue-400/40 px-4 py-2 text-sm text-blue-300">Dashboard</Link></div>
+   <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">{readOnly?`${viewerRole==="examiner"?"Examiner":"Admin"} / Read-only answer review`:"Examination Evaluation"}</p></div>
+   <div className="flex flex-wrap gap-2"><Link href={previousHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Previous Section</Link><Link href={dashboardHref} className="rounded-lg border border-blue-400/40 px-4 py-2 text-sm text-blue-300">Dashboard</Link></div>
   </div></header>
   <div className="mx-auto max-w-6xl px-5 py-8">
    {error&&<div role="alert" className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
@@ -117,7 +134,7 @@ export default function SessionEvaluationPage(){
        <label className="block text-sm">Optional feedback<textarea value={feedback} onChange={e=>setFeedback(e.target.value)} disabled={working||evaluationCount>=3} rows={3} className="mt-2 block w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2 text-white disabled:opacity-50"/></label>
        <button type="button" onClick={saveMarks} disabled={working||evaluationCount>=3||!question.answer_id} className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{working?"Saving...":evaluationCount>=3?"Evaluation limit reached":"Save Evaluation"}</button>
       </>}
-      {readOnly&&<p className="text-xs text-slate-400">Read-only: marks, feedback, and evaluation history are visible to Admins but cannot be changed here.</p>}
+      {readOnly&&<p className="text-xs text-slate-400">Read-only: marks, feedback, and evaluation history are visible but cannot be changed here.</p>}
      </div>}
     </div>}
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"><button type="button" onClick={()=>setIndex(i=>Math.max(0,i-1))} disabled={index===0} className="rounded-lg border border-white/20 px-4 py-2 text-sm disabled:opacity-40">Previous Question</button><button type="button" onClick={()=>{if(!readOnly&&question&&!question.is_objective&&question.answer_id&&(question.awarded_marks===null||question.awarded_marks===undefined)){setError("Save the marks for this question before proceeding to the next question.");return;}setError("");setIndex(i=>Math.min(data.questions.length-1,i+1));}} disabled={index>=data.questions.length-1} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-40">Next Question</button></div>
