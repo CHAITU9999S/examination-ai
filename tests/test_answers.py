@@ -822,6 +822,49 @@ def test_question_timer_pauses_and_resumes_with_remaining_time(client, db_sessio
     assert expired.json()["is_locked"] is True
     assert expired.json()["remaining_seconds"] == 0
 
+
+def test_question_progress_pauses_previous_question_timer(client, db_session, answer_test_data):
+    data = answer_test_data
+    assignment = db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == data["exam"].id,
+        ExamQuestion.question_id == data["mcq"].id,
+    ).one()
+    assignment.question_time_limit_seconds = 300
+    db_session.commit()
+
+    timer_url = f"/exam-sessions/{data['session'].id}/question-timer/{data['mcq'].id}"
+    started = client.get(timer_url, headers=exam_headers(data["token"]))
+    assert started.status_code == 200
+    answer = db_session.query(Answer).filter_by(
+        session_id=data["session"].id, question_id=data["mcq"].id,
+    ).one()
+    answer.question_started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=120)
+    db_session.commit()
+
+    progress = client.put(
+        f"/exam-sessions/progress/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+        json={"current_question_index": 1},
+    )
+    assert progress.status_code == 200
+    db_session.refresh(answer)
+    assert answer.question_started_at is None
+    assert 119 <= answer.question_elapsed_seconds <= 120
+
+    old_question_timer = client.get(timer_url, headers=exam_headers(data["token"]))
+    assert old_question_timer.status_code == 409
+
+    return_progress = client.put(
+        f"/exam-sessions/progress/{data['session'].id}",
+        headers=exam_headers(data["token"]),
+        json={"current_question_index": 0},
+    )
+    assert return_progress.status_code == 200
+    resumed = client.get(timer_url, headers=exam_headers(data["token"]))
+    assert resumed.status_code == 200
+    assert 179 <= resumed.json()["remaining_seconds"] <= 180
+
+
 def test_student_cannot_save_answer_while_exam_is_paused(client, answer_test_data):
     data = answer_test_data
     pause_response = client.post(
