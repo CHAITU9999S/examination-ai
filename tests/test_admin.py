@@ -624,3 +624,102 @@ def test_deleting_another_admin_preserves_completed_exam_and_grading_history(
         item["kind"] == "answer_mark_revision" and item["id"] == revision.id
         for item in retained.json()["items"]
     )
+
+def test_admin_performance_lists_students_and_their_completed_attempt_details(
+    client, db_session, admin, student
+):
+    question = QuestionBank(
+        question_text="Explain gravity.",
+        question_type="LONG_ANSWER",
+        difficulty="easy",
+        marks=5,
+        expected_answer="Gravity is an attractive force.",
+        created_by=admin.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    exam = Exam(
+        title="Student history examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=datetime.utcnow() - timedelta(days=2),
+        end_time=datetime.utcnow() - timedelta(days=2) + timedelta(hours=1),
+        created_by=admin.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="submitted",
+        started_at=datetime.utcnow() - timedelta(days=2),
+        submitted_at=datetime.utcnow() - timedelta(days=2) + timedelta(minutes=25),
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    db_session.add(Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text="Gravity attracts objects.",
+        awarded_marks=3,
+    ))
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.get("/admin/performance", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    student_row = next(item for item in data["students"] if item["student_id"] == student.id)
+    assert student_row["student_name"] == student.full_name
+    assert len(student_row["attempts"]) == 1
+    attempt = student_row["attempts"][0]
+    assert attempt["session_id"] == session.id
+    assert attempt["exam_title"] == exam.title
+    assert attempt["creator_name"] == admin.full_name
+    assert attempt["started_at"] is not None
+    assert attempt["submitted_at"] is not None
+    assert attempt["obtained_marks"] == 3
+    assert attempt["total_marks"] == 5
+    assert attempt["marks_status"] == "Evaluation in progress"
+
+
+def test_admin_schedules_lists_only_future_examination_assignments(
+    client, db_session, admin, student
+):
+    now = datetime.utcnow()
+    future_exam = Exam(
+        title="Upcoming examination",
+        subject="Mathematics",
+        duration_minutes=30,
+        start_time=now + timedelta(days=2),
+        end_time=now + timedelta(days=2, hours=1),
+        created_by=admin.id,
+    )
+    past_exam = Exam(
+        title="Past examination",
+        subject="Mathematics",
+        duration_minutes=30,
+        start_time=now - timedelta(days=2),
+        end_time=now - timedelta(days=2) + timedelta(hours=1),
+        created_by=admin.id,
+    )
+    db_session.add_all([future_exam, past_exam])
+    db_session.flush()
+    db_session.add_all([
+        ExamAssignment(exam_id=future_exam.id, student_id=student.id, assigned_by=admin.id, is_active=True),
+        ExamAssignment(exam_id=past_exam.id, student_id=student.id, assigned_by=admin.id, is_active=True),
+    ])
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.get("/admin/schedules", headers=headers)
+
+    assert response.status_code == 200
+    schedules = response.json()["schedules"]
+    assert len(schedules) == 1
+    assert schedules[0]["exam_id"] == future_exam.id
+    assert schedules[0]["exam_title"] == future_exam.title
+
