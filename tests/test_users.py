@@ -338,3 +338,31 @@ def test_login_history_requires_authentication(client):
     response = client.get("/users/me/login-history")
     assert response.status_code in (401, 403)
 
+@pytest.mark.parametrize(
+    ("field", "values"),
+    [
+        ("email", ["first.email@example.com", "second.email@example.com", "third.email@example.com", "fourth.email@example.com"]),
+        ("department", ["Department One", "Department Two", "Department Three", "Department Four"]),
+        ("date_of_birth", ["2001-01-01", "2001-02-01", "2001-03-01", "2001-04-01"]),
+    ],
+)
+def test_each_profile_field_stops_after_its_own_third_edit(client, student, field, values):
+    token = _login_token(client, student.email)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for value in values[:3]:
+        response = client.patch(
+            "/users/me/profile",
+            headers=headers,
+            json={field: value},
+        )
+        assert response.status_code == 200
+
+    rejected = client.patch(
+        "/users/me/profile",
+        headers=headers,
+        json={field: values[3]},
+    )
+    assert rejected.status_code == 400
+    assert "3 edit chances" in rejected.json()["detail"]
+
