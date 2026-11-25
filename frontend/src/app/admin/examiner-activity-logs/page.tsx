@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -85,9 +86,7 @@ export default function ExaminerActivityLogsPage() {
             </Link>
             <p className="mt-1 text-sm text-slate-400">Administrator / Examiner Activity Logs</p>
           </div>
-          <Link href="/admin/sections/examiners" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
-            ← Examiners
-          </Link>
+          <AdminSectionNavigation previousHref="/admin/sections/examiners" previousLabel="Examiners" />
         </div>
       </header>
 
