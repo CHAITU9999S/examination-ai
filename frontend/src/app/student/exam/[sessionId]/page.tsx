@@ -1436,7 +1436,7 @@ export default function StudentExamPage() {
       onPaste={(event) => event.preventDefault()}
     >
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
+        <div className="mx-auto flex w-full max-w-none flex-wrap items-center justify-between gap-4 px-3 py-4 sm:px-5">
           <div>
             <h1 className="text-lg font-bold">
               {paper.exam_title || "Online Examination"}
@@ -1450,7 +1450,10 @@ export default function StudentExamPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <span className="rounded-full bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-300">● Proctoring Active</span>
+            <button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold">{showCameraPreview ? "Hide camera preview" : "Show camera preview"}</button>
+            <button type="button" onClick={() => setShowQuestionDrawer((visible) => !visible)} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold lg:hidden" aria-expanded={showQuestionDrawer} aria-label="Toggle question navigation">☰ Questions</button>
             <div className="text-right">
               <p className="text-xs text-slate-400">Time Remaining</p>
               <p className={`text-xl font-bold tabular-nums ${
@@ -1473,7 +1476,7 @@ export default function StudentExamPage() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
+      <div className="mx-auto grid w-full max-w-none gap-4 px-3 py-4 sm:px-5 sm:py-6 lg:grid-cols-[minmax(0,1fr)_minmax(220px,17vw)]">
         <section className="relative rounded-2xl border border-white/10 bg-slate-900 p-6">
           {!faceVerified && (
             <div
@@ -1564,38 +1567,34 @@ export default function StudentExamPage() {
               </div>
 
               <div className="mt-8 flex flex-wrap justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCurrentIndex((index) => Math.max(0, index - 1))
-                  }
-                  disabled={currentIndex === 0 || isPaused}
-                  className="rounded-lg border border-white/20 px-5 py-3 text-sm disabled:opacity-40"
-                >
-                  Previous
-                </button>
+                {currentIndex > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handleQuestionNavigation(currentIndex - 1)}
+                    disabled={isPaused || submitting || saving || imageUploading}
+                    className="rounded-lg border border-white/20 px-5 py-3 text-sm disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                )}
 
                 {currentIndex < paper.questions.length - 1 ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      setCurrentIndex((index) =>
-                        Math.min(paper.questions.length - 1, index + 1)
-                      )
-                    }
-                    disabled={isPaused}
+                    onClick={() => void handleQuestionNavigation(currentIndex + 1)}
+                    disabled={isPaused || submitting || saving || imageUploading}
                     className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500 disabled:opacity-40"
                   >
-                    Next Question
+                    Save &amp; Next
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setShowSubmitConfirmation(true)}
-                    disabled={submitting || isPaused}
-                    className="rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+                    onClick={() => void saveCurrentQuestion()}
+                    disabled={submitting || isPaused || saving || imageUploading}
+                    className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
                   >
-                    Submit Examination
+                    Save
                   </button>
                 )}
               </div>
@@ -1607,7 +1606,8 @@ export default function StudentExamPage() {
           )}
         </section>
 
-        <aside className="h-fit rounded-2xl border border-white/10 bg-slate-900 p-5">
+        {showQuestionDrawer && <button type="button" aria-label="Close question navigation" onClick={() => setShowQuestionDrawer(false)} className="fixed inset-0 z-30 bg-black/70 lg:hidden" />}
+        <aside onClick={(event) => event.stopPropagation()} className={showQuestionDrawer ? "fixed inset-y-0 right-0 z-40 h-full w-[88vw] max-w-sm overflow-y-auto rounded-none border border-white/10 bg-slate-900 p-5 shadow-2xl lg:static lg:h-fit lg:w-auto lg:max-w-none lg:rounded-2xl" : "hidden h-fit rounded-2xl border border-white/10 bg-slate-900 p-5 lg:block"}>
           <h2 className="font-bold">Question Navigation</h2>
 
           <p className="mt-2 text-sm text-slate-400">
@@ -1616,24 +1616,25 @@ export default function StudentExamPage() {
 
           <div className="mt-5 grid grid-cols-5 gap-2">
             {paper.questions.map((question, index) => {
-              const answered = Boolean(
-                answers[question.id]?.trim()
-              ) || uploadedImageQuestionIds.includes(question.id);
+              const answered = savedAnswerQuestionIds.includes(question.id) || uploadedImageQuestionIds.includes(question.id);
+              const visited = visitedQuestionIds.includes(question.id);
 
               return (
                 <button
                   key={question.id}
                   type="button"
-                  onClick={() => setCurrentIndex(index)}
-                  disabled={isPaused}
-                  aria-label={`Go to question ${index + 1}`}
-                  className={`rounded-lg py-3 text-sm font-semibold ${
+                  onClick={() => void handleQuestionNavigation(index)}
+                  disabled={isPaused || submitting || saving || imageUploading}
+                  aria-label={"Go to question " + (index + 1) + (currentIndex === index ? ", current" : answered ? ", answered and saved" : visited ? ", visited but unanswered" : ", not visited")}
+                  className={"rounded-lg py-3 text-sm font-semibold " + (
                     currentIndex === index
                       ? "bg-blue-600 text-white"
                       : answered
-                        ? "bg-green-500/20 text-green-300"
-                        : "bg-slate-800 text-slate-300"
-                  }`}
+                        ? "bg-green-500 text-white"
+                        : visited
+                          ? "bg-orange-500 text-white"
+                          : "bg-slate-700 text-slate-200"
+                  )}
                 >
                   {index + 1}
                 </button>
@@ -1648,21 +1649,25 @@ export default function StudentExamPage() {
             </p>
 
             <p>
-              <span className="mr-2 inline-block h-3 w-3 rounded bg-green-500/60" />
-              Answered
+              <span className="mr-2 inline-block h-3 w-3 rounded bg-green-500" />
+              Answered and saved
             </p>
 
             <p>
+              <span className="mr-2 inline-block h-3 w-3 rounded bg-orange-500" />
+              Visited but unanswered
+            </p>
+            <p>
               <span className="mr-2 inline-block h-3 w-3 rounded bg-slate-700" />
-              Not answered
+              Not visited
             </p>
           </div>
 
           <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
-            {paper.proctoring_enabled && <h3 className="font-semibold">Automated Proctoring</h3>}
+            <h3 className="font-semibold">Automated Proctoring · Always Active</h3>
             <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Camera preview</h3><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide" : "Show"}</button></div>
             <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
-            {paper.proctoring_enabled && (
+            {(
               <>
                 <FaceProctoring
                   stream={cameraStream}
@@ -1694,7 +1699,7 @@ export default function StudentExamPage() {
             <button
               type="button"
               onClick={() => setShowSubmitConfirmation(true)}
-              disabled={submitting || (paper.proctoring_enabled && !faceVerified)}
+              disabled={submitting || !faceVerified}
               className="mt-5 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Submit Examination
@@ -1703,6 +1708,18 @@ export default function StudentExamPage() {
         </aside>
       </div>
 
+      {fullscreenReentryRequired && fullscreenSupported && paper.status === "in_progress" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 p-6 text-center">
+          <div className="max-w-md rounded-2xl border border-amber-400/30 bg-slate-900 p-7 shadow-2xl">
+            <h2 className="text-xl font-bold text-amber-300">Full-screen mode required</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">You exited full-screen mode. This event has been recorded for staff review. Return to full-screen mode to continue. Your examination and current question timers continue running.</p>
+            <button type="button" onClick={() => void requestExamFullscreen()} className="mt-6 rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500">Return to Full Screen</button>
+          </div>
+        </div>
+      )}
+      {!fullscreenSupported && paper.status === "in_progress" && (
+        <div className="fixed bottom-3 left-3 z-40 rounded-lg bg-amber-500/20 px-3 py-2 text-xs text-amber-200">This browser does not support page full-screen mode.</div>
+      )}
       {showSubmitConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
