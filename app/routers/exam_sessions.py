@@ -29,6 +29,7 @@ from app.auth import (
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import (
+    Answer,
     Exam,
     ExamAssignment,
     ExamQuestion,
@@ -738,6 +739,29 @@ def update_exam_question_progress(
     selected_ids = session.selected_question_ids or []
     if data.current_question_index >= len(selected_ids):
         raise HTTPException(status_code=400, detail="Question progress is outside the saved examination paper.")
+
+    previous_index = int(session.current_question_index or 0)
+    if previous_index != data.current_question_index and 0 <= previous_index < len(selected_ids):
+        previous_question_id = selected_ids[previous_index]
+        previous_assignment = db.query(ExamQuestion).filter(
+            ExamQuestion.exam_id == session.exam_id,
+            ExamQuestion.question_id == previous_question_id,
+        ).first()
+        previous_time_limit = previous_assignment.question_time_limit_seconds if previous_assignment else None
+        if previous_time_limit is not None:
+            previous_answer = db.query(Answer).filter(
+                Answer.session_id == session.id,
+                Answer.question_id == previous_question_id,
+            ).with_for_update().first()
+            if previous_answer and not previous_answer.is_locked and previous_answer.question_started_at is not None:
+                elapsed = max(0, int((now - normalize_to_naive_utc(previous_answer.question_started_at)).total_seconds()))
+                accumulated = max(0, int(previous_answer.question_elapsed_seconds or 0)) + elapsed
+                previous_answer.question_elapsed_seconds = min(int(previous_time_limit), accumulated)
+                previous_answer.question_started_at = None
+                if accumulated >= int(previous_time_limit):
+                    previous_answer.is_locked = True
+                    previous_answer.question_elapsed_seconds = int(previous_time_limit)
+
     session.current_question_index = data.current_question_index
     selected_question_id = selected_ids[data.current_question_index]
     visited_question_ids = list(session.visited_question_ids or [])
