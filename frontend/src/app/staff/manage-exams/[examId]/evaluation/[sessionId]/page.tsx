@@ -14,7 +14,7 @@ type QuestionReview={
  ai_suggested_marks?:number|null;ai_justification?:string|null;awarded_marks?:number|null;
  evaluation_count:number;evaluation_history:HistoryItem[];examiner_feedback?:string|null;is_objective:boolean;
 };
-type ReviewData={session_id:number;exam_id:number;exam_title:string;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
+type ReviewData={session_id:number;exam_id:number;exam_title:string;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
 function dateText(value?:string|null){if(!value)return "—";const d=new Date(value);return Number.isNaN(d.getTime())?"—":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
 function SessionEvaluationPageContent(){
  const params=useParams<{examId:string;sessionId:string}>();
@@ -112,7 +112,7 @@ function SessionEvaluationPageContent(){
    {error&&<div role="alert" className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
    {message&&<div role="status" className="mb-5 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">{message}</div>}
    <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">{data.exam_title}</h1><p className="mt-1 text-slate-300">{data.student_name} · {data.department||"Department not set"}</p><p className="mt-2 text-xs text-slate-400">Started: {dateText(data.started_at)} · Submitted: {dateText(data.submitted_at)}</p></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">{data.exam_title}</h1><p className="mt-1 text-slate-300">{data.student_name} · {data.department||"Department not set"}</p><p className="mt-1 text-xs text-slate-400">Created by: {data.creator_name||"Unknown"} · Assigned by: {data.assigned_by_name||"Unknown"}</p><p className="mt-2 text-xs text-slate-400">Started: {dateText(data.started_at)} · Submitted: {dateText(data.submitted_at)}</p></div>
      {data.face_photo_url&&<figure className="w-28 rounded-lg border border-white/10 bg-slate-800 p-2 text-center">{photo?<img src={photo} alt="Student face captured when examination started" className="h-24 w-full rounded object-cover"/>:<div className="flex h-24 items-center justify-center text-xs text-slate-400">Photo unavailable</div>}<figcaption className="mt-1 text-[10px] text-slate-400">Start photo</figcaption></figure>}
     </div>
    </section>
