@@ -25,6 +25,8 @@ export default function AdminUsersPage() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -198,12 +200,17 @@ export default function AdminUsersPage() {
     }
   }
 
-  const filteredUsers =
-    roleFilter === "all"
-      ? users
-      : users.filter(
-          (user) => String(user.role || "").trim().toLowerCase() === roleFilter
-        );
+  const filteredUsers = (roleFilter === "all"
+    ? users
+    : users.filter((user) => String(user.role || "").trim().toLowerCase() === roleFilter))
+    .filter((user) => !searchTerm.trim() || [user.full_name, user.email, user.department, user.role].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name-desc") return b.full_name.localeCompare(a.full_name);
+      if (sortBy === "department") return String(a.department || "").localeCompare(String(b.department || ""));
+      if (sortBy === "role") return String(a.role || "").localeCompare(String(b.role || ""));
+      if (sortBy === "status") return Number(Boolean(b.is_active)) - Number(Boolean(a.is_active));
+      return a.full_name.localeCompare(b.full_name);
+    });
 
   function statusLabel(isActive: boolean | null) {
     return isActive === true ? "Active" : "Inactive";
@@ -288,6 +295,10 @@ export default function AdminUsersPage() {
                 <option value="admin">Administrators</option>
               </select>
             </label>
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search name, email, department" aria-label="Search users" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort users" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
+              <option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option><option value="role">Role</option><option value="status">Status</option>
+            </select>
           </div>
 
           {loading ? (
