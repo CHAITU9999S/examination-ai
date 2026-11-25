@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -38,6 +39,8 @@ export default function ExaminationDetailsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
+  const [previousHref, setPreviousHref] = useState("/staff/examinations");
 
   const loadDetails = useCallback(async () => {
     const token = localStorage.getItem("examguard_access_token");
@@ -46,20 +49,25 @@ export default function ExaminationDetailsPage() {
     setLoading(true);
     setError("");
     try {
-      const [examResponse, questionsResponse, listResponse] = await Promise.all([
+      const [profileResponse, examResponse, questionsResponse, listResponse] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams/${examId}`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams/${examId}/questions`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
       ]);
-      if ([examResponse, questionsResponse, listResponse].some((response) => response.status === 401)) { router.replace("/login"); return; }
+      if ([profileResponse, examResponse, questionsResponse, listResponse].some((response) => response.status === 401)) { router.replace("/login"); return; }
+      const profileData = await profileResponse.json().catch(() => ({}));
       const examData = await examResponse.json().catch(() => ({}));
       const questionData = await questionsResponse.json().catch(() => ({}));
       const listData = await listResponse.json().catch(() => []);
-      if (!examResponse.ok || !questionsResponse.ok || !listResponse.ok) {
+      if (!profileResponse.ok || !examResponse.ok || !questionsResponse.ok || !listResponse.ok) {
         throw new Error(examData.detail || questionData.detail || "Unable to open this examination.");
       }
       const examList = Array.isArray(listData) ? listData : Array.isArray(listData.exams) ? listData.exams : [];
       const listedExam = examList.find((item: { id: number }) => Number(item.id) === Number(examId));
+      const isAdmin = profileData.role === "admin";
+      setDashboardHref(isAdmin ? "/admin/dashboard" : "/examiner/dashboard");
+      setPreviousHref(isAdmin ? "/admin/exams" : "/staff/examinations");
       setExam({ ...examData, max_marks: listedExam?.max_marks ?? null });
       setQuestions(Array.isArray(questionData.questions) ? questionData.questions : []);
     } catch (err) {
@@ -75,8 +83,8 @@ export default function ExaminationDetailsPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-5">
-          <div><Link href="/staff/examinations" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Examination details</p></div>
-          <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Examinations</Link>
+          <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Examination details</p></div>
+          <AdminSectionNavigation previousHref={previousHref} previousLabel="Previous Section" dashboardHref={dashboardHref} />
         </div>
       </header>
       <div className="mx-auto max-w-6xl space-y-6 px-5 py-8">
