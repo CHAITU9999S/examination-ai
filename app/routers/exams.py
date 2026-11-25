@@ -343,6 +343,7 @@ def get_student_examination_overview(
     items = []
     for assignment, exam in assignments:
         creator = db.query(User).filter(User.id == exam.created_by).first()
+        assigner = db.query(User).filter(User.id == assignment.assigned_by).first()
         question_rows = db.query(
             QuestionBank.question_type,
             QuestionBank.difficulty,
@@ -495,6 +496,8 @@ def get_student_examination_overview(
             "subject": exam.subject,
             "creator_name": creator.full_name if creator else "Unknown",
             "creator_role": creator.role if creator else None,
+            "assigned_by_name": assigner.full_name if assigner else "Unknown",
+            "assigned_by_role": assigner.role if assigner else None,
             "duration_minutes": exam.duration_minutes,
             "total_questions": question_count or int(exam.total_questions or 0),
             "question_breakdown": breakdown,
@@ -1344,6 +1347,10 @@ def list_exam_assignments(
     ).filter(
         ExamAssignment.exam_id == exam_id,
     ).order_by(User.full_name.asc()).all()
+    assigner_ids = {assignment.assigned_by for assignment, _ in rows}
+    assigners = db.query(User).filter(User.id.in_(assigner_ids)).all() if assigner_ids else []
+    assigner_names = {user.id: user.full_name for user in assigners}
+    assigner_roles = {user.id: user.role for user in assigners}
 
     sessions = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id
@@ -1380,6 +1387,9 @@ def list_exam_assignments(
                 "email": user.email,
                 "department": user.department,
                 "assigned_at": assignment.assigned_at,
+                "assigned_by": assignment.assigned_by,
+                "assigned_by_name": assigner_names.get(assignment.assigned_by, "Unknown"),
+                "assigned_by_role": assigner_roles.get(assignment.assigned_by),
                 "is_active": assignment.is_active,
                 "session_id": session_by_student[user.id].id if user.id in session_by_student else None,
                 "session_status": session_by_student[user.id].status if user.id in session_by_student else None,
