@@ -107,8 +107,9 @@ export default function StudentResultsPage() {
                     <p>Total marks: <strong>{exam.result_total_marks ?? exam.maximum_marks}</strong></p>
                     <p>Grade: <strong>{exam.grade || "—"}</strong></p>
                   </div>
-                  {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-4 inline-block font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
+
                 </> : <p className="font-semibold text-amber-300">Result Not Declared</p>}
+                {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-4 inline-block font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
               </div>
             </article>)}</div>}
         </section>
