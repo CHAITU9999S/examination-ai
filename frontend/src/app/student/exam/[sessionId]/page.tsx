@@ -728,6 +728,7 @@ export default function StudentExamPage() {
   const saveCurrentQuestion = useCallback(async (): Promise<boolean> => {
     const question = paper?.questions[currentIndex];
     if (!question) return false;
+    if (questionTimerLocked) return true;
     if (imageUploading) {
       setError("Please wait for the answer image upload to finish before moving on.");
       return false;
@@ -744,7 +745,6 @@ export default function StudentExamPage() {
       clearTimeout(pendingTimeout);
       delete saveTimeoutsRef.current[question.id];
     }
-    if (questionTimerLocked) return true;
     const answerText = answersRef.current[question.id] || "";
     const wasSaved = savedAnswerQuestionIds.includes(question.id);
     if (!answerText.trim() && !wasSaved && !pendingTimeout) return true;
