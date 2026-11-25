@@ -61,6 +61,7 @@ def create_question_bank(
         created_by=current_user.id,
     )
     db.add(bank)
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_bank_created", details={"bank_id": bank.id, "bank_name": bank.name}))
     db.commit()
     db.refresh(bank)
     return {"message": "Question bank created.", "bank_id": bank.id}
@@ -143,6 +144,7 @@ def update_question_bank(
     bank.name = data.name.strip()
     bank.description = data.description
     bank.subject = data.subject
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_bank_updated", details={"bank_id": bank.id, "bank_name": bank.name}))
     db.commit()
     return {"message": "Question bank updated."}
 
@@ -196,6 +198,7 @@ def delete_question_bank(
         ).update({Question.source_question_id: None}, synchronize_session=False)
         db.delete(question)
 
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_bank_deleted", details={"bank_id": bank.id, "bank_name": bank.name}))
     db.delete(bank)
     db.commit()
     return {"message": "Question bank deleted. Questions used in other banks, examinations, or student records were kept."}
@@ -477,6 +480,7 @@ async def add_question_to_bank_with_images(
             )
             db.add(Option(question_id=question.id, option_text=option_text, is_correct=is_correct))
         db.add(QuestionCollectionItem(collection_id=bank.id, question_id=question.id))
+        db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_added_to_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question.id}))
         db.commit()
         db.refresh(question)
     except IntegrityError:
@@ -545,6 +549,7 @@ def update_bank_question(
     for index, option_text in enumerate(options):
         correct = (question_type == "MCQ" and index == data.correct_option_index) or (question_type == "multi_select" and index in (data.correct_option_indices or []))
         db.add(Option(question_id=question.id, option_text=option_text, is_correct=correct))
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_updated_in_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question.id}))
     db.commit()
     return {"message": "Question updated in your question bank.", "question_id": question.id}
 
@@ -583,6 +588,7 @@ def delete_bank_question(
     db.query(QuestionCollectionItem).filter(
         QuestionCollectionItem.question_id == question.id
     ).delete(synchronize_session=False)
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_deleted_from_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question.id}))
     db.delete(question)
     db.commit()
     return {"message": "Question deleted from your question banks. Existing examination copies were kept."}
@@ -680,6 +686,7 @@ def remove_question_from_bank(
     ).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Question is not in this bank.")
+    db.add(AdminActivityLog(actor_user_id=current_user.id, action="question_removed_from_bank", details={"bank_id": bank.id, "bank_name": bank.name, "question_id": question_id}))
     db.delete(item)
     db.commit()
     return {"message": "Question removed from this bank. The saved question was kept."}
