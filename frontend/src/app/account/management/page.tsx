@@ -258,7 +258,7 @@ export default function AccountManagementPage() {
                 Each detail has its own maximum of 3 successful edits.
               </p>
             </div>
-            {!editing && (
+            {!editing && editFields.some((field) => remainingEdits(field.count) > 0) && (
               <button
                 type="button"
                 onClick={() => { setEditing(true); setProfileError(""); setProfileMessage(""); }}
