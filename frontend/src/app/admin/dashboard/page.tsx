@@ -39,7 +39,7 @@ interface NavigationGroup {
 const navigationGroups: NavigationGroup[] = [
   {
     title: "User Management",
-    description: "Manage users, administrators, examiners, students, schedules, performance, and administrator activity.",
+    description: "Manage users, administrators, examiners, students, schedules, performance, activity logs, and retained records.",
     slug: "user-management",
     items: [
       { title: "User Management", description: "View and manage all platform accounts.", href: "/admin/users" },
@@ -49,6 +49,7 @@ const navigationGroups: NavigationGroup[] = [
       { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
       { title: "Student Performance", description: "Review student examination performance and published results.", href: "/admin/performance" },
       { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
+      { title: "Retained Data", description: "Review and delete completed records retained after account deletion.", href: "/admin/retained-data" },
     ],
   },
   {
