@@ -242,7 +242,7 @@ export default function ExaminerManagementPage() {
       if (!headers) return;
 
       const response = await fetch(
-        `${API_URL}/admin/users/${examiner.id}`,
+        `${API_URL}/admin/users/${examiner.id}/with-records`,
         {
           method: "DELETE",
           headers,
