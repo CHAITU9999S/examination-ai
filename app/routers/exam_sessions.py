@@ -297,7 +297,6 @@ def _get_exam_attribution(session: ExamSession, exam: Exam, db: Session) -> dict
     assignment = db.query(ExamAssignment).filter(
         ExamAssignment.exam_id == exam.id,
         ExamAssignment.student_id == session.student_id,
-        ExamAssignment.is_active.is_(True),
     ).first()
     assigner = (
         db.query(User).filter(User.id == assignment.assigned_by).first()
