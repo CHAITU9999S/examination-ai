@@ -359,7 +359,7 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "maximum_marks": round(maximum_marks, 2),
         "negative_marking_enabled": bool(exam.negative_marking),
         "total_possible_negative_marks": round(negative_marks, 2),
-        "proctoring_enabled": bool(exam.proctoring_enabled),
+        "proctoring_enabled": True,
         "randomize_questions": bool(exam.randomize_questions),
         "scheduled_start": exam.start_time,
         "scheduled_end": exam.end_time,
@@ -478,6 +478,7 @@ def start_exam(
             prestart_stage="face_capture",
             prestart_expires_at=exam_end,
             selected_question_ids=selected_ids,
+            visited_question_ids=[],
         )
         try:
             db.add(session)
@@ -738,10 +739,16 @@ def update_exam_question_progress(
     if data.current_question_index >= len(selected_ids):
         raise HTTPException(status_code=400, detail="Question progress is outside the saved examination paper.")
     session.current_question_index = data.current_question_index
+    selected_question_id = selected_ids[data.current_question_index]
+    visited_question_ids = list(session.visited_question_ids or [])
+    if selected_question_id not in visited_question_ids:
+        visited_question_ids.append(selected_question_id)
+    session.visited_question_ids = visited_question_ids
     db.commit()
     return {
         "session_id": session.id,
         "current_question_index": session.current_question_index,
+        "visited_question_ids": visited_question_ids,
         "saved": True,
     }
 
@@ -970,7 +977,7 @@ def get_exam_paper(
             **_get_exam_attribution(session, exam, db),
             "exam_summary": _build_exam_summary(session, exam, db),
             "total_questions": len(selected_ids),
-            "proctoring_enabled": bool(exam.proctoring_enabled),
+            "proctoring_enabled": True,
             "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
             "max_tab_switch_warnings": exam.max_tab_switch_warnings,
             "questions": [],
@@ -1081,8 +1088,9 @@ def get_exam_paper(
         ),
         "is_paused": bool(session.is_paused),
         "current_question_index": int(session.current_question_index or 0),
+        "visited_question_ids": list(session.visited_question_ids or []),
         "total_questions": len(paper),
-        "proctoring_enabled": bool(exam.proctoring_enabled),
+        "proctoring_enabled": True,
         "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
         "max_tab_switch_warnings": exam.max_tab_switch_warnings,
         "questions": paper,
