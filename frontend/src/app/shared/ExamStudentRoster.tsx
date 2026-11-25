@@ -125,7 +125,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
      </article>;
     })}</div>}
    </section>
-   <div className="mt-6 flex flex-wrap gap-3"><Link href={`/staff/examinations/${examId}`} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">View Question Paper</Link><Link href="/staff/proctoring" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Open Proctoring Review</Link></div>
+   <div className="mt-6 flex flex-wrap gap-3"><Link href={readOnly?`/admin/exams/${examId}/question-bank`:`/staff/examinations/${examId}`} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">{readOnly?"View Question Bank":"View Question Paper"}</Link><Link href="/staff/proctoring" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Open Proctoring Review</Link></div>
   </div>
  </main>;
 }
