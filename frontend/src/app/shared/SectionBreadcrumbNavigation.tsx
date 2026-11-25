@@ -158,12 +158,16 @@ export default function SectionBreadcrumbNavigation() {
     !/^\/(admin|examiner|student|staff)(\/|$)/.test(pathname)
   ) return null;
 
-  const dashboardHref = pathname.startsWith("/admin/") ||
-    (role === "admin" && (pathname.startsWith("/examiner/") || pathname.startsWith("/staff/")))
-    ? "/admin/dashboard"
-    : pathname.startsWith("/student/")
-      ? "/student/dashboard"
-      : "/examiner/dashboard";
+  const examinerSharedSection = role === "examiner" &&
+    /^\/admin\/sections\/(question-banks|examinations)$/.test(pathname);
+  const dashboardHref = examinerSharedSection
+    ? "/examiner/dashboard"
+    : pathname.startsWith("/admin/") ||
+      (role === "admin" && (pathname.startsWith("/examiner/") || pathname.startsWith("/staff/")))
+      ? "/admin/dashboard"
+      : pathname.startsWith("/student/")
+        ? "/student/dashboard"
+        : "/examiner/dashboard";
 
   const breadcrumbs =
     pathname.startsWith("/admin/")
