@@ -2,7 +2,7 @@ import hmac
 import os
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ from app.auth import (
     verify_password,
 )
 from app.database import get_db
-from app.models import ExamSession, User
+from app.models import ExamSession, LoginHistory, User
 from app.schemas import (
     InitialAdminBootstrapRequest,
     LoginRequest,
@@ -177,6 +177,7 @@ def register_student(
 )
 def login(
     login_data: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -239,6 +240,13 @@ def login(
         {ExamSession.exam_token_refresh_hash: None},
         synchronize_session=False,
     )
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    db.add(LoginHistory(
+        user_id=user.id,
+        ip_address=client_ip[:45] if client_ip else None,
+        user_agent=user_agent[:500] if user_agent else None,
+    ))
     db.commit()
 
     access_token = create_access_token(
