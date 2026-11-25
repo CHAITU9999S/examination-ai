@@ -87,15 +87,43 @@ function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
   return null;
 }
 
-function examinerBreadcrumbs(pathname: string): Breadcrumbs | null {
-  if (pathname === "/examiner/exams") return { ancestors: [], current: "Create Examination" };
-  if (pathname === "/examiner/question-banks") return { ancestors: [], current: "Manage Question Banks" };
-  if (/^\/examiner\/question-banks\/[^/]+$/.test(pathname)) return { ancestors: [{ href: "/examiner/question-banks", label: "Manage Question Banks" }], current: "Question Bank Details" };
-  if (/^\/examiner\/exams\/[^/]+\/question-bank$/.test(pathname)) return { ancestors: [{ href: "/examiner/exams", label: "Create Examination" }], current: "Examination Bank" };
-  if (/^\/examiner\/exams\/[^/]+\/select-question-bank$/.test(pathname)) return { ancestors: [{ href: "/examiner/exams", label: "Create Examination" }], current: "Select Question Bank" };
-  if (pathname === "/examiner/questions") return { ancestors: [{ href: "/examiner/question-banks", label: "Manage Question Banks" }], current: "Questions" };
-  if (pathname === "/examiner/grading") return { ancestors: [], current: "Evaluation" };
-  if (pathname === "/examiner/results") return { ancestors: [], current: "Results" };
+function examinerBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
+  const isAdmin = role === "admin";
+  const bankAncestors: Crumb[] = isAdmin
+    ? [ADMIN_BANKS, { href: "/examiner/question-banks", label: "Manage Question Banks" }]
+    : [{ href: "/examiner/question-banks", label: "Manage Question Banks" }];
+  const createExamAncestors: Crumb[] = isAdmin
+    ? [ADMIN_EXAMS, { href: "/examiner/exams", label: "Create Examination" }]
+    : [{ href: "/examiner/exams", label: "Create Examination" }];
+
+  if (pathname === "/examiner/exams") {
+    return { ancestors: isAdmin ? [ADMIN_EXAMS] : [], current: "Create Examination" };
+  }
+  if (pathname === "/examiner/question-banks") {
+    return { ancestors: isAdmin ? [ADMIN_BANKS] : [], current: "Manage Question Banks" };
+  }
+  if (/^\/examiner\/question-banks\/[^/]+$/.test(pathname)) {
+    return { ancestors: bankAncestors, current: "Question Bank Details" };
+  }
+  const examQuestionBank = pathname.match(/^\/examiner\/exams\/([^/]+)\/question-bank$/);
+  if (examQuestionBank) {
+    const ancestors = isAdmin
+      ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }, { href: `/staff/manage-exams/${examQuestionBank[1]}`, label: "Examination Details" }]
+      : [{ href: "/examiner/exams", label: "Create Examination" }];
+    return { ancestors, current: "Examination Bank" };
+  }
+  if (/^\/examiner\/exams\/[^/]+\/select-question-bank$/.test(pathname)) {
+    return { ancestors: createExamAncestors, current: "Select Question Bank" };
+  }
+  if (pathname === "/examiner/questions") {
+    return { ancestors: bankAncestors, current: "Questions" };
+  }
+  if (pathname === "/examiner/grading") {
+    return { ancestors: isAdmin ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }] : [], current: "Evaluation" };
+  }
+  if (pathname === "/examiner/results") {
+    return { ancestors: isAdmin ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }] : [], current: "Results" };
+  }
   return null;
 }
 
@@ -130,13 +158,12 @@ export default function SectionBreadcrumbNavigation() {
     !/^\/(admin|examiner|student|staff)(\/|$)/.test(pathname)
   ) return null;
 
-  const dashboardHref = pathname.startsWith("/admin/")
+  const dashboardHref = pathname.startsWith("/admin/") ||
+    (role === "admin" && (pathname.startsWith("/examiner/") || pathname.startsWith("/staff/")))
     ? "/admin/dashboard"
     : pathname.startsWith("/student/")
       ? "/student/dashboard"
-      : pathname.startsWith("/staff/") && role === "admin"
-        ? "/admin/dashboard"
-        : "/examiner/dashboard";
+      : "/examiner/dashboard";
 
   const breadcrumbs =
     pathname.startsWith("/admin/")
@@ -145,7 +172,7 @@ export default function SectionBreadcrumbNavigation() {
         ? studentBreadcrumbs(pathname)
         : pathname.startsWith("/staff/")
           ? staffBreadcrumbs(pathname, role)
-          : examinerBreadcrumbs(pathname);
+          : examinerBreadcrumbs(pathname, role);
 
   const pathParts = pathname.split("/").filter(Boolean);
   const lastPart = pathParts[pathParts.length - 1];
