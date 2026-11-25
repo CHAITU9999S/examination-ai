@@ -297,6 +297,9 @@ class Exam(Base):
 
     end_time = Column(DateTime(), nullable=True)
 
+    # Timestamp set by the backend when the creator explicitly publishes the exam.
+    published_at = Column(DateTime(), nullable=True)
+
     negative_marking = Column(Boolean, nullable=True)
 
     # Compatibility with existing code.
