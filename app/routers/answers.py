@@ -590,6 +590,13 @@ def delete_saved_answer(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This question does not belong to your examination paper.",
         )
+    selected_ids = session.selected_question_ids or []
+    current_index = int(session.current_question_index or 0)
+    if selected_ids and selected_ids[current_index] != question_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only the current question answer can be cleared.",
+        )
 
     timer_state = get_or_start_question_timer(
         session,
