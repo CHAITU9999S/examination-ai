@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../../components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -86,7 +87,7 @@ export default function AdminQuestionBankViewPage() {
             <Link href="/admin/exams" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
             <p className="mt-1 text-sm text-slate-400">Administrator / Read-only question bank</p>
           </div>
-          <Link href="/admin/exams" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← All Examinations</Link>
+          <AdminSectionNavigation previousHref={`/admin/exams/${examId}`} previousLabel="Previous Section" dashboardHref="/admin/dashboard" />
         </div>
       </header>
       <div className="mx-auto max-w-6xl space-y-6 px-5 py-8">
