@@ -57,7 +57,7 @@ interface ResultDetails {
 interface ResultStatus {
   exam_title: string;
   subject?: string | null;
-  session_status: string;
+  session_status: string | null;
   submitted_at?: string | null;
   result_published: boolean;
 }
@@ -174,7 +174,7 @@ export default function StudentResultDetailPage() {
             <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
               <p className="font-semibold text-amber-300">Result Not Declared</p>
               <p className="mt-2 text-sm text-slate-300">Your examination has been submitted or expired, but the result has not yet been published. Marks and question-wise evaluation will appear here after publication.</p>
-              <p className="mt-3 text-xs capitalize text-slate-400">Session status: {notDeclared.session_status.replaceAll("_", " ")}</p>
+              <p className="mt-3 text-xs capitalize text-slate-400">Session status: {(notDeclared.session_status || "not available").replaceAll("_", " ")}</p>
             </div>
           </section>
         ) : result ? (
