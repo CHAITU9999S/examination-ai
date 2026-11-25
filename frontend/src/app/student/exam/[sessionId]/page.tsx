@@ -841,6 +841,7 @@ export default function StudentExamPage() {
       sessionStorage.removeItem(examRefreshTokenKey);
       sessionStorage.removeItem(examIdKey);
       sessionStorage.removeItem("examguard_active_exam_session");
+      if (document.fullscreenElement && document.exitFullscreen) void document.exitFullscreen();
 
       setMessage(
         automatic
@@ -956,6 +957,7 @@ export default function StudentExamPage() {
         }
         if (!cancelled) {
           setUploadedImageQuestionIds(restoredImages);
+          setSavedAnswerQuestionIds([...new Set([...Object.keys(restored).map(Number), ...restoredImages])]);
           answersRef.current = restored;
           setAnswers(restored);
         }
@@ -1017,6 +1019,8 @@ export default function StudentExamPage() {
 
   useEffect(() => {
     if (!paper || !examAccessToken || isPaused) return;
+    const currentQuestion = paper.questions[currentIndex];
+    if (currentQuestion) setVisitedQuestionIds((current) => current.includes(currentQuestion.id) ? current : [...current, currentQuestion.id]);
     const headers = getHeaders();
     if (!headers) return;
     fetch(`${API_URL}/exam-sessions/progress/${sessionId}`, {
@@ -1060,13 +1064,13 @@ export default function StudentExamPage() {
   }, [questionTimerLocked, isPaused, paper, currentIndex]);
 
   const heartbeatToken = examAccessToken;
-  const heartbeatUrl = paper?.proctoring_enabled && paper.status === "in_progress" && heartbeatToken
+  const heartbeatUrl = paper?.status === "in_progress" && heartbeatToken
     ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
     : null;
 
   const heartbeat = useWebSocket({
     url: heartbeatUrl,
-    enabled: Boolean(heartbeatUrl && paper?.proctoring_enabled && paper.status === "in_progress"),
+    enabled: Boolean(heartbeatUrl && paper?.status === "in_progress"),
     heartbeatIntervalMs: 10000,
     heartbeatPayload: () => ({
       event_counts: proctoring.events.reduce<Record<string, number>>((counts, event) => {
@@ -1102,6 +1106,32 @@ export default function StudentExamPage() {
   useEffect(() => {
     setWebsocketStatus(heartbeat.status);
   }, [heartbeat.status]);
+
+  useEffect(() => {
+    if (!paper || paper.status !== "in_progress") return;
+    const supported = Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+    setFullscreenSupported(supported);
+    if (!supported) return;
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        fullscreenExitLoggedRef.current = false;
+        setFullscreenReentryRequired(false);
+        return;
+      }
+      if (submittedRef.current) return;
+      setFullscreenReentryRequired(true);
+      if (!fullscreenExitLoggedRef.current) {
+        fullscreenExitLoggedRef.current = true;
+        handleProctoringEvent({
+          event_type: "fullscreen_exit",
+          description: "The student exited full-screen mode during the examination.",
+        });
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    if (!document.fullscreenElement) handleFullscreenChange();
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [paper?.status, handleProctoringEvent]);
 
   function formatTime(seconds: number | null) {
     if (seconds === null) return "--:--";
@@ -1344,7 +1374,7 @@ export default function StudentExamPage() {
                     ["Duration", summary.duration_minutes + " minutes"], ["Maximum marks", String(summary.maximum_marks)],
                     ["Negative marking", summary.negative_marking_enabled ? "Enabled" : "Disabled"],
                     ["Possible negative marks", String(summary.total_possible_negative_marks)],
-                    ["AI proctoring", summary.proctoring_enabled ? "Enabled" : "Disabled"],
+                    ["AI proctoring", "Always enabled"],
                     ["Question order", summary.randomize_questions ? "Randomized" : "Configured order"],
                     ["Scheduled start", summary.scheduled_start ? new Date(summary.scheduled_start).toLocaleString() : "Not specified"],
                     ["Scheduled end", summary.scheduled_end ? new Date(summary.scheduled_end).toLocaleString() : "Not specified"],
@@ -1387,7 +1417,7 @@ export default function StudentExamPage() {
           </section>
           <aside className="h-fit space-y-3 rounded-2xl border border-white/10 bg-slate-900 p-4">
             <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Camera</h2><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide preview" : "Show preview"}</button></div>
-            <WebcamPreview enabled={Boolean(paper.proctoring_enabled || !faceCaptured)} showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
+            <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
             <video ref={captureVideoRef} muted autoPlay playsInline className="hidden" />
             <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} />
             <p className="text-xs text-slate-400">Hiding the preview does not stop face detection during capture or the camera stream during the examination. Automated proctoring continues when enabled. Only a still photo is saved.</p>
@@ -1445,7 +1475,7 @@ export default function StudentExamPage() {
 
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[1fr_280px]">
         <section className="relative rounded-2xl border border-white/10 bg-slate-900 p-6">
-          {paper.proctoring_enabled && !faceVerified && (
+          {!faceVerified && (
             <div
               role="status"
               aria-live="polite"
