@@ -1264,7 +1264,7 @@ export default function StudentExamPage() {
             <WebcamPreview enabled={Boolean(paper.proctoring_enabled || !faceCaptured)} showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
             <video ref={captureVideoRef} muted autoPlay playsInline className="hidden" />
             <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} />
-            <p className="text-xs text-slate-400">Hiding the preview does not stop camera monitoring. Only a still photo is saved.</p>
+            <p className="text-xs text-slate-400">Hiding the preview does not stop face detection during capture or the camera stream during the examination. Automated proctoring continues when enabled. Only a still photo is saved.</p>
           </aside>
         </div>
       </main>
