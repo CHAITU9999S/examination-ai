@@ -535,3 +535,92 @@ def test_deleting_examiner_preserves_owned_completed_exam_and_question_for_later
     )
     assert delete_question.status_code == 200
     assert db_session.query(QuestionBank).filter(QuestionBank.id == question.id).count() == 0
+
+
+
+def test_deleting_another_admin_preserves_completed_exam_and_grading_history(
+    client, db_session, admin, student
+):
+    other_admin = User(
+        full_name="Second Administrator",
+        email="second-admin@example.com",
+        password_hash=hash_password("SecondAdminPass123!"),
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(other_admin)
+    db_session.commit()
+    db_session.refresh(other_admin)
+
+    exam = Exam(
+        title="Second Admin completed exam",
+        subject="Physics",
+        duration_minutes=20,
+        created_by=other_admin.id,
+    )
+    question = QuestionBank(
+        question_text="Define force",
+        question_type="short_answer",
+        difficulty="easy",
+        marks=2,
+        created_by=other_admin.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id))
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="submitted",
+        started_at=datetime.utcnow() - timedelta(minutes=5),
+        submitted_at=datetime.utcnow(),
+        expires_at=datetime.utcnow(),
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    answer = Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text="A push or pull",
+        awarded_marks=2,
+    )
+    db_session.add(answer)
+    db_session.flush()
+    revision = AnswerMarkRevision(
+        answer_id=answer.id,
+        revision_number=1,
+        previous_marks=None,
+        new_marks=2,
+        revised_by=other_admin.id,
+    )
+    db_session.add(revision)
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.delete(
+        f"/admin/users/{other_admin.id}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    db_session.refresh(other_admin)
+    assert other_admin.is_deleted is True
+    assert other_admin.is_active is False
+    assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 1
+    assert db_session.query(Answer).filter(Answer.id == answer.id).count() == 1
+    assert db_session.query(AnswerMarkRevision).filter(
+        AnswerMarkRevision.id == revision.id
+    ).count() == 1
+
+    retained = client.get("/admin/retained-data", headers=headers)
+    assert retained.status_code == 200
+    assert any(
+        item["kind"] == "completed_exam" and item["id"] == exam.id
+        for item in retained.json()["items"]
+    )
+    assert any(
+        item["kind"] == "answer_mark_revision" and item["id"] == revision.id
+        for item in retained.json()["items"]
+    )
