@@ -11,6 +11,8 @@ type Bank = {
   question_count: number; question_types?: Record<string, number>;
   difficulty_counts?: Record<string, number>; maximum_marks?: number;
   created_at?: string | null;
+  created_by_name?: string;
+  created_by_role?: string;
 };
 
 const typeLabels: Record<string, string> = {
@@ -158,7 +160,7 @@ export default function QuestionBanksPage() {
                 <div className="mt-2 flex flex-wrap gap-2">{["easy","medium","hard"].map(level=><span key={level} className="rounded-md bg-slate-800 px-2.5 py-1.5 text-xs capitalize text-slate-300">{level}: {bank.difficulty_counts?.[level] || 0}</span>)}</div>
                 <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Question types</p>
                 <div className="mt-2 flex flex-wrap gap-2">{Object.entries(typeLabels).map(([type,label])=><span key={type} className="rounded-md bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300">{label}: {bank.question_types?.[type] || 0}</span>)}</div>
-                <p className="mt-4 border-t border-white/10 pt-3 text-xs text-slate-400">Created: {formatDate(bank.created_at)}</p>
+                <div className="mt-4 border-t border-white/10 pt-3 text-xs text-slate-400"><p>Created by: <span className="font-medium text-slate-200">{bank.created_by_name || "You"}</span> <span className="capitalize">({bank.created_by_role || "current user"})</span></p><p className="mt-1">Created: {formatDate(bank.created_at)}</p></div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link href={`/examiner/question-banks/${bank.id}`} className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold">View / Manage Questions</Link>
