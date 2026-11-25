@@ -18,6 +18,7 @@ export default function QuestionBanksPage() {
   const [sortBy, setSortBy] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
 
   const loadBanks = useCallback(async () => {
     const token = localStorage.getItem("examguard_access_token");
@@ -25,12 +26,17 @@ export default function QuestionBanksPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(API_URL + "/question-banks/browse", {
-        headers: { Authorization: "Bearer " + token }, cache: "no-store",
-      });
+      const headers = { Authorization: "Bearer " + token };
+      const [profileResponse, response] = await Promise.all([
+        fetch(API_URL + "/users/me", { headers, cache: "no-store" }),
+        fetch(API_URL + "/question-banks/browse", { headers, cache: "no-store" }),
+      ]);
+      const profile = await profileResponse.json().catch(() => ({}));
       const data = await response.json().catch(() => []);
-      if (response.status === 401) { router.replace("/login"); return; }
-      if (!response.ok) throw new Error(data.detail || "Unable to load question banks.");
+      if (profileResponse.status === 401 || profileResponse.status === 403 || response.status === 401 || response.status === 403) { router.replace("/login"); return; }
+      if (!profileResponse.ok || !response.ok) throw new Error(data.detail || "Unable to load question banks.");
+      if (profile.role !== "admin" && profile.role !== "examiner") { router.replace("/login"); return; }
+      setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
       setBanks(Array.isArray(data) ? data : []);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load question banks.");
@@ -53,7 +59,7 @@ export default function QuestionBanksPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-          <div><Link href="/" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">Question Banks</p></div>
+          <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">Question Banks</p></div>
           <div className="flex flex-wrap gap-2">
             <Link href="/examiner/question-banks" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300">Manage Question Bank</Link>
             <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm">Examinations</Link>
