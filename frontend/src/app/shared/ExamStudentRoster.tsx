@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import AdminSectionNavigation from "../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-type Exam = { id:number; title:string; subject?:string|null; duration_minutes:number; total_questions:number; start_time?:string|null; end_time?:string|null; max_marks?:number|null; created_by?:number };
-type Student = { student_id:number; full_name:string; email:string; department?:string|null; is_active:boolean; session_id?:number|null; session_status?:string|null; student_exam_status:string };
+type Exam = { id:number; title:string; subject?:string|null; duration_minutes:number; total_questions:number; start_time?:string|null; end_time?:string|null; max_marks?:number|null; created_by?:number; created_by_name?:string|null; created_by_role?:string|null };
+type Student = { student_id:number; full_name:string; email:string; department?:string|null; is_active:boolean; assigned_by_name?:string|null; assigned_by_role?:string|null; session_id?:number|null; session_status?:string|null; student_exam_status:string };
 type Review = { questions:Array<{question_order:number;answer_id:number|null;evaluation_count:number; awarded_marks:number|null; maximum_marks:number; evaluation_history:Array<{evaluation_number:number;marks:number}>;is_objective:boolean}> };
 type ResultRow = {session_id:number; student_id:number; result_published:boolean; obtained_marks:number|null; total_marks:number|null; grade:string|null; session_status:string};
 function dateText(value?:string|null){if(!value)return "Not assigned";const d=new Date(value);return Number.isNaN(d.getTime())?"Not available":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
@@ -89,7 +89,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
   <div className="mx-auto max-w-7xl px-6 py-10">
    {error&&<div role="alert" className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
    {exam&&<section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">{exam.title}</h1><p className="mt-1 text-slate-400">{exam.subject||"No subject"}</p></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">{exam.title}</h1><p className="mt-1 text-slate-400">{exam.subject||"No subject"}</p><p className="mt-2 text-xs text-slate-400">Created by: <span className="font-medium text-slate-200">{exam.created_by_name||"Unknown"}</span> <span className="capitalize">({exam.created_by_role||"—"})</span></p></div>
      {!readOnly&&<button type="button" onClick={()=>{if(assignmentClosed||(exam?.end_time&&Date.now()>=new Date(exam.end_time).getTime())){setAssignmentClosed(true);setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}setShowAssign(true);setAssignmentMessage("");}} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">＋ Assign to New Student</button>}
     </div>
     <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
@@ -113,7 +113,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
      const evaluationLabel=student.student_exam_status!=="completed"?"Exam not completed":subjectiveQuestions.length===0?"Automatically evaluated":manualAnswers.length===0?"No submitted subjective answers":latestEvaluation===0?"Evaluate 0/3":`Evaluated ${latestEvaluation}/3 ${latestEvaluation>=3?"— no further evaluation":"— can evaluate again"}`;
      const gradeLabel=student.student_exam_status!=="completed"?"Exam not completed":!allManualAnswersEvaluated?"Not evaluated":result?.result_published?(result.grade||"Grade assigned"):"Grade not assigned";
      return <article key={student.student_id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{student.full_name}</h3><p className="mt-1 text-xs text-slate-400">{student.department||"Department not set"} · {student.email}</p><p className="mt-2 text-xs text-cyan-300">{statusText(student.student_exam_status)}</p></div><div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{student.full_name}</h3><p className="mt-1 text-xs text-slate-400">{student.department||"Department not set"} · {student.email}</p><p className="mt-2 text-xs text-cyan-300">{statusText(student.student_exam_status)}</p><p className="mt-1 text-xs text-slate-400">Assigned by: <span className="text-slate-200">{student.assigned_by_name||"Unknown"}</span> {student.assigned_by_role ? "("+student.assigned_by_role+")" : ""}</p></div><div className="flex flex-wrap gap-2">
        {student.session_id&&<Link href={`/staff/manage-exams/${examId}/evaluation/${student.session_id}${readOnly?"?view=1":""}`} className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">{readOnly?"View Answers & Marks":"Evaluate Answers"}</Link>}
        {student.session_id&&<Link href={`/staff/proctoring?session_id=${student.session_id}&return_to=${encodeURIComponent(readOnly?`/admin/exams/${examId}`:`/staff/manage-exams/${examId}`)}`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Proctoring Review</Link>}
       </div></div>
