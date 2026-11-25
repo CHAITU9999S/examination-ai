@@ -87,7 +87,7 @@ export default function StaffProctoringReviewPage() {
       const data = await response.json();
       const list = Array.isArray(data.sessions) ? data.sessions : [];
       setSessions(list);
-      if (requestedSessionId && /^\\d+$/.test(requestedSessionId)) {
+      if (requestedSessionId && /^\d+$/.test(requestedSessionId)) {
         const historyResponse = await fetch(`${API_URL}/exam-sessions/${requestedSessionId}/proctoring/history`, { headers, cache: "no-store" });
         const historyData = await historyResponse.json().catch(() => ({}));
         if (!historyResponse.ok) throw new Error(historyData.detail || "Unable to load this student's proctoring details.");
