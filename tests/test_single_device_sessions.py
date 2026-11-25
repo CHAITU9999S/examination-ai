@@ -124,6 +124,13 @@ def test_new_login_revokes_old_exam_credentials_but_preserves_exam_and_answers(
     session = db_session.query(ExamSession).filter_by(
         id=started["session_id"]
     ).one()
+    # This test focuses on device replacement after the exam has begun;
+    # move the persisted entry session into its active state without waiting.
+    session.status = "in_progress"
+    session.prestart_stage = "in_progress"
+    session.started_at = now
+    session.expires_at = now + timedelta(minutes=30)
+    db_session.commit()
     db_session.add(Answer(
         session_id=session.id,
         question_id=question.id,
