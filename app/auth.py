@@ -13,6 +13,7 @@ from passlib.context import CryptContext
 # AUTHENTICATION CONFIGURATION
 # ==========================================
 
+# Prefer JWT_SECRET_KEY while retaining compatibility with existing SECRET_KEY deployments.
 JWT_SECRET_KEY = (
     os.getenv("JWT_SECRET_KEY")
     or os.getenv("SECRET_KEY")
