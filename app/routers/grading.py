@@ -198,7 +198,7 @@ def _record_mark_revision(
     new_feedback: str | None,
     revised_by: int,
 ):
-    """Record each post-initial human mark change; cap at three per answer."""
+    """Record mark changes while allowing three total evaluations per answer."""
 
     if answer.awarded_marks is None:
         return 0
@@ -1299,7 +1299,8 @@ def get_answer_mark_revisions(
         "question_id": question.id,
         "maximum_marks": question.marks,
         "current_final_marks": answer.awarded_marks,
-        "revision_limit": 3,
+        "revision_limit": 2,
+        "evaluation_limit": 3,
         "revisions_used": len(revisions),
         "evaluation_count": (1 + len(revisions)) if answer.awarded_marks is not None else 0,
         "revisions_remaining": max(0, 3 - ((1 + len(revisions)) if answer.awarded_marks is not None else 0)),
