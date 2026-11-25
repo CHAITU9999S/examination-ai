@@ -756,6 +756,25 @@ def test_student_performance_includes_assignments_from_all_staff_but_tracking_is
 
 
 
+
+def test_global_student_performance_is_admin_only(client, examiner, student):
+    examiner_headers = get_auth_headers(client, examiner.email, "ExaminerPass123!")
+    student_headers = get_auth_headers(client, student.email, "StudentPass123!")
+
+    examiner_response = client.get(
+        "/admin/student-performance",
+        headers=examiner_headers,
+    )
+    student_response = client.get(
+        "/admin/student-performance",
+        headers=student_headers,
+    )
+
+    assert examiner_response.status_code == 403
+    assert student_response.status_code == 403
+
+
+
 def test_admin_schedules_lists_only_future_examination_assignments(
     client, db_session, admin, student
 ):
