@@ -352,3 +352,56 @@ def test_student_cannot_use_global_question_deletion(client, student):
     headers = get_auth_headers(client, student.email, "StudentPass123!")
     response = client.delete("/admin/questions/all", headers=headers)
     assert response.status_code == 403
+
+
+def test_deleting_examiner_removes_their_attempt_but_preserves_another_owners_exam(
+    client, db_session, admin, examiner
+):
+    exam = Exam(
+        title="Admin-owned examination",
+        subject="Mathematics",
+        duration_minutes=30,
+        created_by=admin.id,
+    )
+    question = QuestionBank(
+        question_text="A question owned by the Admin",
+        question_type="MCQ",
+        difficulty="easy",
+        marks=2,
+        created_by=admin.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add_all([
+        ExamQuestion(exam_id=exam.id, question_id=question.id),
+        ExamAssignment(exam_id=exam.id, student_id=examiner.id, assigned_by=admin.id, is_active=True),
+    ])
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=examiner.id,
+        status="submitted",
+        started_at=datetime.utcnow() - timedelta(minutes=10),
+        submitted_at=datetime.utcnow(),
+        expires_at=datetime.utcnow(),
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    answer = Answer(session_id=session.id, question_id=question.id, answer_text="A")
+    db_session.add(answer)
+    db_session.flush()
+    result = Result(session_id=session.id, total_marks=2, obtained_marks=1, percentage=50)
+    db_session.add(result)
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.delete(f"/admin/users/{examiner.id}", headers=headers)
+    assert response.status_code == 200
+
+    assert db_session.query(User).filter(User.id == examiner.id).count() == 0
+    assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
+    assert db_session.query(QuestionBank).filter(QuestionBank.id == question.id).count() == 1
+    assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 1
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 0
+    assert db_session.query(Answer).filter(Answer.id == answer.id).count() == 0
+    assert db_session.query(Result).filter(Result.id == result.id).count() == 0
