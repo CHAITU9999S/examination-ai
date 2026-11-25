@@ -788,7 +788,7 @@ def list_submitted_sessions_for_review(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List submitted sessions the current examiner or Admin can review."""
+    """List candidate progress and submitted sessions visible to this examiner or Admin."""
     require_examiner_or_admin(current_user)
 
     query = db.query(
