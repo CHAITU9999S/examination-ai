@@ -665,6 +665,7 @@ export default function ExamQuestionBankPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">Examination Configuration</h2>
+                <p className="mt-1 text-sm text-slate-400">Created by: <span className="font-medium text-slate-200">{examConfig.created_by_name || "Unknown"}</span> {examConfig.created_by_role ? <span className="capitalize">({examConfig.created_by_role})</span> : null}</p>
                 <p className="mt-1 text-sm text-slate-400">Configuration changes are limited to three revisions before the first student session.</p>
               </div>
               <span className="text-xs text-cyan-300">{revisionsUsed}/3 revisions used</span>
