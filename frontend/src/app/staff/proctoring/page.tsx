@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../../admin/components/AdminSectionNavigation";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -48,13 +48,16 @@ function formatDate(value?: string | null) {
 
 export default function StaffProctoringReviewPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedSessionId = searchParams.get("session_id");
+  const [requestedSessionId, setRequestedSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<FlaggedSession[]>([]);
   const [selected, setSelected] = useState<FlaggedSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
+
+  useEffect(() => {
+    setRequestedSessionId(new URLSearchParams(window.location.search).get("session_id"));
+  }, []);
 
   const loadFlaggedSessions = useCallback(async () => {
     setLoading(true);
