@@ -1098,6 +1098,7 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
     ).limit(20000).all()
 
     flat_performance = []
+    now = datetime.utcnow()
     for assignment, exam, student, creator, assigner in assignment_rows:
         session = db.query(ExamSession).filter(
             ExamSession.exam_id == exam.id,
@@ -1180,10 +1181,9 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
         )
         status_value = session.status if session is not None else "not_started"
         if (
-            session is not None
-            and status_value == "in_progress"
-            and exam.end_time is not None
-            and datetime.utcnow() >= exam.end_time
+            exam.end_time is not None
+            and now >= exam.end_time
+            and status_value in {"not_started", "in_progress"}
         ):
             status_value = "expired"
         status_labels = {
@@ -1195,16 +1195,12 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             "completed": "Completed",
         }
         published = bool(result and result.is_published)
-        is_started = bool(
-            session is not None and (
-                session.started_at is not None
-                or status_value not in (None, "not_started")
-            )
-        )
+        is_started = bool(session is not None and session.started_at is not None)
         is_taken = bool(
             session is not None and (
                 session.submitted_at is not None
-                or status_value in ("submitted", "auto_submitted", "expired", "completed")
+                or status_value in ("submitted", "auto_submitted", "completed")
+                or (status_value == "expired" and session.started_at is not None)
             )
         )
         attempt = {
