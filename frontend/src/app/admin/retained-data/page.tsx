@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -130,9 +131,7 @@ export default function RetainedDataPage() {
             </Link>
             <p className="mt-1 text-sm text-slate-400">Administrator / Retained Data</p>
           </div>
-          <Link href="/admin/sections/user-management" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
-            ← User Management
-          </Link>
+          <AdminSectionNavigation previousHref="/admin/sections/admins" previousLabel="Admins" />
         </div>
       </header>
 
