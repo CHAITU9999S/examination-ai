@@ -405,6 +405,18 @@ def test_proctoring_is_mandatory_even_when_legacy_exam_setting_is_false(
     assert response.status_code == 201
 
 
+
+def test_fullscreen_exit_is_recorded_without_suspicion_points(client, db_session, proctoring_data):
+    data = proctoring_data
+    response = submit_event(client, data, "fullscreen_exit", "Student exited full-screen mode.")
+    assert response.status_code == 201
+    assert response.json()["event_type"] == "fullscreen_exit"
+    assert response.json()["suspicion_points"] == 0
+    event = db_session.query(ProctorEvent).filter_by(
+        session_id=data["session"].id, event_type="fullscreen_exit",
+    ).one()
+    assert event.cumulative_suspicion_score == 0
+
 def test_expired_session_rejects_events(
     client,
     db_session,
