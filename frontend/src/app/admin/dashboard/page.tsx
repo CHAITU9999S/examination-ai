@@ -28,96 +28,126 @@ interface Statistics {
   total_sessions: number;
 }
 
-const navigation = [
+const navigationGroups = [
   {
     title: "User Management",
-    description: "View, activate, deactivate, and manage platform users.",
-    href: "/admin/users",
-  },
-  {
-    title: "Admin Management",
-    description: "Manage administrator accounts.",
-    href: "/admin/admins",
-  },
-  {
-    title: "Student Management",
-    description: "View registered students and their account status.",
-    href: "/admin/students",
-  },
-  {
-    title: "Examiner Management",
-    description: "Manage examiner accounts and access.",
-    href: "/admin/examiners",
-  },
-  {
-    title: "Examinations",
-    description: "View all examinations created by Admins and Examiners, with Admin deletion controls.",
-    href: "/admin/exams",
-  },
-  {
-    title: "All Questions",
-    description: "View every existing question across the platform and safely delete individual questions.",
-    href: "/admin/questions",
-  },
-  {
-    title: "Manage Examination",
-    description: "View and manage only examinations you created.",
-    href: "/staff/manage-exams",
+    description: "Manage all platform accounts and review user-related activity.",
+    items: [
+      {
+        title: "User Management",
+        description: "View, activate, deactivate, and manage platform users.",
+        href: "/admin/users",
+      },
+      {
+        title: "Admin Management",
+        description: "Manage administrator accounts.",
+        href: "/admin/admins",
+        related: [
+          {
+            title: "Admin Activity Logs",
+            description: "Review administrator actions and account changes.",
+            href: "/admin/activity-logs",
+          },
+        ],
+      },
+      {
+        title: "Examiner Management",
+        description: "Manage examiner accounts and access.",
+        href: "/admin/examiners",
+      },
+      {
+        title: "Student Management",
+        description: "View registered students and their account status.",
+        href: "/admin/students",
+        related: [
+          {
+            title: "Student Schedules",
+            description: "View active student assignments and examination opening and closing times.",
+            href: "/admin/schedules",
+          },
+          {
+            title: "Student Performance",
+            description: "Review published results and long-term student performance.",
+            href: "/admin/performance",
+          },
+        ],
+      },
+    ],
   },
   {
     title: "Question Banks",
-    description: "Browse question banks created by all Admins and Examiners.",
-    href: "/staff/question-banks",
+    description: "Browse and manage question banks and the platform question library.",
+    items: [
+      {
+        title: "Question Banks",
+        description: "Browse question banks created by all Admins and Examiners.",
+        href: "/staff/question-banks",
+      },
+      {
+        title: "Manage Question Banks",
+        description: "Create and manage your own question banks and questions.",
+        href: "/examiner/question-banks",
+      },
+      {
+        title: "All Questions",
+        description: "View every existing question across the platform and safely delete individual questions.",
+        href: "/admin/questions",
+      },
+      {
+        title: "Question Library",
+        description: "Create and manage standalone questions for examination preparation.",
+        href: "/examiner/questions",
+      },
+    ],
   },
   {
-    title: "Manage Question Bank",
-    description: "Create and manage your own question banks and questions.",
-    href: "/examiner/question-banks",
-  },
-  {
-    title: "Question Library",
-    description: "Create and manage standalone questions for examination preparation.",
-    href: "/examiner/questions",
-  },
-  {
-    title: "Create Examination",
-    description: "Create a new examination.",
-    href: "/examiner/exams",
-  },
-  {
-    title: "Answer Grading",
-    description: "Review answers and approve or change marks only for examinations you created.",
-    href: "/examiner/grading",
-  },
-  {
-    title: "Result Publication",
-    description: "Review and publish results only for examinations you created.",
-    href: "/examiner/results",
-  },
-  {
-    title: "Student Schedules",
-    description: "View active student assignments and examination opening and closing times.",
-    href: "/admin/schedules",
-  },
-  {
-    title: "Historical Performance",
-    description: "Review published results and long-term student performance.",
-    href: "/admin/performance",
+    title: "Examinations",
+    description: "Create, manage, grade, publish, and review examinations.",
+    items: [
+      {
+        title: "Examinations",
+        description: "View all examinations created by Admins and Examiners, with Admin deletion controls.",
+        href: "/admin/exams",
+      },
+      {
+        title: "Manage Examinations",
+        description: "View and manage examinations you created.",
+        href: "/staff/manage-exams",
+        related: [
+          {
+            title: "Proctoring Review",
+            description: "Review flagged sessions and recorded proctoring events.",
+            href: "/staff/proctoring",
+          },
+        ],
+      },
+      {
+        title: "Create Examination",
+        description: "Create a new examination.",
+        href: "/examiner/exams",
+      },
+      {
+        title: "Answer Grading",
+        description: "Review answers and approve or change marks only for examinations you created.",
+        href: "/examiner/grading",
+      },
+      {
+        title: "Result Publication",
+        description: "Review and publish results only for examinations you created.",
+        href: "/examiner/results",
+      },
+    ],
   },
   {
     title: "Account Security",
-    description: "Change your account password.",
-    href: "/account/security",
-  },
-  {
-    title: "Admin Activity Logs",
-    description: "Review administrator actions and account changes.",
-    href: "/admin/activity-logs",
-  },
-  {
-    title: "Proctoring Review",
-    description: "Review flagged sessions and recorded proctoring events.",
-    href: "/staff/proctoring",
+    description: "Change your account password and maintain account security.",
+    items: [
+      {
+        title: "Account Security",
+        description: "Change your account password.",
+        href: "/account/security",
+      },
+    ],
   },
 ];
 
@@ -397,25 +427,59 @@ export default function AdminDashboardPage() {
             Management
           </h2>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            {navigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
+          <div className="space-y-6">
+            {navigationGroups.map((group) => (
+              <section
+                key={group.title}
+                className="rounded-2xl border border-white/10 bg-slate-900 p-6"
               >
-                <h3 className="text-lg font-bold transition group-hover:text-blue-400">
-                  {item.title}
-                </h3>
+                <div className="mb-5">
+                  <h3 className="text-xl font-bold">{group.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{group.description}</p>
+                </div>
 
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  {item.description}
-                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {group.items.map((item) => (
+                    <article
+                      key={item.href}
+                      className="rounded-xl border border-white/10 bg-slate-800/70 p-4"
+                    >
+                      <Link
+                        href={item.href}
+                        className="group inline-flex font-semibold text-white transition hover:text-blue-400"
+                      >
+                        {item.title} <span className="ml-2 text-blue-400">→</span>
+                      </Link>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        {item.description}
+                      </p>
 
-                <p className="mt-5 text-sm font-semibold text-blue-400">
-                  Open management page →
-                </p>
-              </Link>
+                      {item.related && item.related.length > 0 && (
+                        <div className="mt-4 border-t border-white/10 pt-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Related sections
+                          </p>
+                          <div className="space-y-3">
+                            {item.related.map((relatedItem) => (
+                              <div key={relatedItem.href}>
+                                <Link
+                                  href={relatedItem.href}
+                                  className="text-sm font-semibold text-cyan-300 hover:text-cyan-200"
+                                >
+                                  {relatedItem.title} →
+                                </Link>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                  {relatedItem.description}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </section>
