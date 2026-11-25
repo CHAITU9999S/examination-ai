@@ -68,11 +68,9 @@ const navigationGroups: NavigationGroup[] = [
     description: "View and manage examinations, grade answers, publish results, and review proctoring.",
     slug: "examinations",
     items: [
-      { title: "Examinations", description: "View examinations created by Admins and Examiners.", href: "/admin/exams" },
-      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams" },
-      { title: "Answer Grading", description: "Review answers and manage marks for examinations you own.", href: "/examiner/grading" },
-      { title: "Result Publication", description: "Approve and publish results for examinations you own.", href: "/examiner/results" },
-      { title: "Proctoring Review", description: "Review flagged sessions and proctoring events.", href: "/staff/proctoring" },
+      { title: "Create Examination", description: "Create a new examination and configure its question paper.", href: "/examiner/exams" },
+      { title: "Manage Examinations", description: "Manage examinations created by your Admin account.", href: "/staff/manage-exams" },
+      { title: "Examinations", description: "View all examinations created by Admins and Examiners.", href: "/admin/exams" },
     ],
   },
   {
