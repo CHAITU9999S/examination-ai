@@ -30,11 +30,11 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
  const [error,setError]=useState("");
  const [dashboardHref,setDashboardHref]=useState(readOnly?"/admin/dashboard":"/examiner/dashboard");
  const [previousHref,setPreviousHref]=useState(readOnly?"/admin/sections/examinations":"/admin/sections/examinations");
- const headers=()=>{const token=localStorage.getItem("examguard_access_token");if(!token){router.replace("/login");return null;}return {Authorization:`Bearer ${token}`,"Content-Type":"application/json"};};
+ const getHeaders=useCallback(()=>{const token=localStorage.getItem("examguard_access_token");if(!token){router.replace("/login");return null;}return {Authorization:`Bearer ${token}`,"Content-Type":"application/json"};},[router]);
  const load=useCallback(async()=>{
   setLoading(true);setError("");
   try{
-   const h=headers();if(!h)return;
+   const h=getHeaders();if(!h)return;
    const [profileR,examR,assignmentR,resultR]=await Promise.all([
     fetch(`${API_URL}/users/me`,{headers:h,cache:"no-store"}),
     fetch(`${API_URL}/exams/${examId}`,{headers:h,cache:"no-store"}),
@@ -60,7 +60,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
    setReviews(Object.fromEntries(reviewEntries.filter((x)=>x[1])));
   }catch(err){setError(err instanceof Error?err.message:"Unable to load examination.");}
   finally{setLoading(false);}
- },[examId,readOnly,router]);
+ },[examId,readOnly,router,getHeaders]);
  useEffect(()=>{void load();},[load]);
  const visible=useMemo(()=>[...students].filter(s=>!search.trim()||[s.full_name,s.email,s.department].some(v=>String(v||"").toLowerCase().includes(search.trim().toLowerCase()))).sort((a,b)=>{
   if(sort==="name-desc")return b.full_name.localeCompare(a.full_name);
@@ -73,7 +73,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
   if(assignmentClosed){setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}
   if(selectedIds.length===0){setAssignmentMessage("Select at least one student.");return;}
   setSaving(true);setAssignmentMessage("");setError("");
-  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/exams/${examId}/assignments`,{method:"POST",headers:h,body:JSON.stringify({student_ids:selectedIds})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||"Unable to assign students.");setAssignmentMessage("Selected students were assigned successfully.");setSelectedIds([]);setShowAssign(false);await load();}
+  try{const h=getHeaders();if(!h)return;const response=await fetch(`${API_URL}/exams/${examId}/assignments`,{method:"POST",headers:h,body:JSON.stringify({student_ids:selectedIds})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||"Unable to assign students.");setAssignmentMessage("Selected students were assigned successfully.");setSelectedIds([]);setShowAssign(false);await load();}
   catch(err){setAssignmentMessage(err instanceof Error?err.message:"Unable to assign students.");}
   finally{setSaving(false);}
  }
@@ -106,9 +106,9 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
    <section className="mt-7 rounded-2xl border border-white/10 bg-slate-900 p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Assigned Students</h2><p className="mt-1 text-sm text-slate-400">{visible.length} student(s)</p></div><div className="flex flex-wrap gap-3"><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search student or department" aria-label="Search students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm"/><select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm"><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option><option value="status">Exam status</option></select><button type="button" onClick={load} className="rounded-lg border border-white/20 px-3 py-2 text-sm">Refresh</button></div></div>
     {visible.length===0?<p className="py-10 text-center text-slate-400">No students are assigned to this examination.</p>:<div className="mt-5 space-y-3">{visible.map(student=>{
-     const review=student.session_id?reviews[student.student_id]:undefined;const answers=review?.questions||[];const graded=answers.filter(q=>q.awarded_marks!==null&&q.awarded_marks!==undefined);const latestEvaluation=Math.max(0,...answers.map(q=>q.evaluation_count||0));const result=student.session_id?resultBySession[student.session_id]:undefined;
-     const evaluationLabel=student.student_exam_status!=="completed"?"Exam not completed":graded.length===0?"Evaluate 0/3":`Evaluated ${latestEvaluation}/3 ${latestEvaluation>=3?"— no further evaluation":"— can evaluate again"}`;
-     const gradeLabel=student.student_exam_status!=="completed"?"Exam not completed":!graded.length?"Not evaluated":result?.result_published?(result.grade||"Grade assigned"):"Grade not assigned";
+     const review=student.session_id?reviews[student.student_id]:undefined;const answers=review?.questions||[];const manualAnswers=answers.filter(q=>!((q as {is_objective?:boolean}).is_objective));const graded=manualAnswers.filter(q=>q.awarded_marks!==null&&q.awarded_marks!==undefined);const latestEvaluation=Math.max(0,...manualAnswers.map(q=>q.evaluation_count||0));const result=student.session_id?resultBySession[student.session_id]:undefined;
+     const evaluationLabel=student.student_exam_status!=="completed"?"Exam not completed":manualAnswers.length===0?"Automatically evaluated":graded.length===0?"Evaluate 0/3":`Evaluated ${latestEvaluation}/3 ${latestEvaluation>=3?"— no further evaluation":"— can evaluate again"}`;
+     const gradeLabel=student.student_exam_status!=="completed"?"Exam not completed":manualAnswers.length>0&&!graded.length?"Not evaluated":result?.result_published?(result.grade||"Grade assigned"):"Grade not assigned";
      return <article key={student.student_id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{student.full_name}</h3><p className="mt-1 text-xs text-slate-400">{student.department||"Department not set"} · {student.email}</p><p className="mt-2 text-xs text-cyan-300">{statusText(student.student_exam_status)}</p></div><div className="flex flex-wrap gap-2">
        {student.session_id&&<Link href={`/staff/manage-exams/${examId}/evaluation/${student.session_id}${readOnly?"?view=1":""}`} className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">{readOnly?"View Answers & Marks":"Evaluate Answers"}</Link>}
