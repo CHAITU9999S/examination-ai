@@ -773,6 +773,19 @@ class AdminActivityLog(Base):
 
 
 # -----------------------------------------
+# PLATFORM SETTINGS
+# -----------------------------------------
+
+class PlatformSetting(Base):
+    __tablename__ = "platform_settings"
+
+    setting_key = Column(String(100), primary_key=True)
+    setting_value = Column(String(500), nullable=False)
+    updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+
+
+# -----------------------------------------
 # BACKWARD-COMPATIBILITY ALIASES
 # -----------------------------------------
 
