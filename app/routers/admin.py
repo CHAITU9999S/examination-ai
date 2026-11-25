@@ -1044,15 +1044,8 @@ def list_all_examinations(
     }
 
 
-@router.get("/performance")
-def get_historical_student_performance(
-    current_user: User = Depends(require_role("admin", "examiner")),
-    db: Session = Depends(get_db),
-):
-    """Return assigned examinations and performance summaries for Student Tracking.
-
-    Both roles see only active assignments made by their own account. The same
-    response shape and permission rule are used for Admins and Examiners.
+def _build_student_performance(current_user: User, db: Session, include_all_assignments: bool = False):
+    """Build student assignment and performance summaries. The caller controls scope.
     """
     StudentAccount = aliased(User)
     CreatorAccount = aliased(User)
@@ -1090,9 +1083,10 @@ def get_historical_student_performance(
         StudentAccount.is_deleted.is_(False),
     )
 
-    assignment_query = assignment_query.filter(
-        ExamAssignment.assigned_by == current_user.id
-    )
+    if not include_all_assignments:
+        assignment_query = assignment_query.filter(
+            ExamAssignment.assigned_by == current_user.id
+        )
 
     assignment_rows = assignment_query.order_by(
         StudentAccount.full_name.asc(),
@@ -1274,6 +1268,24 @@ def get_historical_student_performance(
         # Keep the earlier flat response key for existing API consumers.
         "performance": flat_performance,
     }
+
+
+@router.get("/performance")
+def get_historical_student_performance(
+    current_user: User = Depends(require_role("admin", "examiner")),
+    db: Session = Depends(get_db),
+):
+    """Student Tracking: only assignments created by the logged-in account."""
+    return _build_student_performance(current_user, db, include_all_assignments=False)
+
+
+@router.get("/student-performance")
+def get_platform_student_performance(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin-only Student Performance across all Admin and Examiner assignments."""
+    return _build_student_performance(current_admin, db, include_all_assignments=True)
 
 
 @router.get("/schedules")
