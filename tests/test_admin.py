@@ -1,9 +1,10 @@
 import pytest
+from datetime import datetime, timedelta
 
 from app.auth import hash_password, verify_password
 from app.models import (
     AdminActivityLog, Answer, Exam, ExamQuestion, ExamSession,
-    Option, QuestionBank, Result, User,
+    Option, PlatformSetting, QuestionBank, Result, User,
 )
 
 
@@ -296,7 +297,7 @@ def test_admin_can_delete_all_questions_once_and_preserve_result_history(
         started_at=None,
         submitted_at=None,
         status="submitted",
-        expires_at=None,
+        expires_at=datetime.utcnow() + timedelta(hours=1),
         selected_question_ids=[question.id],
     )
     db_session.add(session)
@@ -317,6 +318,12 @@ def test_admin_can_delete_all_questions_once_and_preserve_result_history(
         is_published=True,
     )
     db_session.add(result)
+    db_session.commit()
+
+    db_session.add(PlatformSetting(
+        setting_key="all_questions_deleted_once",
+        setting_value="false",
+    ))
     db_session.commit()
 
     headers = get_auth_headers(client, admin.email, "AdminPass123!")
