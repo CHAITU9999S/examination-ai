@@ -23,6 +23,8 @@ interface Schedule {
 export default function AdminSchedulesPage() {
   const router = useRouter();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("student-asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -41,6 +43,16 @@ export default function AdminSchedulesPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  const visibleSchedules = [...schedules]
+    .filter((item) => !searchTerm.trim() || [item.student_name, item.student_email, item.exam_title, item.creator_name].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "student-desc") return b.student_name.localeCompare(a.student_name);
+      if (sortBy === "exam") return a.exam_title.localeCompare(b.exam_title);
+      if (sortBy === "start-asc") return a.start_time.localeCompare(b.start_time);
+      if (sortBy === "start-desc") return b.start_time.localeCompare(a.start_time);
+      return a.student_name.localeCompare(b.student_name);
+    });
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -54,12 +66,12 @@ export default function AdminSchedulesPage() {
         <p className="mt-2 text-sm text-slate-400">Active student assignments across Admin-created and Examiner-created examinations.</p>
         {error && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
         <section className="mt-7 rounded-2xl border border-white/10 bg-slate-900 p-5">
-          <p className="mb-4 text-sm text-slate-400">{schedules.length} active assignment(s)</p>
-          {loading ? <p className="py-10 text-center text-slate-400">Loading schedules...</p> : schedules.length === 0 ? <p className="py-10 text-center text-slate-400">No active student assignments yet.</p> : (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-400">{visibleSchedules.length} active assignment(s)</p><div className="flex flex-wrap gap-3"><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search student or examination" aria-label="Search schedules" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"/><select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort schedules" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="student-asc">Student A to Z</option><option value="student-desc">Student Z to A</option><option value="exam">Examination</option><option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option></select></div></div>
+          {loading ? <p className="py-10 text-center text-slate-400">Loading schedules...</p> : visibleSchedules.length === 0 ? <p className="py-10 text-center text-slate-400">No active student assignments yet.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Creator</th><th className="p-3">Student</th><th className="p-3">Opens (IST)</th><th className="p-3">Closes (IST)</th><th className="p-3">Duration</th></tr></thead>
-                <tbody>{schedules.map((item) => <tr key={`${item.exam_id}-${item.student_id}`} className="border-b border-white/5"><td className="p-3 font-medium">{item.exam_title}</td><td className="p-3">{item.creator_name || "—"}</td><td className="p-3">{item.student_name}<span className="block text-xs text-slate-500">{item.student_email}</span></td><td className="p-3 text-slate-300">{new Date(item.start_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3 text-slate-300">{new Date(item.end_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3">{item.duration_minutes} min</td></tr>)}</tbody>
+                <tbody>{visibleSchedules.map((item) => <tr key={`${item.exam_id}-${item.student_id}`} className="border-b border-white/5"><td className="p-3 font-medium">{item.exam_title}</td><td className="p-3">{item.creator_name || "—"}</td><td className="p-3">{item.student_name}<span className="block text-xs text-slate-500">{item.student_email}</span></td><td className="p-3 text-slate-300">{new Date(item.start_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3 text-slate-300">{new Date(item.end_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3">{item.duration_minutes} min</td></tr>)}</tbody>
               </table>
             </div>
           )}
