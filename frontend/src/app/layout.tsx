@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import SectionBreadcrumbNavigation from "./shared/SectionBreadcrumbNavigation";
 
 export const metadata: Metadata = {
   title: {
@@ -40,7 +41,7 @@ export default function RootLayout({
 }: Readonly<RootLayoutProps>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><SectionBreadcrumbNavigation />{children}</body>
     </html>
   );
 }
