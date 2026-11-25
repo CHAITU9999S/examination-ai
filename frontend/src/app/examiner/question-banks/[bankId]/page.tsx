@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -328,9 +329,7 @@ export default function QuestionBankDetailPage() {
             </Link>
             <p className="text-sm text-slate-400">Manage Questions</p>
           </div>
-          <Link href="/examiner/question-banks" className="rounded-lg border border-white/20 px-4 py-2 text-sm">
-            All Banks
-          </Link>
+          <AdminSectionNavigation previousHref="/examiner/question-banks" previousLabel="Manage Question Banks" dashboardHref={dashboardHref} />
         </div>
       </header>
 
