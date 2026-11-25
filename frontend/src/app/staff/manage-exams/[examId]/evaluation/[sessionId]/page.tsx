@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type HistoryItem={evaluation_number:number;marks:number;created_at?:string|null};
 type QuestionReview={
- question_id:number;question_order:number;question_text:string;question_type:string;difficulty:string;
+ question_id:number;question_order:number;question_text:string;question_image_url?:string|null;expected_answer_image_url?:string|null;question_type:string;difficulty:string;
  maximum_marks:number;expected_answer?:string|null;model_answer_text?:string|null;
  options:Array<{id:number;option_text:string;is_correct:boolean}>;
  answer_id:number|null;answer_text?:string|null;selected_options?:string[];answer_image_url?:string|null;
@@ -27,7 +27,7 @@ export default function SessionEvaluationPage(){
   : readOnly? `/admin/exams/${examId}` : `/staff/manage-exams/${examId}`;
  const [data,setData]=useState<ReviewData|null>(null);const [index,setIndex]=useState(0);
  const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");const [grade,setGrade]=useState("");
- const [photo,setPhoto]=useState("");const [answerImage,setAnswerImage]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
+ const [photo,setPhoto]=useState("");const [questionImage,setQuestionImage]=useState("");const [expectedAnswerImage,setExpectedAnswerImage]=useState("");const [answerImage,setAnswerImage]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
  const [loading,setLoading]=useState(true);const [working,setWorking]=useState(false);const [error,setError]=useState("");const [message,setMessage]=useState("");
  const headers=()=>{const token=localStorage.getItem("examguard_access_token");if(!token){router.replace("/login");return null;}return {Authorization:`Bearer ${token}`,"Content-Type":"application/json"};};
  const load=useCallback(async()=>{
@@ -45,6 +45,18 @@ export default function SessionEvaluationPage(){
   return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
  },[data?.face_photo_url]);
  useEffect(()=>{setMarks(current?.awarded_marks!==null&&current?.awarded_marks!==undefined?String(current.awarded_marks):current?.ai_suggested_marks!==null&&current?.ai_suggested_marks!==undefined?String(current.ai_suggested_marks):"");setFeedback(current?.examiner_feedback||"");setSuggestion(current?.ai_suggested_marks!==null&&current?.ai_suggested_marks!==undefined?{suggested_marks:current.ai_suggested_marks,justification:current.ai_justification||"Saved AI suggestion"}:null);setError("");setMessage("");},[current?.answer_id,current?.awarded_marks,current?.ai_suggested_marks,current?.examiner_feedback]);
+ useEffect(()=>{
+  if(!current?.question_image_url){setQuestionImage("");return;}
+  let cancelled=false;let objectUrl:string|null=null;const token=localStorage.getItem("examguard_access_token");if(!token)return;
+  fetch(API_URL+current.question_image_url,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"}).then(r=>{if(!r.ok)throw new Error("Question image unavailable");return r.blob();}).then(blob=>{objectUrl=URL.createObjectURL(blob);if(!cancelled)setQuestionImage(objectUrl);else URL.revokeObjectURL(objectUrl);}).catch(()=>{if(!cancelled)setQuestionImage("");});
+  return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+ },[current?.question_image_url]);
+ useEffect(()=>{
+  if(!current?.expected_answer_image_url){setExpectedAnswerImage("");return;}
+  let cancelled=false;let objectUrl:string|null=null;const token=localStorage.getItem("examguard_access_token");if(!token)return;
+  fetch(API_URL+current.expected_answer_image_url,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"}).then(r=>{if(!r.ok)throw new Error("Expected answer image unavailable");return r.blob();}).then(blob=>{objectUrl=URL.createObjectURL(blob);if(!cancelled)setExpectedAnswerImage(objectUrl);else URL.revokeObjectURL(objectUrl);}).catch(()=>{if(!cancelled)setExpectedAnswerImage("");});
+  return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+ },[current?.expected_answer_image_url]);
  useEffect(()=>{
   if(!current?.answer_image_url){setAnswerImage("");return;}
   let cancelled=false;let objectUrl:string|null=null;const token=localStorage.getItem("examguard_access_token");if(!token)return;
@@ -91,8 +103,8 @@ export default function SessionEvaluationPage(){
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
     <div className="mt-4 flex flex-wrap gap-2">{data.questions.map((q,i)=><button key={q.question_id} type="button" onClick={()=>setIndex(i)} className={i===index?"rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold":"rounded-lg border border-white/15 px-3 py-2 text-xs text-slate-300"}>Q{i+1}</button>)}</div>
     {question&&<div className="mt-6 space-y-5">
-     <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}{o.is_correct&&<span className="ml-2 text-green-300">(Correct answer)</span>}</li>)}</ul>}</div>
-     {question.expected_answer&&<div><h3 className="text-sm font-semibold text-slate-400">Expected answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.expected_answer}</p></div>}
+     <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{questionImage&&<img src={questionImage} alt="Examination question image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}{o.is_correct&&<span className="ml-2 text-green-300">(Correct answer)</span>}</li>)}</ul>}</div>
+     {question.expected_answer&&<div><h3 className="text-sm font-semibold text-slate-400">Expected answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.expected_answer}</p>{expectedAnswerImage&&<img src={expectedAnswerImage} alt="Published expected answer image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}</div>}
      {question.model_answer_text&&<div><h3 className="text-sm font-semibold text-slate-400">Model answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.model_answer_text}</p></div>}
      <div className="rounded-xl bg-slate-800 p-4"><h3 className="text-sm font-semibold text-slate-400">Student's submitted answer</h3><>{question.selected_options&&question.selected_options.length>0?<ul className="mt-2 list-disc space-y-1 pl-5">{question.selected_options.map((option,i)=><li key={`${i}-${option}`} className="whitespace-pre-wrap">{option}</li>)}</ul>:<p className="mt-2 whitespace-pre-wrap">{question.answer_text||"No text answer submitted."}</p>}</>{question.answer_image_url&&<div className="mt-3">{answerImage?<img src={answerImage} alt="Student uploaded answer image" className="max-h-[480px] max-w-full rounded-lg border border-white/10 object-contain"/>:<p className="text-xs text-slate-400">Loading uploaded answer image...</p>}</div>}</div>
      {question.is_objective&&<p className="rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-sm text-blue-200">Objective question — automatically evaluated marks: {question.awarded_marks??"Not available"} / {question.maximum_marks}</p>}
