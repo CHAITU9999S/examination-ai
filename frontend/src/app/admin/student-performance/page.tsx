@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -67,8 +67,6 @@ function marksText(value?: number | null) {
 
 export default function StudentPerformancePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  
   const [students, setStudents] = useState<StudentPerformance[]>([]);
   const [role, setRole] = useState<"admin" | "examiner" | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
@@ -93,7 +91,7 @@ export default function StudentPerformancePage() {
       const headers = { Authorization: \`Bearer \${token}\` };
       const [profileResponse, performanceResponse] = await Promise.all([
         fetch(\`\${API_URL}/users/me\`, { headers, cache: "no-store" }),
-        fetch(\`\${API_URL}/admin/performance\`, { headers, cache: "no-store" }),
+        fetch(\`\${API_URL}/admin/student-performance\`, { headers, cache: "no-store" }),
       ]);
 
       if (profileResponse.status === 401 || profileResponse.status === 403 ||
