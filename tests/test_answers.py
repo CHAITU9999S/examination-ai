@@ -688,6 +688,7 @@ def test_student_can_clear_saved_answer(
         session_id=data["session"].id,
         question_id=data["short_answer"].id,
         answer_text="An earlier response",
+        question_elapsed_seconds=42,
     )
     db_session.add(answer)
     db_session.commit()
@@ -699,10 +700,12 @@ def test_student_can_clear_saved_answer(
 
     assert response.status_code == 200
     assert response.json()["deleted"] is True
-    assert db_session.query(Answer).filter(
+    cleared_answer = db_session.query(Answer).filter(
         Answer.session_id == data["session"].id,
         Answer.question_id == data["short_answer"].id,
-    ).first() is None
+    ).one()
+    assert cleared_answer.answer_text is None
+    assert cleared_answer.question_elapsed_seconds == 42
 
 
 def test_student_cannot_clear_unassigned_answer(
