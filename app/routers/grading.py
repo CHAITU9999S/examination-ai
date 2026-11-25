@@ -371,7 +371,6 @@ def get_all_pending_subjective_answers(
                 "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
                 "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
-                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
             }
             for answer, session, question, exam, result in rows
         ],
@@ -447,6 +446,7 @@ def get_pending_subjective_answers(
                 "image_annotations": answer.image_annotations or [],
                 "rubric_scores": answer.rubric_scores or [],
                 "submitted_at": session.submitted_at,
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
             }
             for answer, session, question in rows
         ],
