@@ -6,7 +6,7 @@ This checklist is for the post-merge, deployed application. Automated GitHub Act
 
 - [ ] Confirm the latest Render backend deployment succeeded.
 - [ ] Confirm the frontend deployment succeeded and uses the correct HTTPS backend URL.
-- [ ] Confirm the PostgreSQL migration head is `0029_account_management` (verify the actual Alembic head from the deployed code before testing).
+- [ ] Confirm the PostgreSQL migration head is `0030_exam_session_navigation` (verify the actual Alembic head from the deployed code before testing).
 - [ ] Confirm the Render CORS allowed-origin list contains the deployed frontend origin.
 - [ ] Keep `AI_GRADING_ENABLED=false` unless an authorized API key has been configured by the project owner.
 - [ ] Do not share Admin passwords, bootstrap tokens, or API keys in chat.
@@ -78,6 +78,24 @@ This checklist is for the post-merge, deployed application. Automated GitHub Act
 4. Change the password with the correct old password; confirm an incorrect old password is rejected and the new password cannot equal the old password.
 5. Confirm password changes are not limited by the three-edit profile-field limit.
 6. Confirm the last ten login details are shown only to the account owner.
+
+
+## Examination player, navigation, timers, and paper selection
+
+1. Start an assigned examination and confirm the browser requests full-screen mode before the official examination begins.
+2. Exit full-screen mode during an active examination; confirm the exit event is recorded for staff review and the student must re-enter full-screen mode before continuing. Confirm neither the overall timer nor the active question timer pauses because of the full-screen exit.
+3. On desktop, confirm the question-number panel appears on the right at approximately 17% of the viewport width.
+4. Confirm question states are distinct: current, answered and saved, visited but unanswered, and not visited. Confirm an answer is shown as saved only after the backend accepts it.
+5. On mobile, confirm the question panel is hidden initially; the menu icon opens and closes it, tapping outside closes it, and selecting a question closes it.
+6. Confirm the first question has no Previous button; middle questions have Previous and Save & Next; the final question has Previous and Save. Confirm Submit Examination remains a separate action.
+7. Confirm navigation saves the current answer first and blocks navigation if the save fails or an image upload is still pending.
+8. For a question with a five-minute limit, spend three minutes on it, move to another question, then return. Confirm the first question resumes with approximately two minutes rather than restarting at five minutes.
+9. Refresh or reconnect while a timed question is active or paused; confirm the saved paper and question timer do not reset. Confirm a question locks when its remaining time reaches zero.
+10. Confirm the overall examination deadline continues independently while a question timer is paused by navigation.
+11. Hide the webcam preview; confirm the camera stream, face detection, gaze checks, tab/focus monitoring, and heartbeat continue. Use the persistent header control to show the preview again.
+12. Confirm proctoring is enabled even when an older examination record has its legacy proctoring flag set to false. Confirm Admins can review all examination records, Examiners only their own examinations, and Students cannot access staff-only records.
+13. Confirm the backend selects questions only from the examination's configured eligible pool, respects configured type/difficulty counts, creates no duplicate question within one paper, and reuses the same saved paper after refresh or reconnect. Confirm different papers are selected for different students when unused combinations are available.
+
 
 ## Subjective grading and publication
 
