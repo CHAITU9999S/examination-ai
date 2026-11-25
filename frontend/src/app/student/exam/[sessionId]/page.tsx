@@ -1043,14 +1043,14 @@ export default function StudentExamPage() {
   }, [currentQuestionId, examAccessToken, isPaused, loadQuestionTimer]);
 
   useEffect(() => {
-    if (questionRemainingSeconds === null || questionRemainingSeconds <= 0) return;
+    if (questionRemainingSeconds === null || questionRemainingSeconds <= 0 || isPaused) return;
     const timer = setInterval(() => {
       setQuestionRemainingSeconds((previous) =>
         previous === null ? null : Math.max(0, previous - 1)
       );
     }, 1000);
     return () => clearInterval(timer);
-  }, [questionRemainingSeconds === null || questionRemainingSeconds <= 0]);
+  }, [questionRemainingSeconds === null || questionRemainingSeconds <= 0, isPaused]);
 
   useEffect(() => {
     if (questionRemainingSeconds !== 0 || questionTimerLocked || !currentQuestionId || isPaused) return;
@@ -1126,7 +1126,7 @@ export default function StudentExamPage() {
         fullscreenExitLoggedRef.current = true;
         handleProctoringEvent({
           event_type: "fullscreen_exit",
-          description: "The student exited full-screen mode during the examination.",
+          description: "Full-screen mode was not active during an in-progress examination session (exit or reconnect).",
         });
       }
     };
