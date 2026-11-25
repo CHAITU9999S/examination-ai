@@ -73,7 +73,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
  const resultBySession=Object.fromEntries(results.map(r=>[r.session_id,r]));
  const visibleEligible=useMemo(()=>[...eligible].filter(s=>!eligibleSearch.trim()||[s.full_name,s.email,s.department].some(v=>String(v||"").toLowerCase().includes(eligibleSearch.trim().toLowerCase()))).sort((a,b)=>eligibleSort==="name-desc"?b.full_name.localeCompare(a.full_name):eligibleSort==="department"?String(a.department||"").localeCompare(String(b.department||"")):a.full_name.localeCompare(b.full_name)),[eligible,eligibleSearch,eligibleSort]);
  async function assignSelected(){
-  if(assignmentClosed){setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}
+  if(assignmentClosed||(exam?.end_time&&Date.now()>=new Date(exam.end_time).getTime())){setAssignmentClosed(true);setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}
   if(selectedIds.length===0){setAssignmentMessage("Select at least one student.");return;}
   setSaving(true);setAssignmentMessage("");setError("");
   try{const h=getHeaders();if(!h)return;const response=await fetch(`${API_URL}/exams/${examId}/assignments`,{method:"POST",headers:h,body:JSON.stringify({student_ids:selectedIds})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||"Unable to assign students.");setAssignmentMessage("Selected students were assigned successfully.");setSelectedIds([]);setShowAssign(false);await load();}
@@ -90,7 +90,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
    {error&&<div role="alert" className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
    {exam&&<section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">{exam.title}</h1><p className="mt-1 text-slate-400">{exam.subject||"No subject"}</p></div>
-     {!readOnly&&<button type="button" onClick={()=>{if(assignmentClosed){setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}setShowAssign(true);setAssignmentMessage("");}} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">＋ Assign to New Student</button>}
+     {!readOnly&&<button type="button" onClick={()=>{if(assignmentClosed||(exam?.end_time&&Date.now()>=new Date(exam.end_time).getTime())){setAssignmentClosed(true);setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}setShowAssign(true);setAssignmentMessage("");}} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">＋ Assign to New Student</button>}
     </div>
     <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
      <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">Start time</p><p className="mt-1">{dateText(exam.start_time)}</p></div>
