@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
@@ -103,6 +103,11 @@ class UserResponse(BaseSchema):
     full_name: str
     email: EmailStr
     department: str | None = None
+    date_of_birth: date | None = None
+    full_name_edit_count: int = 0
+    email_edit_count: int = 0
+    department_edit_count: int = 0
+    date_of_birth_edit_count: int = 0
     role: UserRole
     is_active: bool | None = True
 
@@ -134,6 +139,24 @@ class UserStatusUpdate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+# ==========================================
+# CURRENT USER PROFILE UPDATE
+# ==========================================
+
+class UserProfileUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=150)
+    email: EmailStr | None = None
+    department: str | None = Field(default=None, max_length=100)
+    date_of_birth: date | None = None
+
+
+class LoginHistoryResponse(BaseSchema):
+    id: int
+    logged_in_at: datetime
+    ip_address: str | None = None
+    user_agent: str | None = None
 
 
 # ==========================================
