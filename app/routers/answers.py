@@ -350,18 +350,24 @@ def get_or_start_question_timer(
         # student left this question. Resume from the saved remaining time.
         answer.question_started_at = now
 
-    elapsed_before = max(0, int(answer.question_elapsed_seconds or 0))
-    elapsed_this_visit = (
-        max(0, int((now - answer.question_started_at).total_seconds()))
-        if answer.question_started_at is not None else 0
-    )
-    elapsed = elapsed_before + elapsed_this_visit
-    remaining = max(0, int(limit_seconds) - elapsed)
-
-    if remaining == 0:
-        answer.is_locked = True
+    if answer.is_locked:
+        elapsed = int(limit_seconds)
+        remaining = 0
         answer.question_elapsed_seconds = int(limit_seconds)
         answer.question_started_at = None
+    else:
+        elapsed_before = max(0, int(answer.question_elapsed_seconds or 0))
+        elapsed_this_visit = (
+            max(0, int((now - answer.question_started_at).total_seconds()))
+            if answer.question_started_at is not None else 0
+        )
+        elapsed = elapsed_before + elapsed_this_visit
+        remaining = max(0, int(limit_seconds) - elapsed)
+
+        if remaining == 0:
+            answer.is_locked = True
+            answer.question_elapsed_seconds = int(limit_seconds)
+            answer.question_started_at = None
     db.commit()
 
     return {
@@ -440,7 +446,10 @@ def pause_question_timer(
             question_elapsed_seconds=0,
         )
         db.add(answer)
-    elif answer.question_started_at is not None and not answer.is_locked:
+    elif answer.is_locked:
+        answer.question_elapsed_seconds = int(limit_seconds)
+        answer.question_started_at = None
+    elif answer.question_started_at is not None:
         elapsed = max(0, int((now - answer.question_started_at).total_seconds()))
         answer.question_elapsed_seconds = min(
             int(limit_seconds),
@@ -449,6 +458,8 @@ def pause_question_timer(
         answer.question_started_at = None
 
     elapsed_total = min(int(limit_seconds), max(0, int(answer.question_elapsed_seconds or 0)))
+    if answer.is_locked:
+        elapsed_total = int(limit_seconds)
     remaining = max(0, int(limit_seconds) - elapsed_total)
     if remaining == 0:
         answer.is_locked = True
