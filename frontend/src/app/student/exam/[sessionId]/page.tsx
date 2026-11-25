@@ -50,7 +50,9 @@ interface ExamPaper {
   exam_summary?: {
     exam_title: string; subject?: string | null; creator_name: string; student_name: string;
     student_email?: string | null; student_department?: string | null; total_questions: number;
-    question_type_breakdown: Record<string, number>; duration_minutes: number; maximum_marks: number;
+    question_type_breakdown: Record<string, number>;
+    marking_scheme: Array<{ question_type: string; difficulty: string; count: number; positive_marks_per_question: number; negative_marks_per_question: number }>;
+    duration_minutes: number; maximum_marks: number;
     negative_marking_enabled: boolean; total_possible_negative_marks: number;
     proctoring_enabled: boolean; randomize_questions: boolean; instructions?: string[] | string;
   };
@@ -1223,6 +1225,17 @@ export default function StudentExamPage() {
                     ["AI proctoring", summary.proctoring_enabled ? "Enabled" : "Disabled"],
                     ["Question order", summary.randomize_questions ? "Randomized" : "Configured order"],
                   ].map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
+                  <h3 className="font-semibold">Positive and negative marking</h3>
+                  <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    {(summary.marking_scheme || []).map((item, index) => (
+                      <div key={index} className="flex flex-wrap justify-between gap-2 border-b border-white/5 pb-2 last:border-0">
+                        <span>{item.question_type} · {item.difficulty} · {item.count} question(s)</span>
+                        <span>+{item.positive_marks_per_question} / -{item.negative_marks_per_question}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
                   <h3 className="font-semibold">Question type breakdown</h3>
