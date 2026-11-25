@@ -20,6 +20,7 @@ interface ExamResultItem {
   result_published: boolean; obtained_marks?: number | null;
   negative_marks?: number | null; result_total_marks?: number | null;
   percentage?: number | null; grade?: string | null; published_at?: string | null;
+  instructions: string[]; randomize_questions: boolean; proctoring_enabled: boolean;
 }
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -92,6 +93,11 @@ export default function StudentResultsPage() {
               </div>
               {exam.question_breakdown.length > 0 && <div className="mt-4 rounded-lg border border-white/10 bg-slate-900 p-3"><p className="text-xs font-semibold text-slate-300">Question breakdown</p><div className="mt-2 flex flex-wrap gap-2">{exam.question_breakdown.map((group, index) =>
                 <span key={index} className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300">{group.question_type.replaceAll("_", " ")} · {group.difficulty} · {group.count}</span>)}</div></div>}
+              <p className="mt-3 text-sm text-slate-400">Question order: {exam.randomize_questions ? "Randomized" : "Configured order"} · AI proctoring: {exam.proctoring_enabled ? "Enabled" : "Disabled"}</p>
+              {exam.instructions.length > 0 && <div className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3">
+                <p className="text-sm font-semibold text-blue-200">Creator instructions</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-300">{exam.instructions.map((instruction, index) => <li key={index}>{instruction}</li>)}</ul>
+              </div>}
               <div className="mt-5 rounded-lg border border-white/10 bg-slate-900 p-4">
                 {exam.result_published ? <>
                   <p className="text-sm font-semibold text-emerald-300">Result Published</p>
