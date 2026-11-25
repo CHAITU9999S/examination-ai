@@ -1474,6 +1474,14 @@ export default function StudentExamPage() {
             >
               {pauseBusy ? "Please wait..." : isPaused ? "Resume Exam" : "Pause Exam"}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowSubmitConfirmation(true)}
+              disabled={submitting || !faceVerified}
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
+            >
+              Submit Examination
+            </button>
           </div>
         </div>
       </header>
