@@ -335,17 +335,8 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
                 "negative_marks_per_question": negative_per_question,
             }
         marking_groups[group_key]["count"] += 1
-    creator = db.query(User).filter(User.id == exam.created_by).first()
+    attribution = _get_exam_attribution(session, exam, db)
     student = db.query(User).filter(User.id == session.student_id).first()
-    assignment = db.query(ExamAssignment).filter(
-        ExamAssignment.exam_id == exam.id,
-        ExamAssignment.student_id == session.student_id,
-        ExamAssignment.is_active.is_(True),
-    ).first()
-    assigner = (
-        db.query(User).filter(User.id == assignment.assigned_by).first()
-        if assignment is not None else None
-    )
     settings = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
     raw_instructions = settings.get("instructions") or settings.get("exam_instructions") or []
     if isinstance(raw_instructions, str):
@@ -357,10 +348,7 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
     return {
         "exam_title": exam.title,
         "subject": exam.subject,
-        "creator_name": creator.full_name if creator else "Unknown",
-        "creator_role": creator.role if creator else None,
-        "assigned_by_name": assigner.full_name if assigner else "Unknown",
-        "assigned_by_role": assigner.role if assigner else None,
+        **attribution,
         "student_name": student.full_name if student else "Unknown",
         "student_email": student.email if student else None,
         "student_department": student.department if student else None,
