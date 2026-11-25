@@ -14,6 +14,8 @@ interface WebcamPreviewProps {
   ) => void;
   onStreamReady?: (stream: MediaStream | null) => void;
   facingMode?: "user" | "environment";
+  showPreview?: boolean;
+  compact?: boolean;
 }
 
 export default function WebcamPreview({
@@ -21,6 +23,8 @@ export default function WebcamPreview({
   onCameraStatusChange,
   onStreamReady,
   facingMode = "user",
+  showPreview = true,
+  compact = false,
 }: WebcamPreviewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -143,7 +147,7 @@ export default function WebcamPreview({
   ]);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${compact ? "text-xs" : ""}`}>
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
         <h2 className="font-semibold text-slate-900">
           Webcam Proctoring
@@ -178,22 +182,24 @@ export default function WebcamPreview({
           playsInline
           aria-label="Live examination webcam preview"
           className={`h-full w-full object-cover ${
-            status === "active" ? "block" : "hidden"
+            status === "active" && showPreview ? "block" : "hidden"
           }`}
         />
 
-        {status !== "active" && (
+        {(status !== "active" || !showPreview) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center text-white">
             <span className="text-4xl" aria-hidden="true">
-              {status === "loading" ? "⌛" : "📷"}
+              {status === "loading" ? "⌛" : status === "active" ? "◉" : "📷"}
             </span>
 
             <p className="mt-3 text-sm font-medium">
               {status === "loading"
                 ? "Starting webcam..."
-                : status === "disabled"
-                  ? "Webcam is disabled for this examination."
-                  : "Webcam preview is unavailable."}
+                : status === "active" && !showPreview
+                  ? "Preview hidden. Camera monitoring continues."
+                  : status === "disabled"
+                    ? "Webcam is disabled for this examination."
+                    : "Webcam preview is unavailable."}
             </p>
           </div>
         )}
