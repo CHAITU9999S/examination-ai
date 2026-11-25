@@ -67,32 +67,54 @@ def create_question_bank(
     return {"message": "Question bank created.", "bank_id": bank.id}
 
 
+def _serialize_question_bank(db: Session, bank: QuestionCollection, owner: User | None = None):
+    """Return the same complete summary for browse and owner-management lists."""
+    if owner is None:
+        owner = db.query(User).filter(User.id == bank.created_by).first()
+
+    rows = db.query(Question.question_type, Question.difficulty, Question.marks).join(
+        QuestionCollectionItem,
+        QuestionCollectionItem.question_id == Question.id,
+    ).filter(
+        QuestionCollectionItem.collection_id == bank.id,
+    ).all()
+
+    type_counts: dict[str, int] = {}
+    difficulty_counts: dict[str, int] = {}
+    total_marks = 0.0
+    for question_type, difficulty, marks in rows:
+        type_name = getattr(question_type, "value", question_type)
+        type_counts[type_name] = type_counts.get(type_name, 0) + 1
+        level = (difficulty or "unspecified").casefold()
+        difficulty_counts[level] = difficulty_counts.get(level, 0) + 1
+        total_marks += float(marks or 0)
+
+    return {
+        "id": bank.id,
+        "name": bank.name,
+        "description": bank.description,
+        "subject": bank.subject,
+        "question_count": len(rows),
+        "question_types": type_counts,
+        "difficulty_counts": difficulty_counts,
+        "maximum_marks": total_marks,
+        "created_by": owner.id if owner else bank.created_by,
+        "created_by_name": owner.full_name if owner else "Deleted user",
+        "created_by_role": owner.role if owner else "unknown",
+        "created_at": bank.created_at,
+    }
+
+
 @router.get("/browse")
 def browse_question_banks(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("admin", "examiner")),
 ):
-    """Show all question banks without giving permission to change them."""
+    """Show every Admin and Examiner question bank in read-only browsing."""
     rows = db.query(QuestionCollection, User).join(
         User, User.id == QuestionCollection.created_by
-    ).order_by(QuestionCollection.id.desc()).all()
-    result = []
-    for bank, owner in rows:
-        type_rows = db.query(Question.question_type).join(
-            QuestionCollectionItem, QuestionCollectionItem.question_id == Question.id
-        ).filter(QuestionCollectionItem.collection_id == bank.id).all()
-        type_counts = {}
-        for (question_type,) in type_rows:
-            value = getattr(question_type, "value", question_type)
-            type_counts[value] = type_counts.get(value, 0) + 1
-        result.append({
-            "id": bank.id, "name": bank.name, "description": bank.description,
-            "subject": bank.subject, "question_count": len(type_rows),
-            "question_types": type_counts, "created_by": owner.id,
-            "created_by_name": owner.full_name, "created_by_role": owner.role,
-            "created_at": bank.created_at,
-        })
-    return result
+    ).order_by(QuestionCollection.created_at.desc(), QuestionCollection.id.desc()).all()
+    return [_serialize_question_bank(db, bank, owner) for bank, owner in rows]
 
 
 @router.get("/")
@@ -100,35 +122,11 @@ def list_question_banks(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("admin", "examiner")),
 ):
+    """Return only the signed-in creator's question banks for management."""
     banks = db.query(QuestionCollection).filter(
         QuestionCollection.created_by == current_user.id
-    ).order_by(QuestionCollection.id.desc()).all()
-
-    return [
-        {
-            "id": bank.id,
-            "name": bank.name,
-            "description": bank.description,
-            "subject": bank.subject,
-            "question_count": db.query(QuestionCollectionItem.id).filter(
-                QuestionCollectionItem.collection_id == bank.id
-            ).count(),
-            "question_types": {
-                getattr(question_type, "value", question_type): count
-                for question_type, count in db.query(
-                    Question.question_type,
-                    func.count(Question.id),
-                ).join(
-                    QuestionCollectionItem,
-                    QuestionCollectionItem.question_id == Question.id,
-                ).filter(
-                    QuestionCollectionItem.collection_id == bank.id,
-                ).group_by(Question.question_type).all()
-            },
-            "created_at": bank.created_at,
-        }
-        for bank in banks
-    ]
+    ).order_by(QuestionCollection.created_at.desc(), QuestionCollection.id.desc()).all()
+    return [_serialize_question_bank(db, bank, current_user) for bank in banks]
 
 
 @router.patch("/{bank_id}")
