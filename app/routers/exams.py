@@ -309,6 +309,204 @@ def list_exams(
 
 
 
+
+# ==========================================
+# STUDENT EXAMINATION OVERVIEW
+# ==========================================
+
+@router.get("/student-overview")
+def get_student_examination_overview(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("student")),
+):
+    """Return only this student's active assignments and safe exam details."""
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    assignments = db.query(ExamAssignment, Exam).join(
+        Exam, Exam.id == ExamAssignment.exam_id
+    ).filter(
+        ExamAssignment.student_id == current_user.id,
+        ExamAssignment.is_active.is_(True),
+    ).order_by(
+        Exam.end_time.asc().nullslast(),
+        Exam.id.desc(),
+    ).all()
+
+    def as_utc(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    items = []
+    for assignment, exam in assignments:
+        creator = db.query(User).filter(User.id == exam.created_by).first()
+        question_rows = db.query(
+            QuestionBank.question_type,
+            QuestionBank.difficulty,
+            QuestionBank.marks,
+            QuestionBank.negative_marks,
+            ExamQuestion.question_time_limit_seconds,
+        ).join(
+            ExamQuestion, ExamQuestion.question_id == QuestionBank.id
+        ).filter(
+            ExamQuestion.exam_id == exam.id
+        ).all()
+
+        group_rows = {}
+        for question_type, difficulty, marks, negative_marks, time_limit in question_rows:
+            q_type = getattr(question_type, "value", question_type)
+            key = (str(difficulty or "unspecified").lower(), str(q_type))
+            group = group_rows.setdefault(key, {
+                "difficulty": key[0],
+                "question_type": key[1],
+                "count": 0,
+                "marks_per_question": float(marks or 0),
+                "negative_marks_per_question": abs(float(negative_marks or 0)),
+                "question_time_limit_seconds": time_limit,
+            })
+            group["count"] += 1
+
+        selection_rules = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+        configured_counts = selection_rules.get("group_counts")
+        breakdown = []
+        maximum_marks = 0.0
+        total_negative_marks = 0.0
+        if isinstance(configured_counts, dict) and configured_counts:
+            for raw_key, raw_count in configured_counts.items():
+                if "|" not in raw_key:
+                    continue
+                difficulty, q_type = raw_key.split("|", 1)
+                try:
+                    count = max(0, int(raw_count))
+                except (TypeError, ValueError):
+                    continue
+                if count == 0:
+                    continue
+                group = group_rows.get((difficulty.lower(), q_type))
+                if group is None:
+                    continue
+                breakdown.append({
+                    "difficulty": difficulty,
+                    "question_type": q_type,
+                    "count": count,
+                    "marks_per_question": group["marks_per_question"],
+                    "negative_marks_per_question": group["negative_marks_per_question"],
+                    "question_time_limit_seconds": group["question_time_limit_seconds"],
+                })
+                maximum_marks += group["marks_per_question"] * count
+                if exam.negative_marking:
+                    total_negative_marks += group["negative_marks_per_question"] * count
+        else:
+            for group in group_rows.values():
+                breakdown.append(dict(group))
+                maximum_marks += group["marks_per_question"] * group["count"]
+                if exam.negative_marking:
+                    total_negative_marks += group["negative_marks_per_question"] * group["count"]
+
+        breakdown.sort(key=lambda row: (row["difficulty"], row["question_type"]))
+        question_count = sum(row["count"] for row in breakdown)
+        instructions_value = (
+            selection_rules.get("instructions")
+            or selection_rules.get("exam_instructions")
+            or []
+        )
+        if isinstance(instructions_value, str):
+            instructions = [instructions_value] if instructions_value.strip() else []
+        elif isinstance(instructions_value, list):
+            instructions = [
+                item.strip() for item in instructions_value
+                if isinstance(item, str) and item.strip()
+            ]
+        else:
+            instructions = []
+
+        session = db.query(ExamSession).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.student_id == current_user.id,
+        ).order_by(ExamSession.id.desc()).first()
+
+        result = None
+        if session is not None:
+            result = db.query(Result).filter(
+                Result.session_id == session.id,
+                Result.is_published.is_(True),
+            ).first()
+
+        start_at = normalize_to_naive_utc(exam.start_time)
+        end_at = normalize_to_naive_utc(exam.end_time)
+        has_schedule = start_at is not None and end_at is not None
+        submitted_statuses = {"submitted", "auto_submitted"}
+        session_status = session.status if session is not None else None
+        is_submitted = (
+            session_status in submitted_statuses
+            or (session is not None and session.submitted_at is not None and session_status != "expired")
+        )
+        is_expired = (
+            session_status == "expired"
+            or (has_schedule and now >= end_at and not is_submitted)
+        )
+
+        if is_submitted:
+            category = "completed"
+        elif is_expired:
+            category = "expired"
+        elif not has_schedule:
+            category = "upcoming"
+        else:
+            category = "available"
+
+        is_pending = bool(
+            session is not None
+            and session_status == "in_progress"
+            and (session.is_paused or session.started_at is not None)
+        )
+        can_start = bool(
+            category == "available"
+            and now >= start_at
+            and now < end_at
+            and (session is None or session_status in {"not_started", "in_progress"})
+        )
+
+        items.append({
+            "id": exam.id,
+            "title": exam.title,
+            "subject": exam.subject,
+            "creator_name": creator.full_name if creator else "Unknown",
+            "creator_role": creator.role if creator else None,
+            "duration_minutes": exam.duration_minutes,
+            "total_questions": question_count or int(exam.total_questions or 0),
+            "question_breakdown": breakdown,
+            "maximum_marks": round(maximum_marks, 2),
+            "negative_marking": bool(exam.negative_marking),
+            "total_possible_negative_marks": round(total_negative_marks, 2),
+            "randomize_questions": bool(exam.randomize_questions),
+            "proctoring_enabled": bool(exam.proctoring_enabled),
+            "start_time": as_utc(exam.start_time),
+            "end_time": as_utc(exam.end_time),
+            "instructions": instructions,
+            "session_id": session.id if session else None,
+            "session_status": session_status,
+            "is_paused": bool(session.is_paused) if session else False,
+            "is_pending": is_pending,
+            "can_start": can_start,
+            "category": category,
+            "submitted_at": as_utc(session.submitted_at) if session else None,
+            "result_published": bool(result),
+            "obtained_marks": result.obtained_marks if result else None,
+            "negative_marks": (
+                round(max(0.0, -float(result.obtained_marks or 0)), 2)
+                if result else None
+            ),
+            "result_total_marks": result.total_marks if result else None,
+            "percentage": result.percentage if result else None,
+            "grade": result.grade if result else None,
+            "published_at": as_utc(result.published_at) if result else None,
+        })
+
+    return {"examinations": items, "server_time": datetime.now(timezone.utc)}
+
 # ==========================================
 # ADD A QUESTION TO AN EXAMINATION BANK
 # ==========================================
