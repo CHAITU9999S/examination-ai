@@ -1151,6 +1151,9 @@ def get_historical_student_performance(
     return {
         "total_students": len(student_items),
         "total_attempts": len(flat_performance),
+        "total_published_results": sum(
+            1 for attempt in flat_performance if attempt["result_published"]
+        ),
         "students": list(student_items.values()),
         # Keep the earlier flat response key for existing API consumers.
         "performance": flat_performance,
