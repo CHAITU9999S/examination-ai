@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,6 +11,10 @@ interface HistoricalResult {
   result_id: number;
   session_id: number;
   exam_title: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   student_name: string;
   obtained_marks: number;
   total_marks: number;
@@ -23,6 +27,10 @@ interface ReviewSession {
   session_id: number;
   exam_id: number;
   exam_title: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   student_id: number;
   student_name: string;
   session_status: string;
@@ -51,6 +59,8 @@ export default function ExaminerResultsPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
   const [history, setHistory] = useState<HistoricalResult[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("latest");
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<number | null>(null);
@@ -159,6 +169,28 @@ export default function ExaminerResultsPage() {
     }
   }
 
+  const visibleSessions = useMemo(() => [...sessions]
+    .filter((item) => !searchTerm.trim() || [
+      item.exam_title, item.student_name, item.creator_name, item.assigned_by_name,
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "exam") return a.exam_title.localeCompare(b.exam_title);
+      if (sortBy === "student") return a.student_name.localeCompare(b.student_name);
+      if (sortBy === "oldest") return String(a.submitted_at || "").localeCompare(String(b.submitted_at || ""));
+      return String(b.submitted_at || "").localeCompare(String(a.submitted_at || ""));
+    }), [sessions, searchTerm, sortBy]);
+  const visibleHistory = useMemo(() => [...history]
+    .filter((item) => !searchTerm.trim() || [
+      item.exam_title, item.student_name, item.creator_name, item.assigned_by_name,
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "exam") return a.exam_title.localeCompare(b.exam_title);
+      if (sortBy === "student") return a.student_name.localeCompare(b.student_name);
+      if (sortBy === "marks") return b.obtained_marks - a.obtained_marks;
+      if (sortBy === "oldest") return String(a.submitted_at || "").localeCompare(String(b.submitted_at || ""));
+      return String(b.submitted_at || "").localeCompare(String(a.submitted_at || ""));
+    }), [history, searchTerm, sortBy]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -183,7 +215,12 @@ export default function ExaminerResultsPage() {
               Review and publish results for examinations you created. Grade all subjective answers before publishing.
             </p>
           </div>
-          <button
+          <div className="flex flex-wrap gap-3">
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search exam, student, creator, or assigner" aria-label="Search result review" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort result review" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+              <option value="latest">Latest first</option><option value="oldest">Oldest first</option><option value="exam">Examination name</option><option value="student">Student name</option><option value="marks">Highest marks</option>
+            </select>
+                      <button
             type="button"
             onClick={loadSessions}
             disabled={loading}
@@ -191,6 +228,7 @@ export default function ExaminerResultsPage() {
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
+          </div>
         </div>
 
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
@@ -199,7 +237,7 @@ export default function ExaminerResultsPage() {
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
           {loading ? (
             <p className="py-12 text-center text-slate-400">Loading submitted sessions...</p>
-          ) : sessions.length === 0 ? (
+          ) : visibleSessions.length === 0 ? (
             <p className="py-12 text-center text-slate-400">No submitted sessions are available for review.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -217,9 +255,9 @@ export default function ExaminerResultsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sessions.map((session) => (
+                  {visibleSessions.map((session) => (
                     <tr key={session.session_id} className="border-b border-white/5 last:border-0">
-                      <td className="px-4 py-4 font-semibold">{session.exam_title}</td>
+                      <td className="px-4 py-4 font-semibold">{session.exam_title}<span className="mt-1 block text-xs font-normal text-slate-400">Created by: {session.creator_name || "Unknown"} · Assigned by: {session.assigned_by_name || "Unknown"}</span></td>
                       <td className="px-4 py-4">{session.student_name}</td>
                       <td className="px-4 py-4">{facePhotoUrls[session.session_id] ? <img src={facePhotoUrls[session.session_id]} alt="Candidate face captured before the examination" className="h-14 w-14 rounded-lg object-cover" /> : "—"}</td>
                       <td className="px-4 py-4">{session.session_status === "in_progress" ? "In progress" : session.session_status === "not_started" ? "Pre-start" : session.session_status === "auto_submitted" ? "Auto-submitted" : "Submitted"}</td>
@@ -264,15 +302,15 @@ export default function ExaminerResultsPage() {
               <h2 className="text-xl font-bold">Historical Results</h2>
               <p className="mt-1 text-sm text-slate-400">Previously calculated results for examinations you created.</p>
             </div>
-            <span className="text-sm text-slate-400">{history.length} result(s)</span>
+            <span className="text-sm text-slate-400">{visibleHistory.length} of {history.length} result(s)</span>
           </div>
-          {history.length === 0 ? (
+          {visibleHistory.length === 0 ? (
             <p className="py-8 text-center text-slate-400">No historical results are available.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Student</th><th className="p-3">Score</th><th className="p-3">Percentage</th><th className="p-3">Grade</th><th className="p-3">Status</th></tr></thead>
-                <tbody>{history.map((item) => <tr key={item.result_id} className="border-b border-white/5"><td className="p-3">{item.exam_title}</td><td className="p-3">{item.student_name}</td><td className="p-3 tabular-nums">{item.obtained_marks} / {item.total_marks}</td><td className="p-3 tabular-nums">{Number(item.percentage).toFixed(2)}%</td><td className="p-3 font-semibold text-cyan-300">{item.grade || "—"}</td><td className="p-3">{item.published ? "Published" : "Awaiting publication"}</td></tr>)}</tbody>
+                <tbody>{visibleHistory.map((item) => <tr key={item.result_id} className="border-b border-white/5"><td className="p-3">{item.exam_title}<span className="mt-1 block text-xs text-slate-400">Created by: {item.creator_name || "Unknown"} · Assigned by: {item.assigned_by_name || "Unknown"}</span></td><td className="p-3">{item.student_name}</td><td className="p-3 tabular-nums">{item.obtained_marks} / {item.total_marks}</td><td className="p-3 tabular-nums">{Number(item.percentage).toFixed(2)}%</td><td className="p-3 font-semibold text-cyan-300">{item.grade || "—"}</td><td className="p-3">{item.published ? "Published" : "Awaiting publication"}</td></tr>)}</tbody>
               </table>
             </div>
           )}
