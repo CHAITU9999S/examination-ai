@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type AdminSectionNavigationProps = {
   previousHref: string;
@@ -15,6 +18,15 @@ export default function AdminSectionNavigation({
   previousLabel = "Previous Section",
   dashboardHref = "/admin/dashboard",
 }: AdminSectionNavigationProps) {
+  const pathname = usePathname() || "";
+  const globalBreadcrumbOwnsNavigation =
+    /^\/(admin|examiner|student|staff)\//.test(pathname) &&
+    !["/admin/dashboard", "/examiner/dashboard", "/student/dashboard"].includes(pathname);
+
+  // The root breadcrumb provides the complete previous-section path on these
+  // routes, so rendering this local navigation would duplicate it.
+  if (globalBreadcrumbOwnsNavigation) return null;
+
   return (
     <nav aria-label="Admin page navigation" className="flex flex-wrap items-center justify-end gap-2">
       <Link
