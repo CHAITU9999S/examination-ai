@@ -1153,6 +1153,7 @@ def get_historical_student_performance(
         ), 2)
         correct_answers = 0
         wrong_answers = 0
+        partially_correct_answers = 0
         for answer in evaluated_answers:
             maximum = question_marks.get(answer.question_id)
             if maximum is None:
@@ -1160,8 +1161,10 @@ def get_historical_student_performance(
             awarded = float(answer.awarded_marks)
             if abs(awarded - maximum) < 0.0001:
                 correct_answers += 1
-            elif awarded < maximum:
+            elif awarded <= 0:
                 wrong_answers += 1
+            elif awarded < maximum:
+                partially_correct_answers += 1
 
         marked_values = [float(answer.awarded_marks) for answer in evaluated_answers]
         obtained_marks = (
@@ -1220,6 +1223,7 @@ def get_historical_student_performance(
             "total_questions": total_questions,
             "correct_answers": correct_answers,
             "wrong_answers": wrong_answers,
+            "partially_correct_answers": partially_correct_answers,
             "unanswered_questions": max(0, total_questions - len(answers)),
             "positive_marks": positive_marks,
             "negative_marks": negative_marks,
