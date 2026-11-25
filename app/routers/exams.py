@@ -994,6 +994,12 @@ def assign_exam_to_students(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can assign students.")
+    # Enforce the schedule deadline on the server, including direct API calls.
+    if exam.end_time is not None and datetime.utcnow() >= exam.end_time:
+        raise HTTPException(
+            status_code=409,
+            detail="Exam has ended. New students cannot be assigned.",
+        )
     if len(data.student_ids) != len(set(data.student_ids)):
         raise HTTPException(status_code=400, detail="Duplicate student IDs are not allowed.")
 
@@ -1064,21 +1070,40 @@ def list_exam_assignments(
     sessions = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id
     ).all()
-    session_status_by_student = {
-        session.student_id: session.status
+    session_by_student = {
+        session.student_id: session
         for session in sessions
     }
+    now = datetime.utcnow()
+
+    def student_exam_status(session):
+        if session is None:
+            if exam.start_time is not None and now < exam.start_time:
+                return "schedule_not_started"
+            return "not_taken"
+        if session.status == "in_progress":
+            return "partially_attempted"
+        if session.status in {"submitted", "auto_submitted", "expired"}:
+            return "completed"
+        if session.status == "not_started":
+            return "not_taken"
+        return "not_taken"
 
     return {
         "exam_id": exam_id,
+        "exam_end_time": exam.end_time,
+        "assignment_closed": bool(exam.end_time is not None and now >= exam.end_time),
         "students": [
             {
                 "student_id": user.id,
                 "full_name": user.full_name,
                 "email": user.email,
+                "department": user.department,
                 "assigned_at": assignment.assigned_at,
                 "is_active": assignment.is_active,
-                "session_status": session_status_by_student.get(user.id),
+                "session_id": session_by_student[user.id].id if user.id in session_by_student else None,
+                "session_status": session_by_student[user.id].status if user.id in session_by_student else None,
+                "student_exam_status": student_exam_status(session_by_student.get(user.id)),
             }
             for assignment, user in rows
         ],
@@ -1367,14 +1392,26 @@ def list_eligible_students_for_exam(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can assign students.")
+    now = datetime.utcnow()
+    assignment_closed = bool(exam.end_time is not None and now >= exam.end_time)
+    assigned_ids = {
+        row[0] for row in db.query(ExamAssignment.student_id).filter(
+            ExamAssignment.exam_id == exam_id,
+            ExamAssignment.is_active.is_(True),
+        ).all()
+    }
     students = db.query(User).filter(
         User.role == UserRole.STUDENT.value,
         User.is_active.is_(True),
+        User.is_deleted.is_(False),
     ).order_by(User.full_name.asc()).all()
     return {
+        "assignment_closed": assignment_closed,
+        "message": "Exam has ended. New students cannot be assigned." if assignment_closed else None,
         "students": [
-            {"id": student.id, "full_name": student.full_name, "email": student.email}
+            {"id": student.id, "full_name": student.full_name, "email": student.email, "department": student.department}
             for student in students
+            if student.id not in assigned_ids
         ]
     }
 
