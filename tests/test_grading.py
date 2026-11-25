@@ -6,7 +6,7 @@ from PIL import Image
 import pytest
 
 from app.auth import create_access_token
-from app.models import Answer, Exam, ExamSession, QuestionBank, Result, User
+from app.models import Answer, Exam, ExamSession, Option, QuestionBank, Result, User
 
 
 @pytest.fixture
@@ -770,4 +770,54 @@ def test_staff_can_view_student_answers_in_the_exact_paper_order(
         assert payload["questions"][0]["question_order"] == 1
         assert payload["questions"][0]["question_id"] == data["question"].id
         assert payload["questions"][0]["answer_text"] == data["answer"].answer_text
+
+def test_review_displays_selected_option_text_instead_of_only_option_ids(
+    client, db_session, grading_data
+):
+    data = grading_data
+    question = QuestionBank(
+        question_text="What is 2 + 2?",
+        question_type="MCQ",
+        subject="Mathematics",
+        difficulty="easy",
+        marks=1,
+        created_by=data["examiner"].id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    correct_option = Option(
+        question_id=question.id,
+        option_text="4",
+        is_correct=True,
+    )
+    db_session.add_all([
+        correct_option,
+        Option(question_id=question.id, option_text="5", is_correct=False),
+    ])
+    db_session.flush()
+    session = ExamSession(
+        exam_id=data["exam"].id,
+        student_id=data["student"].id,
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5),
+        submitted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        status="submitted",
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    db_session.add(Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text=f"[{correct_option.id}]",
+    ))
+    db_session.commit()
+
+    response = client.get(
+        f"/grading/sessions/{session.id}/review",
+        headers=auth_headers(data["examiner"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["questions"][0]["selected_options"] == ["4"]
 
