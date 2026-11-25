@@ -2,13 +2,13 @@ from datetime import datetime, timezone
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
 from app.auth import hash_password
 from app.database import get_db
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, require_role
 from app.models import (
     AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment,
     ExamConfigurationRevision, ExamQuestion, ExamQuestionMarksRevision,
@@ -1046,12 +1046,17 @@ def list_all_examinations(
 
 @router.get("/performance")
 def get_historical_student_performance(
-    current_admin: User = Depends(get_current_admin),
+    current_user: User = Depends(require_role("admin", "examiner")),
     db: Session = Depends(get_db),
 ):
-    """Return each active Student and their completed examination attempts."""
+    """Return assigned examinations and performance summaries for Student Tracking.
+
+    Admins see every active assignment. Examiners see only assignments made
+    by their own account. The same response shape is used for both roles.
+    """
     StudentAccount = aliased(User)
     CreatorAccount = aliased(User)
+
     students = db.query(User).filter(
         User.role == UserRole.STUDENT.value,
         User.is_deleted.is_(False),
@@ -1063,75 +1068,144 @@ def get_historical_student_performance(
             "student_name": student.full_name,
             "student_email": student.email,
             "department": student.department,
+            "total_assigned_examinations": 0,
+            "total_taken_examinations": 0,
+            "total_started_examinations": 0,
             "attempts": [],
         }
         for student in students
     }
 
-    rows = db.query(
-        ExamSession, Exam, StudentAccount, CreatorAccount, Result
+    assignment_query = db.query(
+        ExamAssignment, Exam, StudentAccount, CreatorAccount
     ).join(
-        Exam, Exam.id == ExamSession.exam_id
+        Exam, Exam.id == ExamAssignment.exam_id
     ).join(
-        StudentAccount, StudentAccount.id == ExamSession.student_id
+        StudentAccount, StudentAccount.id == ExamAssignment.student_id
     ).outerjoin(
         CreatorAccount, CreatorAccount.id == Exam.created_by
-    ).outerjoin(
-        Result, Result.session_id == ExamSession.id
     ).filter(
+        ExamAssignment.is_active.is_(True),
         StudentAccount.role == UserRole.STUDENT.value,
         StudentAccount.is_deleted.is_(False),
-        or_(
-            ExamSession.status.in_(("submitted", "auto_submitted", "expired", "completed")),
-            ExamSession.submitted_at.is_not(None),
-        ),
-    ).order_by(
-        ExamSession.submitted_at.desc(),
-        ExamSession.id.desc(),
-    ).limit(5000).all()
+    )
+
+    if current_user.role == UserRole.EXAMINER.value:
+        assignment_query = assignment_query.filter(
+            ExamAssignment.assigned_by == current_user.id
+        )
+
+    assignment_rows = assignment_query.order_by(
+        StudentAccount.full_name.asc(),
+        ExamAssignment.assigned_at.desc(),
+        Exam.id.desc(),
+    ).limit(20000).all()
 
     flat_performance = []
-    for session, exam, student, creator, result in rows:
-        question_ids = list(session.selected_question_ids or [])
+    for assignment, exam, student, creator in assignment_rows:
+        session = db.query(ExamSession).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.student_id == student.id,
+        ).order_by(ExamSession.id.desc()).first()
+
+        result = (
+            db.query(Result).filter(Result.session_id == session.id).first()
+            if session is not None else None
+        )
+
+        question_ids = list(session.selected_question_ids or []) if session else []
         if not question_ids:
             question_ids = [
                 row[0] for row in db.query(ExamQuestion.question_id).filter(
                     ExamQuestion.exam_id == exam.id
                 ).order_by(ExamQuestion.question_order.asc(), ExamQuestion.id.asc()).all()
             ]
-        answers = db.query(Answer).filter(
-            Answer.session_id == session.id
+
+        question_rows = db.query(
+            QuestionBank.id, QuestionBank.marks
+        ).filter(
+            QuestionBank.id.in_(question_ids or [-1])
         ).all()
-        marked_values = [
-            float(answer.awarded_marks)
-            for answer in answers
-            if answer.awarded_marks is not None
-        ]
-        obtained_marks = (
-            result.obtained_marks
-            if result is not None and result.obtained_marks is not None
-            else (sum(marked_values) if marked_values else None)
+        question_marks = {
+            question_id: float(maximum_marks or 0)
+            for question_id, maximum_marks in question_rows
+        }
+        total_questions = len(question_ids) if question_ids else int(exam.total_questions or 0)
+        total_marks = (
+            float(result.total_marks)
+            if result is not None and result.total_marks is not None
+            else sum(question_marks.values()) if question_marks else None
         )
-        if result is not None and result.total_marks is not None:
-            total_marks = result.total_marks
-        else:
-            total_marks = (
-                db.query(func.sum(QuestionBank.marks))
-                .filter(QuestionBank.id.in_(question_ids or [-1]))
-                .scalar()
-            )
+
+        answers = (
+            db.query(Answer).filter(Answer.session_id == session.id).all()
+            if session is not None else []
+        )
+        answer_by_question = {answer.question_id: answer for answer in answers}
+        evaluated_answers = [
+            answer for answer in answers if answer.awarded_marks is not None
+        ]
+        positive_marks = round(sum(
+            max(0.0, float(answer.awarded_marks))
+            for answer in evaluated_answers
+        ), 2)
+        negative_marks = round(sum(
+            abs(min(0.0, float(answer.awarded_marks)))
+            for answer in evaluated_answers
+        ), 2)
+        correct_answers = 0
+        wrong_answers = 0
+        for answer in evaluated_answers:
+            maximum = question_marks.get(answer.question_id)
+            if maximum is None:
+                continue
+            awarded = float(answer.awarded_marks)
+            if abs(awarded - maximum) < 0.0001:
+                correct_answers += 1
+            elif awarded < maximum:
+                wrong_answers += 1
+
+        marked_values = [float(answer.awarded_marks) for answer in evaluated_answers]
+        obtained_marks = (
+            float(result.obtained_marks)
+            if result is not None and result.obtained_marks is not None
+            else round(sum(marked_values), 2) if marked_values else None
+        )
         percentage = (
-            result.percentage
+            float(result.percentage)
             if result is not None and result.percentage is not None
             else (
-                round(float(obtained_marks) / float(total_marks) * 100, 2)
+                round(obtained_marks / total_marks * 100, 2)
                 if obtained_marks is not None and total_marks
                 else None
             )
         )
+        status_value = session.status if session is not None else "not_started"
+        status_labels = {
+            "not_started": "Not Started",
+            "in_progress": "In Progress",
+            "submitted": "Submitted",
+            "auto_submitted": "Auto Submitted",
+            "expired": "Expired",
+            "completed": "Completed",
+        }
         published = bool(result and result.is_published)
+        is_started = bool(
+            session is not None and (
+                session.started_at is not None
+                or status_value not in (None, "not_started")
+            )
+        )
+        is_taken = bool(
+            session is not None and (
+                session.submitted_at is not None
+                or status_value in ("submitted", "auto_submitted", "expired", "completed")
+            )
+        )
         attempt = {
-            "session_id": session.id,
+            "assignment_id": assignment.id,
+            "assigned_at": _utc_iso(assignment.assigned_at),
+            "session_id": session.id if session else None,
             "exam_id": exam.id,
             "exam_title": exam.title,
             "exam_subject": exam.subject,
@@ -1139,9 +1213,18 @@ def get_historical_student_performance(
             "exam_end_time": _utc_iso(exam.end_time),
             "creator_id": exam.created_by,
             "creator_name": creator.full_name if creator else "Deleted account",
-            "started_at": _utc_iso(session.started_at),
-            "submitted_at": _utc_iso(session.submitted_at),
-            "session_status": session.status,
+            "started_at": _utc_iso(session.started_at) if session else None,
+            "submitted_at": _utc_iso(session.submitted_at) if session else None,
+            "session_status": status_value,
+            "status_label": status_labels.get(status_value, str(status_value or "Not Started").replace("_", " ").title()),
+            "is_started": is_started,
+            "is_taken": is_taken,
+            "total_questions": total_questions,
+            "correct_answers": correct_answers,
+            "wrong_answers": wrong_answers,
+            "unanswered_questions": max(0, total_questions - len(answers)),
+            "positive_marks": positive_marks,
+            "negative_marks": negative_marks,
             "obtained_marks": obtained_marks,
             "total_marks": total_marks,
             "percentage": percentage,
@@ -1155,12 +1238,20 @@ def get_historical_student_performance(
                 "Result published" if published
                 else "Evaluated — awaiting publication" if result is not None
                 else "Evaluation in progress" if marked_values
-                else "Not evaluated"
+                else "Not evaluated" if is_taken
+                else "Not started" if not is_started
+                else "In progress"
             ),
             "published_at": _utc_iso(result.published_at) if result else None,
         }
+
         if student.id in student_items:
-            student_items[student.id]["attempts"].append(attempt)
+            student_item = student_items[student.id]
+            student_item["attempts"].append(attempt)
+            student_item["total_assigned_examinations"] += 1
+            student_item["total_started_examinations"] += int(is_started)
+            student_item["total_taken_examinations"] += int(is_taken)
+
         flat_performance.append({
             "result_id": result.id if result else None,
             "student_id": student.id,
@@ -1170,7 +1261,10 @@ def get_historical_student_performance(
 
     return {
         "total_students": len(student_items),
-        "total_attempts": len(flat_performance),
+        "total_assignments": len(flat_performance),
+        "total_taken_examinations": sum(
+            student["total_taken_examinations"] for student in student_items.values()
+        ),
         "total_published_results": sum(
             1 for attempt in flat_performance if attempt["result_published"]
         ),
