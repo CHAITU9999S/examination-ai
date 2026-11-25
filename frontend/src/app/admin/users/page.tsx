@@ -154,7 +154,7 @@ export default function AdminUsersPage() {
   async function deleteUser(user: User) {
     const userRole = String(user.role || "").trim().toLowerCase();
     const confirmed = window.confirm(
-      `Permanently delete ${userRole} ${user.full_name} (${user.email}) and the examination records connected to this account? This cannot be undone. Questions still used by other examinations will be kept. The last active Admin cannot be deleted.`
+      `Delete ${userRole} ${user.full_name} (${user.email})? Unfinished work and scheduled exams will be removed. Completed examinations, submissions, results, and grading history will be preserved and can be deleted later from Admin Management → Retained Data. The account will be anonymized and cannot log in.`
     );
 
     if (!confirmed) return;
@@ -184,7 +184,7 @@ export default function AdminUsersPage() {
         );
       }
 
-      setMessage(`${user.full_name}'s account was deleted.`);
+      setMessage(data.message || `${user.full_name}'s account was deleted.`);
       await loadUsers();
     } catch (err) {
       setError(
