@@ -192,6 +192,21 @@ def list_exams(
         creator.id: creator.role
         for creator in creators
     }
+    assigned_by_names = {}
+    assigned_by_roles = {}
+    if current_user.role == UserRole.STUDENT.value and exams:
+        student_assignments = db.query(ExamAssignment).filter(
+            ExamAssignment.student_id == current_user.id,
+            ExamAssignment.exam_id.in_([exam.id for exam in exams]),
+            ExamAssignment.is_active.is_(True),
+        ).all()
+        assigner_ids = {item.assigned_by for item in student_assignments if item.assigned_by is not None}
+        assigners = db.query(User).filter(User.id.in_(assigner_ids)).all() if assigner_ids else []
+        assigner_by_id = {user.id: user for user in assigners}
+        for item in student_assignments:
+            assigner = assigner_by_id.get(item.assigned_by)
+            assigned_by_names[item.exam_id] = assigner.full_name if assigner else "Unknown"
+            assigned_by_roles[item.exam_id] = assigner.role if assigner else None
 
     def utc_timestamp(value):
         if value is None:
@@ -303,6 +318,8 @@ def list_exams(
             "created_by": exam.created_by,
             "created_by_name": creator_names.get(exam.created_by, "Unknown"),
             "created_by_role": creator_roles.get(exam.created_by),
+            "assigned_by_name": assigned_by_names.get(exam.id),
+            "assigned_by_role": assigned_by_roles.get(exam.id),
         }
         for exam in exams
     ]
