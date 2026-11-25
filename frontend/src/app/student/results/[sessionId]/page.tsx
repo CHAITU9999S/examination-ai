@@ -43,6 +43,10 @@ interface CohortDistribution {
 
 interface ResultDetails {
   exam_title: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   total_marks: number;
   obtained_marks: number;
   percentage: number;
@@ -57,6 +61,10 @@ interface ResultDetails {
 interface ResultStatus {
   exam_title: string;
   subject?: string | null;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   session_status: string | null;
   submitted_at?: string | null;
   result_published: boolean;
@@ -171,6 +179,7 @@ export default function StudentResultDetailPage() {
           <section className="rounded-2xl border border-amber-500/20 bg-slate-900 p-8">
             <h1 className="text-2xl font-bold">{notDeclared.exam_title}</h1>
             <p className="mt-2 text-sm text-slate-400">{notDeclared.subject || "Examination performance"}</p>
+            <p className="mt-2 text-xs text-slate-400">Created by: {notDeclared.creator_name || "Unknown"} · Assigned by: {notDeclared.assigned_by_name || "Unknown"}</p>
             <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
               <p className="font-semibold text-amber-300">Result Not Declared</p>
               <p className="mt-2 text-sm text-slate-300">Your examination has been submitted or expired, but the result has not yet been published. Marks and question-wise evaluation will appear here after publication.</p>
@@ -180,6 +189,7 @@ export default function StudentResultDetailPage() {
         ) : result ? (
           <>
             <h1 className="text-3xl font-bold">{result.exam_title}</h1>
+            <p className="mt-2 text-xs text-slate-400">Created by: {result.creator_name || "Unknown"} · Assigned by: {result.assigned_by_name || "Unknown"}</p>
             {result.face_photo_url && (
               <section className="mt-6 flex justify-end">
                 <figure className="w-32 rounded-xl border border-white/10 bg-slate-900 p-3 text-center">
