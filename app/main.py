@@ -32,9 +32,10 @@ APP_NAME = os.getenv("APP_NAME", "ExamGuard AI")
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEBUG = APP_ENV == "development"
 
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "development-only-secret-change-before-deployment"
+JWT_SECRET_KEY = (
+    os.getenv("JWT_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "development-only-secret-change-before-deployment"
 )
 
 
