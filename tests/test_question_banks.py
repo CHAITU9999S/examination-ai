@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta
+
 from app.auth import create_access_token
-from app.models import QuestionBank, User
+from app.models import Exam, QuestionBank, User
 from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 
 
@@ -115,3 +117,49 @@ def test_creator_cannot_edit_another_users_question_bank(client, db_session):
     assert response.status_code == 404
     db_session.refresh(bank)
     assert bank.name == "Owned Bank"
+
+
+
+def test_question_bank_questions_cannot_be_copied_after_exam_start(client, db_session):
+    creator = create_user(db_session, "examiner", "bank_copy_after_start@test.com")
+    exam = Exam(
+        title="Started Destination Exam",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=datetime.utcnow() - timedelta(minutes=1),
+        created_by=creator.id,
+    )
+    bank = QuestionCollection(
+        name="Source Questions",
+        subject="Science",
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, bank])
+    db_session.flush()
+    question = QuestionBank(
+        question_text="Source question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(QuestionCollectionItem(
+        collection_id=bank.id,
+        question_id=question.id,
+    ))
+    db_session.commit()
+
+    response = client.post(
+        f"/question-banks/select-for-exam/{exam.id}",
+        json={"question_ids": [question.id]},
+        headers=auth_headers(creator),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "The examination has started. Its question bank can no longer be changed."
+    )
