@@ -917,7 +917,19 @@ def test_student_can_load_exam_paper_using_session_id_without_browser_exam_id(
     db_session,
 ):
     student = create_student(db_session, email="paper-session-route@test.com")
+    creator = create_student(
+        db_session, email="paper-session-creator@test.com", role="examiner"
+    )
     exam = create_exam(db_session, title="Session ID Paper Route")
+    exam.created_by = creator.id
+    db_session.add(exam)
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=creator.id,
+        is_active=True,
+    ))
+    db_session.commit()
     question = QuestionBank(
         question_text="Which planet is known as the Red Planet?",
         question_type="MCQ",
@@ -965,6 +977,8 @@ def test_student_can_load_exam_paper_using_session_id_without_browser_exam_id(
     assert paper["session_id"] == session.id
     assert paper["exam_id"] == exam.id
     assert paper["exam_title"] == exam.title
+    assert paper["creator_name"] == creator.full_name
+    assert paper["assigned_by_name"] == creator.full_name
     assert len(paper["questions"]) == 1
     assert paper["questions"][0]["id"] == question.id
     assert {option["option_text"] for option in paper["questions"][0]["options"]} == {"Mars", "Venus"}
