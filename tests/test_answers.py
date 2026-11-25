@@ -691,6 +691,7 @@ def test_student_can_clear_saved_answer(
         question_elapsed_seconds=42,
     )
     db_session.add(answer)
+    data["session"].current_question_index = 2
     db_session.commit()
 
     response = client.delete(
