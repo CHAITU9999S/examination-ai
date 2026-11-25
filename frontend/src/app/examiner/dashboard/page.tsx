@@ -69,9 +69,9 @@ const navigation = [
     href: "/examiner/results",
   },
   {
-    title: "Account Security",
-    description: "Change your account password.",
-    href: "/account/security",
+    title: "Account Management",
+    description: "Manage your personal details, password, and recent login history.",
+    href: "/account/management",
   },
   {
     title: "Proctoring Review",
