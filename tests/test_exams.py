@@ -231,6 +231,80 @@ def test_expired_student_session_is_not_reported_as_completed(
 
 
 
+
+def test_student_overview_distinguishes_paused_pending_from_active_in_progress(
+    client, db_session
+):
+    creator = create_user(db_session, "examiner", "pending_creator@test.com")
+    paused_student = create_user(db_session, "student", "pending_paused@test.com")
+    active_student = create_user(db_session, "student", "pending_active@test.com")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam = Exam(
+        title="Paused versus active status test",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=now - timedelta(minutes=30),
+        end_time=now + timedelta(minutes=30),
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    db_session.add_all([
+        ExamAssignment(
+            exam_id=exam.id,
+            student_id=paused_student.id,
+            assigned_by=creator.id,
+            is_active=True,
+        ),
+        ExamAssignment(
+            exam_id=exam.id,
+            student_id=active_student.id,
+            assigned_by=creator.id,
+            is_active=True,
+        ),
+        ExamSession(
+            exam_id=exam.id,
+            student_id=paused_student.id,
+            started_at=now - timedelta(minutes=5),
+            expires_at=now + timedelta(minutes=25),
+            status="in_progress",
+            is_paused=True,
+            paused_at=now - timedelta(minutes=1),
+        ),
+        ExamSession(
+            exam_id=exam.id,
+            student_id=active_student.id,
+            started_at=now - timedelta(minutes=5),
+            expires_at=now + timedelta(minutes=25),
+            status="in_progress",
+            is_paused=False,
+        ),
+    ])
+    db_session.commit()
+
+    paused_response = client.get(
+        "/exams/student-overview",
+        headers=get_auth_headers(paused_student),
+    )
+    active_response = client.get(
+        "/exams/student-overview",
+        headers=get_auth_headers(active_student),
+    )
+
+    assert paused_response.status_code == 200
+    assert active_response.status_code == 200
+    paused_exam = paused_response.json()["examinations"][0]
+    active_exam = active_response.json()["examinations"][0]
+    assert paused_exam["is_pending"] is True
+    assert paused_exam["is_in_progress"] is False
+    assert paused_exam["is_paused"] is True
+    assert active_exam["is_pending"] is False
+    assert active_exam["is_in_progress"] is True
+    assert active_exam["is_paused"] is False
+
+
+
 def test_examiner_can_create_exam(client, db_session):
     examiner = create_user(
         db_session,
