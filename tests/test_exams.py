@@ -1391,7 +1391,7 @@ def test_imported_questions_must_match_exam_configured_type_and_difficulty(clien
 
 
 
-def test_admin_can_delete_examination_created_by_another_user(client, db_session):
+def test_admin_cannot_delete_examination_created_by_another_user(client, db_session):
     owner = create_user(db_session, "examiner", "exam_owner_for_admin_delete@test.com")
     admin = create_user(db_session, "admin", "exam_admin_delete@test.com")
 
@@ -1408,8 +1408,8 @@ def test_admin_can_delete_examination_created_by_another_user(client, db_session
         headers=get_auth_headers(admin),
     )
 
-    assert deleted.status_code == 200
-    assert db_session.query(Exam).filter(Exam.id == exam_id).first() is None
+    assert deleted.status_code == 403
+    assert db_session.query(Exam).filter(Exam.id == exam_id).first() is not None
 
 def test_exam_creator_cannot_assign_students_after_schedule_end(client, db_session):
     creator = create_user(
