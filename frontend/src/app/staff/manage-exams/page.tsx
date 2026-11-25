@@ -17,6 +17,8 @@ interface Exam {
   assigned_question_count?: number;
   exam_status?: string;
   created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
   start_time?: string | null;
   end_time?: string | null;
   published_at?: string | null;
@@ -103,7 +105,7 @@ export default function ManageExamsPage() {
   useEffect(() => { void loadExams(); }, [loadExams]);
 
   const visibleExams = useMemo(() => [...exams]
-    .filter((exam) => !searchTerm.trim() || [exam.title, exam.subject].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .filter((exam) => !searchTerm.trim() || [exam.title, exam.subject, exam.created_by_name].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
     .sort((a, b) => {
       if (sortBy === "name-asc") return a.title.localeCompare(b.title);
       if (sortBy === "name-desc") return b.title.localeCompare(a.title);
@@ -193,6 +195,7 @@ export default function ManageExamsPage() {
                   <div className="flex-1">
                     <h2 className="text-lg font-bold">{exam.title}</h2>
                     <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
+                    <p className="mt-2 text-xs text-slate-400">Created by: <span className="font-medium text-slate-200">{exam.created_by_name || "Unknown"}</span> <span className="capitalize">({exam.created_by_role || "—"})</span></p>
                     <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
                     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <div><dt className="text-xs text-slate-500">Published</dt><dd className="mt-1 text-slate-200">{formatDate(exam.published_at)}</dd></div>
