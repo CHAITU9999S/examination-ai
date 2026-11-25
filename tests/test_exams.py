@@ -143,6 +143,7 @@ def test_expired_student_session_is_not_reported_as_completed(
 ):
     examiner = create_user(db_session, "examiner", "expired_owner@test.com")
     student = create_user(db_session, "student", "expired_student@test.com")
+    unattempted_student = create_user(db_session, "student", "expired_unattempted@test.com")
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     exam = Exam(
         title="Expired session status test",
@@ -155,12 +156,20 @@ def test_expired_student_session_is_not_reported_as_completed(
     )
     db_session.add(exam)
     db_session.flush()
-    db_session.add(ExamAssignment(
-        exam_id=exam.id,
-        student_id=student.id,
-        assigned_by=examiner.id,
-        is_active=True,
-    ))
+    db_session.add_all([
+        ExamAssignment(
+            exam_id=exam.id,
+            student_id=student.id,
+            assigned_by=examiner.id,
+            is_active=True,
+        ),
+        ExamAssignment(
+            exam_id=exam.id,
+            student_id=unattempted_student.id,
+            assigned_by=examiner.id,
+            is_active=True,
+        ),
+    ])
     db_session.add(ExamSession(
         exam_id=exam.id,
         student_id=student.id,
@@ -176,7 +185,12 @@ def test_expired_student_session_is_not_reported_as_completed(
     exams_response = client.get("/exams?mine=true", headers=headers)
 
     assert assignments_response.status_code == 200
-    assert assignments_response.json()["students"][0]["student_exam_status"] == "expired"
+    assignment_statuses = {
+        item["student_id"]: item["student_exam_status"]
+        for item in assignments_response.json()["students"]
+    }
+    assert assignment_statuses[student.id] == "expired"
+    assert assignment_statuses[unattempted_student.id] == "expired"
     assert exams_response.status_code == 200
     exam_row = exams_response.json()[0]
     assert exam_row["completed_session_count"] == 0
