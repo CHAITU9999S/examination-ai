@@ -11,6 +11,8 @@ interface Exam {
   total_questions: number; start_time?: string | null; end_time?: string | null;
   created_by_name?: string | null; created_by_role?: string | null; max_marks?: number | null;
   selection_rules?: { group_counts?: Record<string, number> } | null;
+  assigned_question_count?: number;
+  exam_status?: string;
 }
 function formatDate(value?: string | null) {
   if (!value) return "Not assigned";
@@ -65,6 +67,10 @@ export default function AdminExamsPage() {
     if (sort === "start-desc") return (b.start_time || "").localeCompare(a.start_time || "");
     if (sort === "duration-asc") return a.duration_minutes - b.duration_minutes;
     if (sort === "duration-desc") return b.duration_minutes - a.duration_minutes;
+    if (sort === "questions-asc") return (a.assigned_question_count ?? 0) - (b.assigned_question_count ?? 0);
+    if (sort === "questions-desc") return (b.assigned_question_count ?? 0) - (a.assigned_question_count ?? 0);
+    if (sort === "marks-asc") return (a.max_marks ?? -1) - (b.max_marks ?? -1);
+    if (sort === "marks-desc") return (b.max_marks ?? -1) - (a.max_marks ?? -1);
     return b.id - a.id;
   }), [exams, search, sort]);
   return (
@@ -79,7 +85,7 @@ export default function AdminExamsPage() {
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-400">{visible.length} examination(s)</p><div className="flex flex-wrap gap-3">
             <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search exam, subject, or creator" aria-label="Search examinations" className="min-w-[240px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"/>
-            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option><option value="duration-asc">Shortest duration</option><option value="duration-desc">Longest duration</option></select>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option><option value="duration-asc">Shortest duration</option><option value="duration-desc">Longest duration</option><option value="questions-asc">Fewest questions in bank</option><option value="questions-desc">Most questions in bank</option><option value="marks-asc">Lowest maximum marks</option><option value="marks-desc">Highest maximum marks</option></select>
           </div></div>
           {loading ? <p className="py-12 text-center text-slate-400">Loading examinations...</p> : visible.length === 0 ? <p className="py-12 text-center text-slate-400">{exams.length ? "No examinations match your search." : "No examinations found."}</p> : (
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visible.map((exam) => (
