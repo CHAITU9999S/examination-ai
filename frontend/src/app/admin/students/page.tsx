@@ -11,12 +11,15 @@ interface Student {
   id: number;
   full_name: string;
   email: string;
+  department?: string | null;
   is_active: boolean;
 }
 
 export default function StudentManagementPage() {
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -35,6 +38,15 @@ export default function StudentManagementPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  const visibleStudents = [...students]
+    .filter((student) => !searchTerm.trim() || [student.full_name, student.email, student.department].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name-desc") return b.full_name.localeCompare(a.full_name);
+      if (sortBy === "department") return String(a.department || "").localeCompare(String(b.department || ""));
+      if (sortBy === "status") return Number(Boolean(b.is_active)) - Number(Boolean(a.is_active));
+      return a.full_name.localeCompare(b.full_name);
+    });
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -50,12 +62,18 @@ export default function StudentManagementPage() {
         </div>
         {error && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
         <section className="mt-7 rounded-2xl border border-white/10 bg-slate-900 p-5">
-          <p className="mb-4 text-sm text-slate-400">{students.length} student account(s)</p>
-          {loading ? <p className="py-10 text-center text-slate-400">Loading students...</p> : students.length === 0 ? <p className="py-10 text-center text-slate-400">No students registered yet.</p> : (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-400">{visibleStudents.length} student account(s)</p>
+            <div className="flex flex-wrap gap-3">
+              <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search student name, email, department" aria-label="Search students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option><option value="status">Status</option></select>
+            </div>
+          </div>
+          {loading ? <p className="py-10 text-center text-slate-400">Loading students...</p> : visibleStudents.length === 0 ? <p className="py-10 text-center text-slate-400">No students registered yet.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-left text-sm">
                 <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Student ID</th></tr></thead>
-                <tbody>{students.map((student) => <tr key={student.id} className="border-b border-white/5"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3 text-slate-300">{student.email}</td><td className="p-3"><span className={student.is_active ? "text-emerald-300" : "text-amber-300"}>{student.is_active ? "Active" : "Deactivated"}</span></td><td className="p-3 text-slate-500">{student.id}</td></tr>)}</tbody>
+                <tbody>{visibleStudents.map((student) => <tr key={student.id} className="border-b border-white/5"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3 text-slate-300">{student.email}</td><td className="p-3"><span className={student.is_active ? "text-emerald-300" : "text-amber-300"}>{student.is_active ? "Active" : "Deactivated"}</span></td><td className="p-3 text-slate-500">{student.id}</td></tr>)}</tbody>
               </table>
             </div>
           )}
