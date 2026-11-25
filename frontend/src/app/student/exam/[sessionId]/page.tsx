@@ -760,8 +760,8 @@ export default function StudentExamPage() {
         const previousResult = await previousSave;
         if (previousResult === false) throw new Error("The previous answer save did not complete.");
       }
-      await saveAnswer(question.id, answerText);
-      return true;
+      const saved = await saveAnswer(question.id, answerText);
+      return saved !== false;
     } catch {
       return false;
     }
