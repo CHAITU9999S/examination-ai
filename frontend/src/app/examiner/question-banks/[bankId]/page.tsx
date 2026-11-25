@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminSectionNavigation from "../../../admin/components/AdminSectionNavigation";
@@ -38,6 +38,8 @@ export default function QuestionBankDetailPage() {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionSearch, setQuestionSearch] = useState("");
+  const [questionSort, setQuestionSort] = useState("bank-order");
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [imagePreviews, setImagePreviews] = useState<Record<number, { prompt?: string; expected?: string }>>({});
   const [bankName, setBankName] = useState("Question Bank");
@@ -322,6 +324,22 @@ export default function QuestionBankDetailPage() {
   }
 
   const choice = type === "MCQ" || type === "multi_select";
+  const visibleQuestions = useMemo(() => {
+    const term = questionSearch.trim().toLowerCase();
+    const filtered = questions.filter((question) => !term || [
+      question.question_text, question.question_type, question.difficulty,
+      question.subject, question.tags?.join(" "), String(question.id),
+    ].some((value) => String(value || "").toLowerCase().includes(term)));
+    if (questionSort === "bank-order") return filtered;
+    return filtered.sort((a, b) => {
+      if (questionSort === "name") return a.question_text.localeCompare(b.question_text);
+      if (questionSort === "type") return a.question_type.localeCompare(b.question_type);
+      if (questionSort === "difficulty") return a.difficulty.localeCompare(b.difficulty);
+      if (questionSort === "marks-low") return a.marks - b.marks;
+      if (questionSort === "marks-high") return b.marks - a.marks;
+      return b.id - a.id;
+    });
+  }, [questions, questionSearch, questionSort]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -494,10 +512,20 @@ export default function QuestionBankDetailPage() {
         </form>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Questions in this bank ({questions.length})</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Questions in this bank ({visibleQuestions.length} of {questions.length})</h2>
+            <div className="flex flex-wrap gap-3">
+              <input type="search" value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} placeholder="Search questions in this bank" aria-label="Search bank questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <select value={questionSort} onChange={(event) => setQuestionSort(event.target.value)} aria-label="Sort bank questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                <option value="bank-order">Saved bank order</option><option value="newest">Newest first</option><option value="name">Question A to Z</option><option value="type">Question type</option><option value="difficulty">Difficulty</option><option value="marks-low">Lowest marks</option><option value="marks-high">Highest marks</option>
+              </select>
+            </div>
+          </div>
           {questions.length === 0 ? (
             <p className="rounded-xl border border-white/10 p-6 text-slate-400">No questions have been added yet.</p>
-          ) : questions.map((question) => (
+          ) : visibleQuestions.length === 0 ? (
+            <p className="rounded-xl border border-white/10 p-6 text-slate-400">No questions match your search.</p>
+          ) : visibleQuestions.map((question) => (
             <article key={question.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-slate-900 p-5">
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-cyan-300">{question.question_type} · {question.difficulty} · {question.marks} marks</p>
