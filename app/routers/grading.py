@@ -440,17 +440,20 @@ def get_pending_subjective_answers(
         ExamSession.submitted_at.asc(),
         Answer.id.asc(),
     ).all()
+    creator = db.query(User).filter(User.id == exam.created_by).first()
 
     return {
         "exam_id": exam.id,
         "exam_title": exam.title,
-        "creator_name": db.query(User).filter(User.id == exam.created_by).first().full_name if db.query(User).filter(User.id == exam.created_by).first() else "Unknown",
+        "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
         "total_pending": len(rows),
         "answers": [
             {
                 "answer_id": answer.id,
                 "session_id": session.id,
                 "student_id": session.student_id,
+                **_exam_attribution(exam, session.student_id, db),
                 "question_id": question.id,
                 "question_text": question.question_text,
                 "question_type": getattr(
