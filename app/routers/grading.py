@@ -309,7 +309,7 @@ def get_all_pending_subjective_answers(
         Result,
         Result.session_id == ExamSession.id,
     ).filter(
-        ExamSession.status.in_(("submitted", "auto_submitted")),
+        ExamSession.status.in_(("not_started", "in_progress", "submitted", "auto_submitted")),
         QuestionBank.question_type.in_([
             "short_answer",
             "long_answer",
@@ -826,6 +826,7 @@ def list_submitted_sessions_for_review(
                 "exam_title": exam.title,
                 "student_id": student.id,
                 "student_name": student.full_name,
+                "session_status": session.status,
                 "submitted_at": session.submitted_at,
                 "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
                 "result_ready": result is not None,
