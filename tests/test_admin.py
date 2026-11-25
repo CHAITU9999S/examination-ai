@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 
 from app.auth import hash_password, verify_password
 from app.models import (
-    AdminActivityLog, Answer, Exam, ExamAssignment, ExamQuestion, ExamSession,
-    Option, PlatformSetting, QuestionBank, Result, User,
+    AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment,
+    ExamQuestion, ExamSession, Option, PlatformSetting, QuestionBank, Result, User,
 )
 
 
@@ -354,7 +354,7 @@ def test_student_cannot_use_global_question_deletion(client, student):
     assert response.status_code == 403
 
 
-def test_deleting_examiner_removes_their_attempt_but_preserves_another_owners_exam(
+def test_deleting_examiner_preserves_completed_attempt_and_allows_later_cleanup(
     client, db_session, admin, examiner
 ):
     exam = Exam(
@@ -387,10 +387,22 @@ def test_deleting_examiner_removes_their_attempt_but_preserves_another_owners_ex
     )
     db_session.add(session)
     db_session.flush()
-    answer = Answer(session_id=session.id, question_id=question.id, answer_text="A")
+    answer = Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text="A",
+        awarded_marks=1,
+        examiner_feedback="Good answer",
+    )
     db_session.add(answer)
     db_session.flush()
-    result = Result(session_id=session.id, total_marks=2, obtained_marks=1, percentage=50)
+    result = Result(
+        session_id=session.id,
+        total_marks=2,
+        obtained_marks=1,
+        percentage=50,
+        is_published=True,
+    )
     db_session.add(result)
     db_session.commit()
 
@@ -398,10 +410,128 @@ def test_deleting_examiner_removes_their_attempt_but_preserves_another_owners_ex
     response = client.delete(f"/admin/users/{examiner.id}", headers=headers)
     assert response.status_code == 200
 
-    assert db_session.query(User).filter(User.id == examiner.id).count() == 0
+    db_session.refresh(examiner)
+    assert examiner.is_deleted is True
+    assert examiner.is_active is False
     assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
-    assert db_session.query(QuestionBank).filter(QuestionBank.id == question.id).count() == 1
     assert db_session.query(ExamQuestion).filter(ExamQuestion.exam_id == exam.id).count() == 1
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 1
+    assert db_session.query(Answer).filter(Answer.id == answer.id).count() == 1
+    assert db_session.query(Result).filter(Result.id == result.id).count() == 1
+
+    retained_response = client.get("/admin/retained-data", headers=headers)
+    assert retained_response.status_code == 200
+    assert any(
+        item["kind"] == "completed_submission" and item["id"] == session.id
+        for item in retained_response.json()["items"]
+    )
+
+    cleanup_response = client.delete(
+        f"/admin/retained-data/completed_submission/{session.id}",
+        headers=headers,
+    )
+    assert cleanup_response.status_code == 200
     assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 0
     assert db_session.query(Answer).filter(Answer.id == answer.id).count() == 0
     assert db_session.query(Result).filter(Result.id == result.id).count() == 0
+    assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
+
+
+def test_deleting_examiner_preserves_owned_completed_exam_and_question_for_later_deletion(
+    client, db_session, admin, examiner, student
+):
+    exam = Exam(
+        title="Examiner-owned completed exam",
+        subject="Science",
+        duration_minutes=25,
+        created_by=examiner.id,
+    )
+    question = QuestionBank(
+        question_text="Explain gravity",
+        question_type="short_answer",
+        difficulty="easy",
+        marks=2,
+        created_by=examiner.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id))
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="submitted",
+        started_at=datetime.utcnow() - timedelta(minutes=10),
+        submitted_at=datetime.utcnow(),
+        expires_at=datetime.utcnow(),
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    answer = Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text="Gravity attracts objects.",
+        awarded_marks=2,
+    )
+    db_session.add(answer)
+    db_session.flush()
+    result = Result(
+        session_id=session.id,
+        total_marks=2,
+        obtained_marks=2,
+        percentage=100,
+        is_published=True,
+    )
+    revision = AnswerMarkRevision(
+        answer_id=answer.id,
+        revision_number=1,
+        previous_marks=None,
+        new_marks=2,
+        revised_by=examiner.id,
+    )
+    db_session.add_all([result, revision])
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.delete(
+        f"/admin/users/{examiner.id}/with-records",
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    db_session.refresh(examiner)
+    assert examiner.is_deleted is True
+    assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 1
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 1
+    assert db_session.query(Result).filter(Result.session_id == session.id).count() == 1
+    assert db_session.query(AnswerMarkRevision).filter(
+        AnswerMarkRevision.id == revision.id
+    ).count() == 1
+    assert db_session.query(QuestionBank).filter(
+        QuestionBank.id == question.id
+    ).one().created_by == examiner.id
+
+    retained = client.get("/admin/retained-data", headers=headers)
+    assert retained.status_code == 200
+    retained_items = retained.json()["items"]
+    assert any(item["kind"] == "completed_exam" and item["id"] == exam.id for item in retained_items)
+    assert any(item["kind"] == "retained_question" and item["id"] == question.id for item in retained_items)
+    assert any(item["kind"] == "answer_mark_revision" and item["id"] == revision.id for item in retained_items)
+
+    delete_exam = client.delete(
+        f"/admin/retained-data/completed_exam/{exam.id}",
+        headers=headers,
+    )
+    assert delete_exam.status_code == 200
+    assert db_session.query(Exam).filter(Exam.id == exam.id).count() == 0
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 0
+    assert db_session.query(AnswerMarkRevision).filter(
+        AnswerMarkRevision.id == revision.id
+    ).count() == 0
+
+    delete_question = client.delete(
+        f"/admin/retained-data/retained_question/{question.id}",
+        headers=headers,
+    )
+    assert delete_question.status_code == 200
+    assert db_session.query(QuestionBank).filter(QuestionBank.id == question.id).count() == 0
