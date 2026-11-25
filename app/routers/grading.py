@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
@@ -68,6 +68,10 @@ class BulkGradeItem(ManualGradeSubmission):
 
 class BulkGradeSubmission(BaseModel):
     grades: list[BulkGradeItem] = Field(min_length=1, max_length=200)
+
+
+class PublishResultRequest(BaseModel):
+    grade: str | None = Field(default=None, max_length=20)
 
 
 def require_examiner_or_admin(user: User):
@@ -880,7 +884,7 @@ def get_session_answer_review(
         "result_published": bool(result and result.is_published),
         "result_obtained_marks": result.obtained_marks if result else None,
         "result_total_marks": result.total_marks if result else None,
-        "result_grade": ("A+" if float(result.percentage or 0) >= 90 else "A" if float(result.percentage or 0) >= 80 else "B" if float(result.percentage or 0) >= 70 else "C" if float(result.percentage or 0) >= 60 else "D" if float(result.percentage or 0) >= 50 else "F") if result and result.is_published else None,
+        "result_grade": (result.grade or ("A+" if float(result.percentage or 0) >= 90 else "A" if float(result.percentage or 0) >= 80 else "B" if float(result.percentage or 0) >= 70 else "C" if float(result.percentage or 0) >= 60 else "D" if float(result.percentage or 0) >= 50 else "F")) if result and result.is_published else None,
         "questions": review_items,
     }
 
@@ -1085,6 +1089,7 @@ def bulk_grade_session_answers(
 @router.post("/sessions/{session_id}/publish")
 def publish_session_result(
     session_id: int,
+    submission: PublishResultRequest = Body(default=PublishResultRequest()),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1134,6 +1139,8 @@ def publish_session_result(
         )
 
     if not result.is_published:
+        custom_grade = (submission.grade or "").strip()
+        result.grade = custom_grade or None
         result.is_published = True
         result.published_at = datetime.utcnow()
         db.add(AdminActivityLog(
