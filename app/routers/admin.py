@@ -206,21 +206,12 @@ def list_examiner_activity_logs(
         .join(actor, AdminActivityLog.actor_user_id == actor.id)
         .filter(
             actor.role == UserRole.EXAMINER.value,
-            AdminActivityLog.action.in_([
-                "examination_created",
-                "examination_updated",
-                "examination_deleted",
-                "exam_question_added",
-                "exam_question_removed_from_bank",
-                "exam_questions_copied_from_banks",
-                "question_bank_created",
-                "question_bank_updated",
-                "question_bank_deleted",
-                "question_added_to_bank",
-                "question_updated_in_bank",
-                "question_deleted_from_bank",
-                "question_removed_from_bank",
-            ]),
+            or_(
+                AdminActivityLog.action.like("exam%"),
+                AdminActivityLog.action.like("examination%"),
+                AdminActivityLog.action.like("question_bank%"),
+                AdminActivityLog.action.like("question_%"),
+            ),
         )
         .order_by(AdminActivityLog.created_at.desc(), AdminActivityLog.id.desc())
         .limit(200)
