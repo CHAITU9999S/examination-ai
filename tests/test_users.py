@@ -378,7 +378,7 @@ def test_login_history_is_private_to_each_account(client, student, db_session):
     db_session.commit()
 
     first_token = _login_token(client, student.email)
-    second_token = _login_token(client, another_user.email)
+    second_token = _login_token(client, another_user.email, "SecondPass123!")
 
     first_history = client.get(
         "/users/me/login-history",
