@@ -35,13 +35,36 @@ const navigation = [
   },
   {
     title: "Examinations",
-    description: "Create and manage examinations that you own. The Admin-only Examinations subsection is not available.",
+    description: "Create and manage examinations created by your account.",
     href: "/admin/sections/examinations",
   },
   {
     title: "Account Management",
     description: "Manage your personal details, password, and recent login history.",
     href: "/account/management",
+  },
+];
+
+const examinerTools = [
+  {
+    title: "Question Library",
+    description: "Create and manage standalone questions for examination preparation.",
+    href: "/examiner/questions",
+  },
+  {
+    title: "Answer Grading",
+    description: "Review and grade submitted subjective answers.",
+    href: "/examiner/grading",
+  },
+  {
+    title: "Result Publication",
+    description: "Review completed grading and publish student results.",
+    href: "/examiner/results",
+  },
+  {
+    title: "Proctoring Review",
+    description: "Review flagged sessions and recorded proctoring events.",
+    href: "/staff/proctoring",
   },
 ];
 
@@ -304,6 +327,23 @@ export default function ExaminerDashboardPage() {
                 <p className="mt-5 text-sm font-semibold text-blue-400">
                   Open →
                 </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-5 text-xl font-bold">Examiner Tools</h2>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {examinerTools.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
+              >
+                <h3 className="text-lg font-bold transition group-hover:text-blue-400">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">{item.description}</p>
+                <p className="mt-5 text-sm font-semibold text-blue-400">Open →</p>
               </Link>
             ))}
           </div>
