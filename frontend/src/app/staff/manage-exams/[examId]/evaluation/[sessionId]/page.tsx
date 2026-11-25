@@ -23,12 +23,12 @@ export default function SessionEvaluationPage(){
  const readOnly=search.get("view")==="1";
  const [data,setData]=useState<ReviewData|null>(null);const [index,setIndex]=useState(0);
  const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");const [grade,setGrade]=useState("");
- const [photo,setPhoto]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
+ const [photo,setPhoto]=useState("");const [answerImage,setAnswerImage]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
  const [loading,setLoading]=useState(true);const [working,setWorking]=useState(false);const [error,setError]=useState("");const [message,setMessage]=useState("");
  const headers=()=>{const token=localStorage.getItem("examguard_access_token");if(!token){router.replace("/login");return null;}return {Authorization:`Bearer ${token}`,"Content-Type":"application/json"};};
  const load=useCallback(async()=>{
   setLoading(true);setError("");
-  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/review`,{headers:h,cache:"no-store"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to load student answers.");setData(result);setGrade(result.result_grade||"");setIndex(0);}
+  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/review`,{headers:h,cache:"no-store"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to load student answers.");setData(result);setGrade(result.result_grade||"");}
   catch(err){setError(err instanceof Error?err.message:"Unable to load evaluation.");}
   finally{setLoading(false);}
  },[sessionId]);
@@ -41,6 +41,13 @@ export default function SessionEvaluationPage(){
   return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
  },[data?.face_photo_url]);
  useEffect(()=>{setMarks(current?.awarded_marks!==null&&current?.awarded_marks!==undefined?String(current.awarded_marks):current?.ai_suggested_marks!==null&&current?.ai_suggested_marks!==undefined?String(current.ai_suggested_marks):"");setFeedback(current?.examiner_feedback||"");setSuggestion(current?.ai_suggested_marks!==null&&current?.ai_suggested_marks!==undefined?{suggested_marks:current.ai_suggested_marks,justification:current.ai_justification||"Saved AI suggestion"}:null);setError("");setMessage("");},[current?.answer_id,current?.awarded_marks,current?.ai_suggested_marks,current?.examiner_feedback]);
+ useEffect(()=>{
+  if(!current?.answer_image_url){setAnswerImage("");return;}
+  let cancelled=false;let objectUrl:string|null=null;const token=localStorage.getItem("examguard_access_token");if(!token)return;
+  fetch(API_URL+current.answer_image_url,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"}).then(r=>{if(!r.ok)throw new Error("Unable to load answer image");return r.blob();}).then(blob=>{objectUrl=URL.createObjectURL(blob);if(!cancelled)setAnswerImage(objectUrl);else URL.revokeObjectURL(objectUrl);}).catch(()=>{if(!cancelled)setAnswerImage("");});
+  return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+ },[current?.answer_image_url]);
+
  async function requestSuggestion(){
   if(!current?.answer_id||readOnly)return;setWorking(true);setError("");setMessage("");
   try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/answers/${current.answer_id}/ai-suggestion`,{method:"POST",headers:h});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to generate AI suggestion.");setSuggestion(result);setMarks(String(result.suggested_marks));}
@@ -83,7 +90,7 @@ export default function SessionEvaluationPage(){
      <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}</li>)}</ul>}</div>
      {question.expected_answer&&<div><h3 className="text-sm font-semibold text-slate-400">Expected answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.expected_answer}</p></div>}
      {question.model_answer_text&&<div><h3 className="text-sm font-semibold text-slate-400">Model answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.model_answer_text}</p></div>}
-     <div className="rounded-xl bg-slate-800 p-4"><h3 className="text-sm font-semibold text-slate-400">Student's submitted answer</h3><p className="mt-2 whitespace-pre-wrap">{question.answer_text||"No text answer submitted."}</p>{question.answer_image_url&&<p className="mt-2 text-xs text-cyan-300">An answer image is attached. Open it from the existing grading review.</p>}</div>
+     <div className="rounded-xl bg-slate-800 p-4"><h3 className="text-sm font-semibold text-slate-400">Student's submitted answer</h3><p className="mt-2 whitespace-pre-wrap">{question.answer_text||"No text answer submitted."}</p>{question.answer_image_url&&<div className="mt-3">{answerImage?<img src={answerImage} alt="Student uploaded answer image" className="max-h-[480px] max-w-full rounded-lg border border-white/10 object-contain"/>:<p className="text-xs text-slate-400">Loading uploaded answer image...</p>}</div>}</div>
      {question.is_objective&&<p className="rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-sm text-blue-200">Objective question — automatically evaluated marks: {question.awarded_marks??"Not available"} / {question.maximum_marks}</p>}
      {!question.is_objective&&<div className="space-y-4 rounded-xl border border-white/10 bg-slate-800/50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">AI suggested marks and human evaluation</h3><span className="text-xs text-slate-400">Evaluation {evaluationCount}/3</span></div>
