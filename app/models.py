@@ -102,6 +102,11 @@ class User(Base):
         nullable=True
     )
 
+    # Deleted accounts are anonymized tombstones so historical records retain
+    # valid ownership and grading attribution without allowing login.
+    is_deleted = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    deleted_at = Column(DateTime(), nullable=True)
+
     # Random identifier for the account's one currently authorized device session.
     # Rotated at every successful login; never expose this value to the UI.
     active_session_id = Column(String(64), nullable=True, index=True)
