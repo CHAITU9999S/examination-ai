@@ -19,6 +19,7 @@ interface Exam {
   created_by?: number | null;
   start_time?: string | null;
   end_time?: string | null;
+  published_at?: string | null;
   selection_rules?: { group_counts?: Record<string, number> } | null;
 }
 
@@ -115,6 +116,28 @@ export default function ManageExamsPage() {
       return b.id - a.id;
     }), [exams, searchTerm, sortBy]);
 
+  async function publishExam(exam: Exam) {
+    setWorkingId(exam.id);
+    setError("");
+    setMessage("");
+    try {
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(`${API_URL}/exams/${exam.id}/publish`, {
+        method: "POST",
+        headers,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to publish this examination.");
+      setMessage(data.message || "Examination published successfully.");
+      await loadExams();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to publish this examination.");
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
   async function deleteExam(exam: Exam) {
     if (!window.confirm(`Delete "${exam.title}" and its related examination records? This cannot be undone.`)) return;
     setWorkingId(exam.id);
@@ -172,8 +195,10 @@ export default function ManageExamsPage() {
                     <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
                     <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
                     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div><dt className="text-xs text-slate-500">Start time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.start_time)}</dd></div>
-                      <div><dt className="text-xs text-slate-500">End time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.end_time)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Created</dt><dd className="mt-1 text-slate-200">{formatDate(exam.created_at)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Published</dt><dd className="mt-1 text-slate-200">{formatDate(exam.published_at)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Scheduled start</dt><dd className="mt-1 text-slate-200">{formatDate(exam.start_time)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Scheduled end</dt><dd className="mt-1 text-slate-200">{formatDate(exam.end_time)}</dd></div>
                       <div><dt className="text-xs text-slate-500">Questions in bank</dt><dd className="mt-1">{exam.assigned_question_count ?? "—"}</dd></div><div><dt className="text-xs text-slate-500">Questions per student</dt><dd className="mt-1">{exam.total_questions}</dd></div>
                       <div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
                       <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div>
@@ -184,6 +209,7 @@ export default function ManageExamsPage() {
                   <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
                     <Link href={`/staff/manage-exams/${exam.id}`} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold hover:bg-cyan-500">Students & Evaluation</Link>
                     <Link href={`/examiner/exams/${exam.id}/question-bank`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Question Bank</Link>
+                    {exam.published_at ? <span className="rounded-lg border border-emerald-500/40 px-3 py-2 text-xs text-emerald-300">Published</span> : <button type="button" onClick={() => publishExam(exam)} disabled={workingId !== null} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50">{workingId === exam.id ? "Publishing..." : "Publish Examination"}</button>}
                     <button type="button" onClick={() => deleteExam(exam)} disabled={workingId !== null} className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">{workingId === exam.id ? "Deleting..." : "Delete"}</button>
                   </div>
                 </article>
