@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
@@ -67,7 +67,7 @@ function marksText(value?: number | null) {
   return value === null || value === undefined ? "Not evaluated" : Number(value).toFixed(2).replace(/\.00$/, "");
 }
 
-export default function StudentTrackingPage() {
+function StudentTrackingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromExaminations = searchParams.get("from") === "examinations";
@@ -359,5 +359,13 @@ export default function StudentTrackingPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function StudentTrackingPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-center text-slate-400">Loading Student Tracking...</main>}>
+      <StudentTrackingPageContent />
+    </Suspense>
   );
 }
