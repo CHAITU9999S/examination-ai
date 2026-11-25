@@ -13,9 +13,10 @@ from passlib.context import CryptContext
 # AUTHENTICATION CONFIGURATION
 # ==========================================
 
-JWT_SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "development-only-secret-change-before-deployment"
+JWT_SECRET_KEY = (
+    os.getenv("JWT_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "development-only-secret-change-before-deployment"
 )
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
