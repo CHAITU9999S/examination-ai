@@ -81,6 +81,18 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
           {exam.instructions.map((instruction, index) => <li key={index}>{instruction}</li>)}
         </ul>
       </div>}
+      {exam.category === "completed" && <div className="mt-5 rounded-xl border border-white/10 bg-slate-800/60 p-4">
+        {exam.result_published ? <>
+          <p className="text-sm font-semibold text-emerald-300">Result Published</p>
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <p>Obtained marks: <strong>{exam.obtained_marks ?? "—"}</strong></p>
+            <p>Negative marks: <strong>{exam.negative_marks ?? "0"}</strong></p>
+            <p>Total marks: <strong>{exam.result_total_marks ?? exam.maximum_marks}</strong></p>
+            <p>Grade: <strong>{exam.grade || "—"}</strong></p>
+          </div>
+          {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-3 inline-block text-sm font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
+        </> : <p className="text-sm font-semibold text-amber-300">Result Not Declared</p>}
+      </div>}
       <div className="mt-6">{action}</div>
     </article>
   );
