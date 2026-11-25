@@ -218,7 +218,7 @@ export default function StudentDashboardPage() {
             {overview.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No matching examinations.</p> :
               <div className="mt-5 grid gap-5 xl:grid-cols-2">{overview.map(exam => <ExamCard key={exam.id} exam={exam} action={
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="capitalize text-slate-300">{exam.category === "available" && expiringSoon(exam) ? "Expiring Soon" : exam.is_pending ? "Pending" : exam.category}</span>
-                  {exam.result_published && exam.session_id ? <Link className="font-semibold text-blue-300 hover:text-blue-200" href={"/student/results/" + exam.session_id}>View published result →</Link> :
+                  {exam.session_id ? <Link className="font-semibold text-blue-300 hover:text-blue-200" href={"/student/results/" + exam.session_id}>{exam.result_published ? "View published result →" : "View performance status →"}</Link> :
                     <span className="text-slate-500">{exam.category === "completed" ? "Result Not Declared" : ""}</span>}</div>
               } />)}</div>}
           </section>
