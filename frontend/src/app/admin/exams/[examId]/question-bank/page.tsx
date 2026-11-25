@@ -38,7 +38,6 @@ export default function AdminQuestionBankViewPage() {
   const router = useRouter();
   const examId = String(params.examId || "");
   const [bank, setBank] = useState<BankData | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
   const [marksRevisions, setMarksRevisions] = useState<MarksRevision[]>([]);
   const [marksRevisionsUsed, setMarksRevisionsUsed] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -66,7 +65,7 @@ export default function AdminQuestionBankViewPage() {
       if (!profileResponse.ok || !bankResponse.ok || !marksResponse.ok) {
         throw new Error(data.detail || "Unable to load examination question bank.");
       }
-      setIsOwner(Number(profile.id) === Number(data.created_by));
+      if (profile.role !== "admin") { router.replace("/login"); return; }
       setBank(data);
       setMarksRevisions(Array.isArray(marksData.revisions) ? marksData.revisions : []);
       setMarksRevisionsUsed(Number(marksData.revisions_used || 0));
@@ -96,11 +95,7 @@ export default function AdminQuestionBankViewPage() {
             <h1 className="text-3xl font-bold">Examination Question Bank</h1>
             <p className="mt-2 text-sm text-slate-400">Admin inspection view. Other creators' question banks are read-only.</p>
           </div>
-          {isOwner && (
-            <Link href={`/examiner/exams/${examId}/question-bank`} className="rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold hover:bg-cyan-500">
-              Manage My Question Bank
-            </Link>
-          )}
+
         </div>
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
         {loading ? <p className="py-10 text-center text-slate-400">Loading question bank...</p> : (
