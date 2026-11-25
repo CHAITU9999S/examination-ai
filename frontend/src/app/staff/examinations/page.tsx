@@ -109,10 +109,10 @@ export default function StaffExaminationsPage() {
             <p className="py-12 text-center text-slate-400">{exams.length ? "No examinations match your search." : "No examinations are available."}</p>
           ) : (
             <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm">
-              <thead><tr className="border-b border-white/10 text-slate-400"><th className="px-4 py-3">Examination</th><th className="px-4 py-3">Subject</th>{role === "admin" && <th className="px-4 py-3">Created By</th>}<th className="px-4 py-3">Maximum Time</th><th className="px-4 py-3">Questions</th><th className="px-4 py-3">Maximum Marks</th><th className="px-4 py-3">View</th></tr></thead>
+              <thead><tr className="border-b border-white/10 text-slate-400"><th className="px-4 py-3">Examination</th><th className="px-4 py-3">Subject</th><th className="px-4 py-3">Created By</th><th className="px-4 py-3">Maximum Time</th><th className="px-4 py-3">Questions</th><th className="px-4 py-3">Maximum Marks</th><th className="px-4 py-3">View</th></tr></thead>
               <tbody>{visibleExams.map((exam) => <tr key={exam.id} className="border-b border-white/5 last:border-0">
                 <td className="px-4 py-4 font-semibold">{exam.title}</td><td className="px-4 py-4 text-slate-300">{exam.subject || "—"}</td>
-                {role === "admin" && <td className="px-4 py-4 text-slate-300"><span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span><span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span></td>}
+                <td className="px-4 py-4 text-slate-300"><span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span><span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span></td>
                 <td className="px-4 py-4 text-slate-300">{exam.duration_minutes} minutes</td><td className="px-4 py-4 text-slate-300">{exam.total_questions}</td><td className="px-4 py-4 text-slate-300">{exam.max_marks === null || exam.max_marks === undefined ? "Not available yet" : exam.max_marks}</td>
                 <td className="px-4 py-4"><Link href={`/staff/examinations/${exam.id}`} className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30">View Questions</Link></td>
               </tr>)}</tbody>
