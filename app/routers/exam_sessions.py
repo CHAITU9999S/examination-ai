@@ -1,4 +1,5 @@
 import hmac
+import io
 from datetime import datetime, timedelta
 from math import ceil
 
@@ -6,6 +7,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
 from fastapi.security import (
@@ -15,6 +17,7 @@ from fastapi.security import (
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from PIL import Image, ImageOps
 
 from app.auth import (
     EXAM_ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -88,12 +91,26 @@ def expire_session_if_needed(
 ) -> bool:
     """Mark an active session submitted when its time expires."""
 
+    if session.status == "not_started":
+        prestart_expires_at = normalize_to_naive_utc(session.prestart_expires_at)
+        if prestart_expires_at is not None and now >= prestart_expires_at:
+            session.status = "expired"
+            session.exam_token_refresh_hash = None
+            db.commit()
+            db.refresh(session)
+            return True
+        return False
+
     if session.status != "in_progress":
         return True
 
-    expires_at = normalize_to_naive_utc(
-        session.expires_at
-    )
+    expires_at = normalize_to_naive_utc(session.expires_at)
+    if expires_at is None:
+        session.status = "expired"
+        session.exam_token_refresh_hash = None
+        db.commit()
+        db.refresh(session)
+        return True
 
     if now >= expires_at:
         session.status = "submitted"
@@ -229,6 +246,73 @@ def validate_exam_token(
     return payload, session
 
 
+
+
+def _start_exam_clock(session: ExamSession, exam: Exam, start_at: datetime) -> None:
+    """Set the official exam clock from a server-controlled start timestamp."""
+    expires_at = start_at + timedelta(minutes=exam.duration_minutes)
+    exam_end = normalize_to_naive_utc(exam.end_time)
+    if exam_end is not None and exam_end < expires_at:
+        expires_at = exam_end
+    session.started_at = start_at
+    session.expires_at = expires_at
+    session.status = "in_progress"
+    session.prestart_stage = "in_progress"
+    session.start_window_expires_at = None
+
+
+def _advance_prestart_stage(session: ExamSession, exam: Exam, now: datetime) -> bool:
+    """Advance persisted entry stages and auto-start when the 17-second window ends."""
+    if session.status != "not_started":
+        return False
+    changed = False
+    if session.prestart_stage == "summary" and session.summary_started_at:
+        summary_start = normalize_to_naive_utc(session.summary_started_at)
+        if now >= summary_start + timedelta(seconds=120):
+            session.prestart_stage = "start_window"
+            session.start_window_expires_at = summary_start + timedelta(seconds=137)
+            changed = True
+    if session.prestart_stage == "start_window" and session.start_window_expires_at:
+        deadline = normalize_to_naive_utc(session.start_window_expires_at)
+        if now >= deadline:
+            _start_exam_clock(session, exam, deadline)
+            changed = True
+    return changed
+
+
+def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
+    selected_ids = session.selected_question_ids or []
+    questions = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(selected_ids or [-1]),
+    ).all()
+    breakdown = {}
+    maximum_marks = 0.0
+    negative_marks = 0.0
+    for question in questions:
+        question_type = getattr(question.question_type, "value", question.question_type)
+        breakdown[question_type] = breakdown.get(question_type, 0) + 1
+        maximum_marks += float(question.marks or 0)
+        if exam.negative_marking:
+            negative_marks += abs(float(question.negative_marks or 0))
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    student = db.query(User).filter(User.id == session.student_id).first()
+    settings = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+    return {
+        "exam_title": exam.title,
+        "subject": exam.subject,
+        "creator_name": creator.full_name if creator else "Unknown",
+        "student_name": student.full_name if student else "Unknown",
+        "student_email": student.email if student else None,
+        "student_department": student.department if student else None,
+        "total_questions": len(selected_ids),
+        "question_type_breakdown": breakdown,
+        "duration_minutes": exam.duration_minutes,
+        "maximum_marks": round(maximum_marks, 2),
+        "negative_marking_enabled": bool(exam.negative_marking),
+        "total_possible_negative_marks": round(negative_marks, 2),
+        "instructions": settings.get("instructions") or settings.get("exam_instructions") or [],
+    }
+
 # ==========================================
 # START EXAM
 # ==========================================
@@ -306,8 +390,8 @@ def start_exam(
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == current_user.id,
-        ExamSession.status == "in_progress",
-    ).first()
+        ExamSession.status.in_(("not_started", "in_progress")),
+    ).order_by(ExamSession.id.desc()).first()
 
     if session is not None:
         if expire_session_if_needed(session, db, now):
@@ -315,79 +399,42 @@ def start_exam(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Your previous exam session has expired or been submitted.",
             )
-
+        if session.status == "not_started" and not session.prestart_stage:
+            session.prestart_stage = "face_capture"
+            session.prestart_expires_at = now + timedelta(minutes=30)
         try:
-            get_or_create_session_question_ids(
-                session,
-                exam,
-                db,
-            )
+            get_or_create_session_question_ids(session, exam, db)
         except ValueError as error:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(error),
-            )
-
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
     else:
-        expires_at = now + timedelta(
-            minutes=exam.duration_minutes
-        )
-
-        if exam_end and exam_end < expires_at:
-            expires_at = exam_end
-
         try:
-            selected_ids = generate_session_question_ids(
-                exam,
-                current_user.id,
-                db,
-            )
+            selected_ids = generate_session_question_ids(exam, current_user.id, db)
         except ValueError as error:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(error),
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
 
         session = ExamSession(
             exam_id=exam_id,
             student_id=current_user.id,
-            started_at=now,
-            expires_at=expires_at,
-            status="in_progress",
+            started_at=None,
+            expires_at=None,
+            status="not_started",
+            prestart_stage="face_capture",
+            prestart_expires_at=now + timedelta(minutes=30),
             selected_question_ids=selected_ids,
         )
-
         try:
             db.add(session)
             db.commit()
             db.refresh(session)
-
         except IntegrityError:
             db.rollback()
-
-            # Another simultaneous request may have created
-            # the unique active session first.
             session = db.query(ExamSession).filter(
                 ExamSession.exam_id == exam_id,
                 ExamSession.student_id == current_user.id,
-                ExamSession.status == "in_progress",
-            ).first()
-
-            if session is None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Could not create an exam session. Please try again.",
-                )
-
-            if expire_session_if_needed(
-                session,
-                db,
-                get_current_utc_time(),
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Your exam session has expired or been submitted.",
-                )
+                ExamSession.status.in_(("not_started", "in_progress")),
+            ).order_by(ExamSession.id.desc()).first()
+            if session is None or expire_session_if_needed(session, db, get_current_utc_time()):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not create an exam session. Please try again.")
 
     # Rotate the opaque refresh token whenever a session is issued.
     # Only its SHA-256 digest is stored in the database.
@@ -403,7 +450,7 @@ def start_exam(
         student_id=current_user.id,
         session_id=session.id,
         expires_at=normalize_to_naive_utc(
-            session.expires_at
+            session.expires_at or session.prestart_expires_at
         ),
         auth_session_id=current_user.active_session_id,
     )
@@ -411,15 +458,16 @@ def start_exam(
     current_time = get_current_utc_time()
 
     return {
-        "message": "Exam session started.",
+        "message": "Examination entry session created.",
         "session_id": session.id,
         "exam_id": exam_id,
         "started_at": session.started_at,
         "expires_at": session.expires_at,
-        "remaining_seconds": get_remaining_seconds(
-            session,
-            current_time,
+        "remaining_seconds": (
+            get_remaining_seconds(session, current_time)
+            if session.status == "in_progress" else None
         ),
+        "prestart_stage": session.prestart_stage,
         "total_questions": len(
             session.selected_question_ids or []
         ),
@@ -482,11 +530,12 @@ def refresh_exam_access_token(
 
     now = get_current_utc_time()
 
-    if (
-        session.status != "in_progress"
-        or session.expires_at is None
-        or now >= normalize_to_naive_utc(session.expires_at)
-    ):
+    token_deadline = (
+        session.expires_at if session.status == "in_progress"
+        else session.prestart_expires_at if session.status == "not_started"
+        else None
+    )
+    if token_deadline is None or now >= normalize_to_naive_utc(token_deadline):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="The examination session is no longer active.",
@@ -520,7 +569,7 @@ def refresh_exam_access_token(
         exam_id=session.exam_id,
         student_id=session.student_id,
         session_id=session.id,
-        expires_at=normalize_to_naive_utc(session.expires_at),
+        expires_at=normalize_to_naive_utc(token_deadline),
         auth_session_id=student.active_session_id,
     )
 
@@ -535,7 +584,7 @@ def refresh_exam_access_token(
                 0,
                 int(
                     (
-                        normalize_to_naive_utc(session.expires_at) - now
+                        normalize_to_naive_utc(token_deadline) - now
                     ).total_seconds()
                 ),
             ),
@@ -567,6 +616,21 @@ def get_exam_remaining_time(
         )
 
     now = get_current_utc_time()
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+    if exam and _advance_prestart_stage(session, exam, now):
+        db.commit()
+        db.refresh(session)
+
+    if session.status == "not_started":
+        if expire_session_if_needed(session, db, now):
+            return {"session_id": session.id, "status": session.status, "remaining_seconds": 0}
+        return {
+            "session_id": session.id,
+            "status": "not_started",
+            "prestart_stage": session.prestart_stage,
+            "remaining_seconds": None,
+            "is_paused": False,
+        }
 
     if expire_session_if_needed(session, db, now):
         return {
@@ -801,15 +865,64 @@ def get_exam_paper(
 
     now = get_current_utc_time()
 
+    exam = db.query(Exam).filter(
+        Exam.id == exam_id
+    ).first()
+    if exam is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Exam not found.",
+        )
+
+    if _advance_prestart_stage(session, exam, now):
+        db.commit()
+        db.refresh(session)
+
     if expire_session_if_needed(session, db, now):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Exam session is no longer active.",
         )
 
-    exam = db.query(Exam).filter(
-        Exam.id == exam_id
-    ).first()
+    if session.status == "not_started":
+        elapsed = 0
+        if session.summary_started_at:
+            elapsed = max(0, int((now - normalize_to_naive_utc(session.summary_started_at)).total_seconds()))
+        selected_ids = session.selected_question_ids or []
+        return {
+            "exam_id": exam_id,
+            "exam_title": exam.title,
+            "duration_minutes": exam.duration_minutes,
+            "session_id": session.id,
+            "started_at": None,
+            "expires_at": None,
+            "remaining_seconds": None,
+            "status": "not_started",
+            "prestart_stage": session.prestart_stage or "face_capture",
+            "face_captured": bool(session.face_capture_data),
+            "face_captured_at": session.face_captured_at,
+            "summary_started_at": session.summary_started_at,
+            "summary_elapsed_seconds": elapsed,
+            "summary_seconds_until_continue": max(0, 60 - elapsed),
+            "summary_seconds_until_auto_continue": max(0, 120 - elapsed),
+            "start_window_expires_at": session.start_window_expires_at,
+            "start_window_seconds_remaining": (
+                max(0, ceil((normalize_to_naive_utc(session.start_window_expires_at) - now).total_seconds()))
+                if session.start_window_expires_at else None
+            ),
+            "exam_summary": _build_exam_summary(session, exam, db),
+            "total_questions": len(selected_ids),
+            "proctoring_enabled": bool(exam.proctoring_enabled),
+            "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
+            "max_tab_switch_warnings": exam.max_tab_switch_warnings,
+            "questions": [],
+        }
+
+    if expire_session_if_needed(session, db, now):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Exam session is no longer active.",
+        )
 
     if exam is None:
         raise HTTPException(
@@ -895,8 +1008,12 @@ def get_exam_paper(
     return {
         "exam_id": exam_id,
         "exam_title": exam.title,
+        "subject": exam.subject,
         "duration_minutes": exam.duration_minutes,
         "session_id": session.id,
+        "status": session.status,
+        "prestart_stage": session.prestart_stage,
+        "face_captured": bool(session.face_capture_data),
         "started_at": session.started_at,
         "expires_at": session.expires_at,
         "remaining_seconds": get_remaining_seconds(
@@ -913,6 +1030,161 @@ def get_exam_paper(
 }
     
 
+
+
+
+@router.get("/prestart/{session_id}")
+def get_prestart_status(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, session = validate_exam_token(credentials, db)
+    if session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    now = get_current_utc_time()
+    changed = _advance_prestart_stage(session, exam, now)
+    if changed:
+        db.commit()
+        db.refresh(session)
+    if expire_session_if_needed(session, db, now):
+        raise HTTPException(status_code=409, detail="The examination entry session has expired.")
+    elapsed = 0
+    if session.summary_started_at:
+        elapsed = max(0, int((now - normalize_to_naive_utc(session.summary_started_at)).total_seconds()))
+    return {
+        "session_id": session.id,
+        "status": session.status,
+        "stage": session.prestart_stage,
+        "face_captured": bool(session.face_capture_data),
+        "summary_elapsed_seconds": elapsed,
+        "summary_seconds_until_continue": max(0, 60 - elapsed),
+        "summary_seconds_until_auto_continue": max(0, 120 - elapsed),
+        "start_window_seconds_remaining": (
+            max(0, ceil((normalize_to_naive_utc(session.start_window_expires_at) - now).total_seconds()))
+            if session.start_window_expires_at else None
+        ),
+        "started_at": session.started_at,
+        "expires_at": session.expires_at,
+        "remaining_seconds": get_remaining_seconds(session, now) if session.status == "in_progress" else None,
+    }
+
+
+@router.post("/face-capture/{session_id}")
+async def save_face_capture(
+    session_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, session = validate_exam_token(credentials, db)
+    if session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
+    if session.status != "not_started" or session.prestart_stage != "face_capture":
+        raise HTTPException(status_code=409, detail="Face capture is not available at this stage.")
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=415, detail="Upload the face capture as a JPEG, PNG, or WebP image.")
+    image_bytes = await request.body()
+    if not image_bytes or len(image_bytes) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="The face capture must be smaller than 2 MB.")
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as source:
+            source = ImageOps.exif_transpose(source).convert("RGB")
+            source.thumbnail((640, 480))
+            output = io.BytesIO()
+            source.save(output, format="JPEG", quality=82, optimize=True)
+            stored_image = output.getvalue()
+    except Exception:
+        raise HTTPException(status_code=400, detail="The uploaded face capture is not a valid image.")
+    now = get_current_utc_time()
+    session.face_capture_data = stored_image
+    session.face_capture_mime_type = "image/jpeg"
+    session.face_captured_at = now
+    session.prestart_stage = "summary"
+    session.summary_started_at = now
+    if session.prestart_expires_at is None:
+        session.prestart_expires_at = now + timedelta(minutes=30)
+    db.commit()
+    return {
+        "session_id": session.id,
+        "stage": "summary",
+        "face_captured": True,
+        "summary_started_at": session.summary_started_at,
+        "message": "Face capture saved. The examination summary has started.",
+    }
+
+
+@router.post("/summary/continue/{session_id}")
+def continue_after_exam_summary(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, session = validate_exam_token(credentials, db)
+    if session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
+    if session.status != "not_started" or session.prestart_stage != "summary" or not session.summary_started_at:
+        raise HTTPException(status_code=409, detail="The examination summary is not ready to continue.")
+    now = get_current_utc_time()
+    summary_start = normalize_to_naive_utc(session.summary_started_at)
+    elapsed = (now - summary_start).total_seconds()
+    if elapsed < 60:
+        raise HTTPException(status_code=409, detail="The examination summary must be displayed for at least 60 seconds.")
+    if elapsed >= 120:
+        session.start_window_expires_at = summary_start + timedelta(seconds=137)
+    else:
+        session.start_window_expires_at = now + timedelta(seconds=17)
+    session.prestart_stage = "start_window"
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+    if exam:
+        _advance_prestart_stage(session, exam, now)
+    db.commit()
+    return {
+        "session_id": session.id,
+        "stage": session.prestart_stage,
+        "start_window_expires_at": session.start_window_expires_at,
+        "start_window_seconds_remaining": max(0, ceil((normalize_to_naive_utc(session.start_window_expires_at) - now).total_seconds())) if session.status == "not_started" else 0,
+        "status": session.status,
+    }
+
+
+@router.post("/confirm-start/{session_id}")
+def confirm_exam_start(
+    session_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    _, session = validate_exam_token(credentials, db)
+    if session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).with_for_update().first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    now = get_current_utc_time()
+    _advance_prestart_stage(session, exam, now)
+    if session.status == "not_started":
+        if session.prestart_stage != "start_window" or not session.start_window_expires_at:
+            raise HTTPException(status_code=409, detail="The examination is not ready to start.")
+        if now >= normalize_to_naive_utc(session.start_window_expires_at):
+            _advance_prestart_stage(session, exam, now)
+        else:
+            _start_exam_clock(session, exam, now)
+    db.commit()
+    db.refresh(session)
+    if session.status != "in_progress":
+        raise HTTPException(status_code=409, detail="The examination could not be started.")
+    return {
+        "session_id": session.id,
+        "status": session.status,
+        "started_at": session.started_at,
+        "expires_at": session.expires_at,
+        "remaining_seconds": get_remaining_seconds(session, now),
+        "message": "Examination started.",
+    }
 
 # Resolve the paper from the authenticated session rather than browser-stored exam metadata.
 # This also supports safe page reloads when sessionStorage's exam ID is missing.
