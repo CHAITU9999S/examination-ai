@@ -366,3 +366,32 @@ def test_each_profile_field_stops_after_its_own_third_edit(client, student, fiel
     assert rejected.status_code == 400
     assert "3 edit chances" in rejected.json()["detail"]
 
+def test_login_history_is_private_to_each_account(client, student, db_session):
+    another_user = User(
+        full_name="Second Student",
+        email="second.student@example.com",
+        password_hash=hash_password("SecondPass123!"),
+        role="student",
+        is_active=True,
+    )
+    db_session.add(another_user)
+    db_session.commit()
+
+    first_token = _login_token(client, student.email)
+    second_token = _login_token(client, another_user.email)
+
+    first_history = client.get(
+        "/users/me/login-history",
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    second_history = client.get(
+        "/users/me/login-history",
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+
+    assert first_history.status_code == 200
+    assert second_history.status_code == 200
+    assert len(first_history.json()) == 1
+    assert len(second_history.json()) == 1
+    assert first_history.json()[0]["id"] != second_history.json()[0]["id"]
+
