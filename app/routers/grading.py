@@ -309,7 +309,7 @@ def get_all_pending_subjective_answers(
         Result,
         Result.session_id == ExamSession.id,
     ).filter(
-        ExamSession.status.in_(("not_started", "in_progress", "submitted", "auto_submitted")),
+        ExamSession.status.in_(("submitted", "auto_submitted")),
         QuestionBank.question_type.in_([
             "short_answer",
             "long_answer",
@@ -806,7 +806,7 @@ def list_submitted_sessions_for_review(
         Result,
         Result.session_id == ExamSession.id,
     ).filter(
-        ExamSession.status.in_(("submitted", "auto_submitted")),
+        ExamSession.status.in_(("not_started", "in_progress", "submitted", "auto_submitted")),
     )
 
     role = getattr(current_user.role, "value", current_user.role)
