@@ -51,6 +51,7 @@ export default function StaffProctoringReviewPage() {
   const [selected, setSelected] = useState<FlaggedSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
 
   const loadFlaggedSessions = useCallback(async () => {
     setLoading(true);
@@ -62,10 +63,17 @@ export default function StaffProctoringReviewPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/exam-sessions/proctoring/flagged`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const headers = { Authorization: `Bearer ${token}` };
+      const [profileResponse, response] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exam-sessions/proctoring/flagged`, { headers, cache: "no-store" }),
+      ]);
+      const profile = await profileResponse.json().catch(() => ({}));
+      if (!profileResponse.ok || (profile.role !== "admin" && profile.role !== "examiner")) {
+        router.replace("/login");
+        return;
+      }
+      setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
       if (response.status === 401 || response.status === 403) {
         router.replace("/login");
         return;
@@ -92,7 +100,7 @@ export default function StaffProctoringReviewPage() {
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
-            <Link href="/" className="text-2xl font-bold">
+            <Link href={dashboardHref} className="text-2xl font-bold">
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
             <p className="mt-1 text-sm text-slate-400">Staff / Proctoring Review</p>
