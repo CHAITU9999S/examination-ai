@@ -128,6 +128,27 @@ def get_authorized_exam(
     return exam
 
 
+@router.get("/sessions/{session_id}/face-photo")
+def get_session_face_photo(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serve the candidate's captured still photo to authorized exam staff."""
+    require_examiner_or_admin(current_user)
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Examination session not found.")
+    get_visible_exam(session.exam_id, current_user, db)
+    if not session.face_capture_data:
+        raise HTTPException(status_code=404, detail="No face capture is available for this session.")
+    return Response(
+        content=session.face_capture_data,
+        media_type=session.face_capture_mime_type or "image/jpeg",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 def _validate_rubric_scores(question, rubric_scores, awarded_marks):
     """Validate a per-criterion rubric and ensure its total matches final marks."""
     if not rubric_scores:
@@ -349,6 +370,8 @@ def get_all_pending_subjective_answers(
                 "rubric_scores": answer.rubric_scores or [],
                 "ai_suggestion_generated_at": answer.ai_suggestion_generated_at,
                 "submitted_at": session.submitted_at,
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
             }
             for answer, session, question, exam, result in rows
         ],
