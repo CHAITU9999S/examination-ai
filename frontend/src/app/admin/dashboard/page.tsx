@@ -44,9 +44,9 @@ interface NavigationGroup {
 
 const navigationGroups: NavigationGroup[] = [
   {
-    title: "User Management",
-    description: "Manage users, administrators, examiners, students, schedules, performance, activity logs, and retained records.",
-    slug: "user-management",
+    title: "Users",
+    description: "Manage Admins, Examiners, Students, and all user accounts.",
+    slug: "users",
     items: [
       { title: "User Management", description: "View and manage all platform accounts.", href: "/admin/users" },
       { title: "Admin Management", description: "Create and manage administrator accounts and review Admin Activity Logs.", href: "/admin/admins" },
@@ -59,8 +59,8 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "Question Banks",
-    description: "Browse existing question banks and manage your own question banks.",
+    title: "Question Bank",
+    description: "Browse question banks and manage the question banks you own.",
     slug: "question-banks",
     items: [
       { title: "Question Bank", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
@@ -80,9 +80,9 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "Account Security",
-    description: "Change your account password and maintain account security.",
-    slug: "account-security",
+    title: "Security",
+    description: "Change your password and maintain account security.",
+    slug: "security",
     href: "/account/security",
     items: [],
   },
