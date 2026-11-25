@@ -14,7 +14,7 @@ interface QuestionGroup {
 }
 interface Exam {
   id: number; title: string; subject?: string | null; creator_name: string;
-  creator_role?: string | null; duration_minutes: number; total_questions: number;
+  creator_role?: string | null; assigned_by_name?: string | null; assigned_by_role?: string | null; duration_minutes: number; total_questions: number;
   question_breakdown: QuestionGroup[]; maximum_marks: number; negative_marking: boolean;
   total_possible_negative_marks: number; randomize_questions: boolean; proctoring_enabled: boolean;
   start_time?: string | null; end_time?: string | null; instructions: string[];
@@ -57,6 +57,7 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
       </div>
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         <p><span className="text-slate-500">Created by:</span> {exam.creator_name} {exam.creator_role ? "(" + exam.creator_role + ")" : ""}</p>
+        <p><span className="text-slate-500">Assigned by:</span> {exam.assigned_by_name || "Unknown"} {exam.assigned_by_role ? "(" + exam.assigned_by_role + ")" : ""}</p>
         <p><span className="text-slate-500">Duration:</span> {exam.duration_minutes} minutes</p>
         <p><span className="text-slate-500">Questions:</span> {exam.total_questions}</p>
         <p><span className="text-slate-500">Maximum marks:</span> {exam.maximum_marks}</p>
@@ -143,7 +144,7 @@ export default function StudentDashboardPage() {
   const completed = useMemo(() => sortByDate(exams.filter(exam => exam.category === "completed"), "submitted_at", "desc"), [exams]);
   const expired = useMemo(() => sortByDate(exams.filter(exam => exam.category === "expired"), "end_time", "desc"), [exams]);
   const overview = useMemo(() => {
-    const filtered = exams.filter(exam => (exam.title + " " + (exam.subject || "") + " " + exam.creator_name).toLowerCase().includes(search.toLowerCase()));
+    const filtered = exams.filter(exam => (exam.title + " " + (exam.subject || "") + " " + exam.creator_name + " " + (exam.assigned_by_name || "")).toLowerCase().includes(search.toLowerCase()));
     if (sort === "latest") return sortByDate(filtered, "end_time", "desc");
     if (sort === "completed") return sortByDate(filtered, "submitted_at", "desc");
     return sortByDate(filtered, "start_time", "asc");
