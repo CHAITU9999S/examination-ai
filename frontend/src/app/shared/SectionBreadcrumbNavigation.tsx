@@ -1,85 +1,133 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const routeTemplates = [
-  "/admin/dashboard", "/admin/users", "/admin/admins", "/admin/examiners",
-  "/admin/students", "/admin/exams", "/admin/exams/[examId]",
-  "/admin/exams/[examId]/question-bank", "/admin/questions",
-  "/admin/sections/[section]", "/admin/activity-logs",
-  "/admin/examiner-activity-logs", "/admin/performance",
-  "/admin/retained-data", "/admin/schedules",
-  "/examiner/dashboard", "/examiner/exams", "/examiner/exams/[examId]/question-bank",
-  "/examiner/exams/[examId]/select-question-bank", "/examiner/question-banks",
-  "/examiner/question-banks/[bankId]", "/examiner/questions",
-  "/examiner/grading", "/examiner/results",
-  "/student/dashboard", "/student/exams", "/student/exam/[sessionId]",
-  "/student/results", "/student/results/[sessionId]",
-  "/staff/examinations", "/staff/examinations/[examId]",
-  "/staff/manage-exams", "/staff/manage-exams/[examId]",
-  "/staff/manage-exams/[examId]/evaluation/[sessionId]",
-  "/staff/proctoring", "/staff/question-banks", "/staff/question-banks/[bankId]",
-];
+type Crumb = { href: string; label: string };
+type Breadcrumbs = { ancestors: Crumb[]; current: string };
 
-const labels: Record<string, string> = {
-  dashboard: "Dashboard",
+const ADMIN_USERS: Crumb = { href: "/admin/sections/users", label: "Users" };
+const ADMIN_EXAMS: Crumb = { href: "/admin/sections/examinations", label: "Examinations" };
+const ADMIN_BANKS: Crumb = { href: "/admin/sections/question-banks", label: "Question Bank" };
+
+const adminSectionLabels: Record<string, string> = {
   users: "Users",
-  admins: "Admin Management",
-  examiners: "Examiner Management",
-  students: "Student Management",
-  exams: "Examinations",
-  questions: "Questions",
-  sections: "Sections",
-  "activity-logs": "Admin Activity Logs",
-  "examiner-activity-logs": "Examiner Activity Logs",
-  performance: "Student Performance",
-  "retained-data": "Retained Data",
-  schedules: "Student Schedules",
-  "question-bank": "Examination Bank",
-  "question-banks": "Question Banks",
-  "select-question-bank": "Select Question Bank",
-  grading: "Evaluation",
-  results: "Results",
-  exam: "Examination",
+  admins: "Admins",
+  examiners: "Examiners",
+  students: "Students",
+  "question-banks": "Question Bank",
   examinations: "Examinations",
-  "manage-exams": "Manage Examinations",
-  proctoring: "Proctoring Review",
-  evaluation: "Evaluation",
 };
 
-function routeMatches(template: string, pathname: string) {
-  const pattern = template
-    .split("/")
-    .map((part) => part.startsWith("[") ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("/");
-  return new RegExp(`^${pattern}$`).test(pathname);
+function adminBreadcrumbs(pathname: string): Breadcrumbs | null {
+  const sectionMatch = pathname.match(/^\/admin\/sections\/([^/]+)$/);
+  if (sectionMatch) {
+    const section = sectionMatch[1];
+    const label = adminSectionLabels[section];
+    if (!label) return null;
+    const ancestors = ["admins", "examiners", "students"].includes(section) ? [ADMIN_USERS] : [];
+    return { ancestors, current: label };
+  }
+
+  if (pathname === "/admin/users") return { ancestors: [ADMIN_USERS], current: "User Management" };
+  if (pathname === "/admin/admins") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/admins", label: "Admins" }], current: "Admin Management" };
+  if (pathname === "/admin/activity-logs") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/admins", label: "Admins" }], current: "Admin Activity Logs" };
+  if (pathname === "/admin/retained-data") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/admins", label: "Admins" }, { href: "/admin/admins", label: "Admin Management" }], current: "Retained Data" };
+  if (pathname === "/admin/examiners") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/examiners", label: "Examiners" }], current: "Examiner Management" };
+  if (pathname === "/admin/examiner-activity-logs") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/examiners", label: "Examiners" }], current: "Examiner Activity Logs" };
+  if (pathname === "/admin/students") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Management" };
+  if (pathname === "/admin/schedules") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Schedule" };
+  if (pathname === "/admin/performance") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Performance" };
+  if (pathname === "/admin/questions") return { ancestors: [ADMIN_BANKS], current: "Questions" };
+  if (pathname === "/admin/exams") return { ancestors: [ADMIN_EXAMS], current: "Examinations" };
+
+  const examQuestionBank = pathname.match(/^\/admin\/exams\/([^/]+)\/question-bank$/);
+  if (examQuestionBank) return { ancestors: [ADMIN_EXAMS, { href: "/admin/exams", label: "Examinations" }], current: "Examination Bank" };
+  const examDetails = pathname.match(/^\/admin\/exams\/([^/]+)$/);
+  if (examDetails) return { ancestors: [ADMIN_EXAMS, { href: "/admin/exams", label: "Examinations" }], current: "Examination Details" };
+  return null;
 }
 
-function titleFor(template: string, actualPath: string) {
-  const templateParts = template.split("/").filter(Boolean);
-  const actualParts = actualPath.split("/").filter(Boolean);
-  const last = templateParts[templateParts.length - 1];
-  if (last?.startsWith("[") && actualParts.length) {
-    if (template.includes("/evaluation/")) return "Student Evaluation";
-    if (template.includes("/question-bank")) return "Question Bank Details";
-    if (template.includes("/select-question-bank")) return "Select Question Bank";
-    if (template.includes("/manage-exams/")) return "Examination Details";
-    if (template.includes("/examinations/")) return "Examination Details";
-    if (template.includes("/results/")) return "Result Details";
-    if (template.includes("/question-banks/")) return "Question Bank Details";
-    return "Details";
+function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
+  const isAdmin = role === "admin";
+  const dashboard = isAdmin ? "/admin/dashboard" : "/examiner/dashboard";
+  const examParent = isAdmin ? ADMIN_EXAMS : null;
+  const bankParent = isAdmin ? ADMIN_BANKS : null;
+
+  if (pathname === "/staff/question-banks") {
+    return { ancestors: bankParent ? [bankParent] : [], current: "All Question Banks" };
   }
-  return labels[last] || last.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (pathname === "/staff/manage-exams") {
+    return { ancestors: examParent ? [examParent] : [], current: "Manage Examinations" };
+  }
+  if (pathname === "/staff/examinations") {
+    return { ancestors: examParent ? [examParent] : [], current: "Examinations" };
+  }
+  if (pathname === "/staff/proctoring") {
+    return {
+      ancestors: [...(examParent ? [examParent] : []), { href: "/staff/manage-exams", label: "Manage Examinations" }],
+      current: "Proctoring Review",
+    };
+  }
+  if (/^\/staff\/question-banks\/[^/]+$/.test(pathname)) {
+    return { ancestors: [{ href: "/staff/question-banks", label: "All Question Banks" }], current: "Question Bank Details" };
+  }
+  if (/^\/staff\/examinations\/[^/]+$/.test(pathname)) {
+    return { ancestors: [...(examParent ? [examParent] : []), { href: "/staff/examinations", label: "Examinations" }], current: "Examination Details" };
+  }
+  if (/^\/staff\/manage-exams\/[^/]+\/evaluation\/[^/]+$/.test(pathname)) {
+    return {
+      ancestors: [...(examParent ? [examParent] : []), { href: "/staff/manage-exams", label: "Manage Examinations" }, { href: pathname.replace(/\/evaluation\/[^/]+$/, ""), label: "Examination Details" }],
+      current: "Student Evaluation",
+    };
+  }
+  if (/^\/staff\/manage-exams\/[^/]+$/.test(pathname)) {
+    return { ancestors: [...(examParent ? [examParent] : []), { href: "/staff/manage-exams", label: "Manage Examinations" }], current: "Examination Details" };
+  }
+  return null;
+}
+
+function examinerBreadcrumbs(pathname: string): Breadcrumbs | null {
+  if (pathname === "/examiner/exams") return { ancestors: [], current: "Create Examination" };
+  if (pathname === "/examiner/question-banks") return { ancestors: [], current: "Manage Question Banks" };
+  if (/^\/examiner\/question-banks\/[^/]+$/.test(pathname)) return { ancestors: [{ href: "/examiner/question-banks", label: "Manage Question Banks" }], current: "Question Bank Details" };
+  if (/^\/examiner\/exams\/[^/]+\/question-bank$/.test(pathname)) return { ancestors: [{ href: "/examiner/exams", label: "Create Examination" }], current: "Examination Bank" };
+  if (/^\/examiner\/exams\/[^/]+\/select-question-bank$/.test(pathname)) return { ancestors: [{ href: "/examiner/exams", label: "Create Examination" }], current: "Select Question Bank" };
+  if (pathname === "/examiner/questions") return { ancestors: [{ href: "/examiner/question-banks", label: "Manage Question Banks" }], current: "Questions" };
+  if (pathname === "/examiner/grading") return { ancestors: [], current: "Evaluation" };
+  if (pathname === "/examiner/results") return { ancestors: [], current: "Results" };
+  return null;
+}
+
+function studentBreadcrumbs(pathname: string): Breadcrumbs | null {
+  if (pathname === "/student/exams") return { ancestors: [], current: "Examinations" };
+  if (/^\/student\/exam\/[^/]+$/.test(pathname)) return { ancestors: [{ href: "/student/exams", label: "Examinations" }], current: "Examination" };
+  if (pathname === "/student/results") return { ancestors: [], current: "Results" };
+  if (/^\/student\/results\/[^/]+$/.test(pathname)) return { ancestors: [{ href: "/student/results", label: "Results" }], current: "Result Details" };
+  return null;
 }
 
 export default function SectionBreadcrumbNavigation() {
   const pathname = usePathname() || "";
+  const [role, setRole] = useState("examiner");
 
-  // Account Management already provides its role-aware Dashboard link.
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem("examguard_user");
+      const user = storedUser ? JSON.parse(storedUser) : null;
+      if (user?.role) setRole(String(user.role));
+    } catch {
+      setRole("examiner");
+    }
+  }, [pathname]);
+
   if (
     pathname === "/account/management" ||
     pathname === "/account/security" ||
+    pathname === "/admin/dashboard" ||
+    pathname === "/examiner/dashboard" ||
+    pathname === "/student/dashboard" ||
     !/^\/(admin|examiner|student|staff)(\/|$)/.test(pathname)
   ) return null;
 
@@ -87,34 +135,25 @@ export default function SectionBreadcrumbNavigation() {
     ? "/admin/dashboard"
     : pathname.startsWith("/student/")
       ? "/student/dashboard"
-      : pathname.startsWith("/staff/")
-        ? "/examiner/dashboard"
+      : pathname.startsWith("/staff/") && role === "admin"
+        ? "/admin/dashboard"
         : "/examiner/dashboard";
 
-  if (pathname === dashboardHref) return null;
+  const breadcrumbs =
+    pathname.startsWith("/admin/")
+      ? adminBreadcrumbs(pathname)
+      : pathname.startsWith("/student/")
+        ? studentBreadcrumbs(pathname)
+        : pathname.startsWith("/staff/")
+          ? staffBreadcrumbs(pathname, role)
+          : examinerBreadcrumbs(pathname);
 
-  const parts = pathname.split("/").filter(Boolean);
-  const ancestors: { href: string; label: string }[] = [];
-
-  for (let index = 1; index < parts.length; index += 1) {
-    const href = "/" + parts.slice(0, index).join("/");
-    const template = routeTemplates.find((candidate) => routeMatches(candidate, href));
-    if (template && href !== dashboardHref) {
-      ancestors.push({ href, label: titleFor(template, href) });
-    }
-  }
-
-  const currentTemplate = routeTemplates.find((candidate) => routeMatches(candidate, pathname));
-  const currentLabel = currentTemplate
-    ? titleFor(currentTemplate, pathname)
-    : titleFor("/" + parts.join("/"), pathname);
+  const current = breadcrumbs?.current || pathname.split("/").filter(Boolean).at(-1)?.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Details";
+  const ancestors = breadcrumbs?.ancestors || [];
 
   return (
     <nav aria-label="Previous sections" className="mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm">
-      <Link
-        href={dashboardHref}
-        className="font-semibold text-blue-300 transition hover:text-blue-200"
-      >
+      <Link href={dashboardHref} className="font-semibold text-blue-300 transition hover:text-blue-200">
         Dashboard
       </Link>
       {ancestors.map((item) => (
@@ -126,7 +165,7 @@ export default function SectionBreadcrumbNavigation() {
         </span>
       ))}
       <span aria-hidden="true" className="text-slate-500">/</span>
-      <span aria-current="page" className="font-semibold text-white">{currentLabel}</span>
+      <span aria-current="page" className="font-semibold text-white">{current}</span>
     </nav>
   );
 }
