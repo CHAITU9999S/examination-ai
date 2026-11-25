@@ -74,10 +74,10 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "Security",
-    description: "Change your password and maintain account security.",
-    slug: "security",
-    href: "/account/security",
+    title: "Account Management",
+    description: "Manage your personal details, password, and recent login history.",
+    slug: "account-management",
+    href: "/account/management",
     items: [],
   },
 ];
