@@ -51,7 +51,6 @@ function adminBreadcrumbs(pathname: string): Breadcrumbs | null {
 
 function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
   const isAdmin = role === "admin";
-  const dashboard = isAdmin ? "/admin/dashboard" : "/examiner/dashboard";
   const examParent = isAdmin ? ADMIN_EXAMS : null;
   const bankParent = isAdmin ? ADMIN_BANKS : null;
 
