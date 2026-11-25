@@ -827,14 +827,14 @@ QuestionBank = Question
 class LoginHistory(Base):
     __tablename__ = "login_history"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    logged_in_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+    logged_in_at = Column(DateTime(), nullable=False, default=utc_now_naive, server_default=text("CURRENT_TIMESTAMP"))
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
 
