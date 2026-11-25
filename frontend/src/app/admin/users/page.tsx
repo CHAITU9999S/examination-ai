@@ -367,7 +367,7 @@ export default function AdminUsersPage() {
                             disabled={actionId === user.id}
                             className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                           >
-                            Delete with records
+                            Delete account
                           </button>
                         </div>
                       </td>
