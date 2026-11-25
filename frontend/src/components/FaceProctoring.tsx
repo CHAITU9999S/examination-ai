@@ -7,7 +7,7 @@ interface FaceProctoringProps {
   enabled: boolean;
   sensitivity?: number;
   onFaceMissing: () => void;
-  onFaceVerified: () => void;
+  onFaceVerified: (photo: Blob) => void;
   onMultipleFaces: () => void;
   onGazeAway: (data: Record<string, unknown>) => void;
   onDetectorError: (message: string) => void;
@@ -214,7 +214,18 @@ export default function FaceProctoring({
         now - facePresentSinceRef.current >= 1000
       ) {
         faceVerifiedRef.current = true;
-        onFaceVerified();
+        const captureCanvas = document.createElement("canvas");
+        captureCanvas.width = videoElement.videoWidth;
+        captureCanvas.height = videoElement.videoHeight;
+        const captureContext = captureCanvas.getContext("2d");
+        if (captureContext && captureCanvas.width > 0 && captureCanvas.height > 0) {
+          captureContext.drawImage(videoElement, 0, 0, captureCanvas.width, captureCanvas.height);
+          captureCanvas.toBlob((photo) => {
+            if (photo && !cancelled) onFaceVerified(photo);
+          }, "image/jpeg", 0.82);
+        } else {
+          onDetectorError("The camera frame could not be captured. Please retry the photo.");
+        }
       }
 
       const width = videoElement.videoWidth;
