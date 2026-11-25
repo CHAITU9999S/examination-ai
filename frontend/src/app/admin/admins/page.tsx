@@ -214,7 +214,7 @@ export default function AdminManagementPage() {
   async function deleteAdmin(admin: AdminUser) {
     if (
       !window.confirm(
-        `Delete administrator ${admin.full_name}? The backend may block deletion if this account is the last active administrator or has dependent records.`
+        `Delete administrator ${admin.full_name}? Scheduled exams and owned question banks will be removed. Completed exams and grading history will be preserved for later review in Retained Data. The account will be anonymized. The last active Admin cannot be deleted.`
       )
     ) {
       return;
@@ -244,7 +244,7 @@ export default function AdminManagementPage() {
         );
       }
 
-      setMessage("Administrator account deleted.");
+      setMessage(data.message || "Administrator account deleted.");
       await loadAdmins();
     } catch (err) {
       setError(
