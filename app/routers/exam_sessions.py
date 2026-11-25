@@ -265,6 +265,9 @@ def _advance_prestart_stage(session: ExamSession, exam: Exam, now: datetime) -> 
     """Advance persisted entry stages and auto-start when the 17-second window ends."""
     if session.status != "not_started":
         return False
+    prestart_deadline = normalize_to_naive_utc(session.prestart_expires_at)
+    if prestart_deadline is not None and now >= prestart_deadline:
+        return False
     changed = False
     if session.prestart_stage == "summary" and session.summary_started_at:
         summary_start = normalize_to_naive_utc(session.summary_started_at)
