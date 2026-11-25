@@ -846,7 +846,9 @@ export default function StudentExamPage() {
     void initializeExam();
 
     const timeInterval = setInterval(() => { loadRemainingTime(); }, 15000);
-    const prestartInterval = setInterval(() => { void loadPrestartStatus(); }, 1000);
+    const prestartInterval = setInterval(() => {
+      if (!activePaperLoadedRef.current) void loadPrestartStatus();
+    }, 1000);
     const tokenRefreshInterval = setInterval(() => {
       void refreshExamAccessToken();
     }, 4 * 60 * 1000);
