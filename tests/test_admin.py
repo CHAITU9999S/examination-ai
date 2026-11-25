@@ -378,7 +378,7 @@ def test_deleting_student_preserves_completed_attempt_and_allows_later_cleanup(
     ])
     session = ExamSession(
         exam_id=exam.id,
-        student_id=examiner.id,
+        student_id=student.id,
         status="submitted",
         started_at=datetime.utcnow() - timedelta(minutes=10),
         submitted_at=datetime.utcnow(),
