@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
@@ -30,6 +30,8 @@ const KIND_LABELS: Record<string, string> = {
 export default function RetainedDataPage() {
   const router = useRouter();
   const [items, setItems] = useState<RetainedItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("title-asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -90,6 +92,21 @@ export default function RetainedDataPage() {
     verifyAndLoad();
   }, [loadItems, router]);
 
+  const visibleItems = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return [...items]
+      .filter((item) => !term || [
+        item.title, item.owner_name, item.owner_role, item.description,
+        item.kind, KIND_LABELS[item.kind] || item.kind,
+      ].some((value) => String(value || "").toLowerCase().includes(term)))
+      .sort((a, b) => {
+        if (sortBy === "title-desc") return b.title.localeCompare(a.title);
+        if (sortBy === "owner") return a.owner_name.localeCompare(b.owner_name);
+        if (sortBy === "kind") return (KIND_LABELS[a.kind] || a.kind).localeCompare(KIND_LABELS[b.kind] || b.kind);
+        return a.title.localeCompare(b.title);
+      });
+  }, [items, searchTerm, sortBy]);
+
   async function deleteItem(item: RetainedItem) {
     const label = KIND_LABELS[item.kind] || "retained record";
     if (!window.confirm(`Delete this ${label.toLowerCase()} permanently? This cannot be undone.`)) return;
@@ -145,16 +162,26 @@ export default function RetainedDataPage() {
         {error && <div role="alert" className="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
         {message && <div role="status" className="mt-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{message}</div>}
 
+        <div className="mt-8 flex flex-wrap gap-3">
+          <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search retained records, owner, or description" aria-label="Search retained data" className="min-w-[240px] flex-1 rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort retained data" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+            <option value="title-asc">Title A to Z</option>
+            <option value="title-desc">Title Z to A</option>
+            <option value="owner">Original account A to Z</option>
+            <option value="kind">Record type</option>
+          </select>
+        </div>
+
         {loading ? (
           <p className="mt-8 text-slate-400">Loading retained records...</p>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <div className="mt-8 rounded-xl border border-white/10 bg-slate-900 p-6 text-slate-300">
-            No retained records are currently available.
+            {items.length === 0 ? "No retained records are currently available." : "No retained records match your search."}
           </div>
         ) : (
           <div className="mt-8 space-y-4">
-            <p className="text-sm text-slate-400">{items.length} retained record(s)</p>
-            {items.map((item) => {
+            <p className="text-sm text-slate-400">{visibleItems.length} of {items.length} retained record(s)</p>
+            {visibleItems.map((item) => {
               const key = `${item.kind}-${item.id}`;
               return (
                 <article key={key} className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900 p-5 sm:flex-row sm:items-center sm:justify-between">
