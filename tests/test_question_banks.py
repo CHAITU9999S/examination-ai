@@ -1,0 +1,117 @@
+from app.auth import create_access_token
+from app.models import QuestionBank, User
+from app.question_bank_models import QuestionCollection, QuestionCollectionItem
+
+
+def create_user(db, role, email):
+    user = User(
+        full_name=f"Question Bank {role.title()}",
+        email=email,
+        password_hash="test-password-hash",
+        role=role,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def auth_headers(user):
+    token = create_access_token({"sub": str(user.id)})
+    return {"Authorization": f"Bearer {token}"}
+
+
+def add_bank_with_questions(db, owner, name, subject, question_specs):
+    bank = QuestionCollection(
+        name=name,
+        subject=subject,
+        description="Test bank",
+        created_by=owner.id,
+    )
+    db.add(bank)
+    db.flush()
+
+    for text, question_type, difficulty, marks in question_specs:
+        question = QuestionBank(
+            question_text=text,
+            question_type=question_type,
+            subject=subject,
+            difficulty=difficulty,
+            marks=marks,
+            negative_marks=0,
+            created_by=owner.id,
+        )
+        db.add(question)
+        db.flush()
+        db.add(QuestionCollectionItem(collection_id=bank.id, question_id=question.id))
+
+    db.commit()
+    db.refresh(bank)
+    return bank
+
+
+def test_browse_returns_all_creators_and_complete_question_bank_summary(client, db_session):
+    admin = create_user(db_session, "admin", "bank_summary_admin@test.com")
+    examiner = create_user(db_session, "examiner", "bank_summary_examiner@test.com")
+    admin_bank = add_bank_with_questions(
+        db_session,
+        admin,
+        "Admin Mathematics",
+        "Mathematics",
+        [
+            ("Addition", "MCQ", "easy", 2),
+            ("Algebra", "long_answer", "hard", 5),
+        ],
+    )
+    examiner_bank = add_bank_with_questions(
+        db_session,
+        examiner,
+        "Examiner Science",
+        "Science",
+        [("Physics", "short_answer", "medium", 3)],
+    )
+
+    response = client.get("/question-banks/browse", headers=auth_headers(examiner))
+
+    assert response.status_code == 200
+    banks = response.json()
+    assert {bank["id"] for bank in banks} == {admin_bank.id, examiner_bank.id}
+
+    admin_summary = next(bank for bank in banks if bank["id"] == admin_bank.id)
+    assert admin_summary["created_by_name"] == admin.full_name
+    assert admin_summary["created_by_role"] == "admin"
+    assert admin_summary["subject"] == "Mathematics"
+    assert admin_summary["question_count"] == 2
+    assert admin_summary["maximum_marks"] == 7
+    assert admin_summary["question_types"] == {"MCQ": 1, "long_answer": 1}
+    assert admin_summary["difficulty_counts"] == {"easy": 1, "hard": 1}
+    assert admin_summary["created_at"] is not None
+
+
+def test_manage_question_banks_returns_only_signed_in_users_banks(client, db_session):
+    admin = create_user(db_session, "admin", "bank_owner_admin@test.com")
+    examiner = create_user(db_session, "examiner", "bank_owner_examiner@test.com")
+    admin_bank = add_bank_with_questions(db_session, admin, "Admin Bank", "Math", [])
+    add_bank_with_questions(db_session, examiner, "Examiner Bank", "Science", [])
+
+    response = client.get("/question-banks/", headers=auth_headers(admin))
+
+    assert response.status_code == 200
+    assert [bank["id"] for bank in response.json()] == [admin_bank.id]
+
+
+def test_creator_cannot_edit_another_users_question_bank(client, db_session):
+    owner = create_user(db_session, "examiner", "bank_edit_owner@test.com")
+    other_examiner = create_user(db_session, "examiner", "bank_edit_other@test.com")
+    bank = add_bank_with_questions(db_session, owner, "Owned Bank", "Math", [])
+
+    response = client.patch(
+        f"/question-banks/{bank.id}",
+        json={"name": "Changed by another user", "subject": "Math", "description": None},
+        headers=auth_headers(other_examiner),
+    )
+
+    assert response.status_code == 404
+    db_session.refresh(bank)
+    assert bank.name == "Owned Bank"
