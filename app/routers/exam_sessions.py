@@ -410,7 +410,7 @@ def start_exam(
             )
         if session.status == "not_started" and not session.prestart_stage:
             session.prestart_stage = "face_capture"
-            session.prestart_expires_at = now + timedelta(minutes=30)
+            session.prestart_expires_at = exam_end
         try:
             get_or_create_session_question_ids(session, exam, db)
         except ValueError as error:
@@ -428,7 +428,7 @@ def start_exam(
             expires_at=None,
             status="not_started",
             prestart_stage="face_capture",
-            prestart_expires_at=now + timedelta(minutes=30),
+            prestart_expires_at=exam_end,
             selected_question_ids=selected_ids,
         )
         try:
@@ -1133,7 +1133,8 @@ async def save_face_capture(
     session.prestart_stage = "summary"
     session.summary_started_at = now
     if session.prestart_expires_at is None:
-        session.prestart_expires_at = now + timedelta(minutes=30)
+        exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+        session.prestart_expires_at = normalize_to_naive_utc(exam.end_time) if exam else now
     db.commit()
     return {
         "session_id": session.id,
