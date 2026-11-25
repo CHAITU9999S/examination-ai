@@ -113,6 +113,16 @@ def expire_session_if_needed(
         return True
 
     if now >= expires_at:
+        if session.is_paused:
+            exam_end = normalize_to_naive_utc(session.exam.end_time) if session.exam else None
+            if exam_end is not None and now >= exam_end:
+                session.status = "expired"
+                session.exam_token_refresh_hash = None
+                db.commit()
+                db.refresh(session)
+                return True
+            return False
+
         session.status = "submitted"
         session.submitted_at = now
         db.commit()
