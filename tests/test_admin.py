@@ -630,7 +630,7 @@ def test_admin_performance_lists_students_and_their_completed_attempt_details(
 ):
     question = QuestionBank(
         question_text="Explain gravity.",
-        question_type="LONG_ANSWER",
+        question_type="long_answer",
         difficulty="easy",
         marks=5,
         expected_answer="Gravity is an attractive force.",
