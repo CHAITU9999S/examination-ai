@@ -196,7 +196,7 @@ export default function WebcamPreview({
               {status === "loading"
                 ? "Starting webcam..."
                 : status === "active" && !showPreview
-                  ? "Preview hidden. Camera monitoring continues."
+                  ? "Preview hidden. The camera stream remains active."
                   : status === "disabled"
                     ? "Webcam is disabled for this examination."
                     : "Webcam preview is unavailable."}
