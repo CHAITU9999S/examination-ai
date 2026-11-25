@@ -11,8 +11,8 @@ from app.models import LoginHistory, User
 from app.schemas import (
     MessageResponse,
     PasswordChange,
+    UserProfileResponse,
     UserProfileUpdate,
-    UserResponse,
     LoginHistoryResponse,
 )
 
@@ -29,7 +29,7 @@ router = APIRouter(
 
 @router.get(
     "/me",
-    response_model=UserResponse
+    response_model=UserProfileResponse
 )
 def get_my_profile(
     current_user: User = Depends(get_current_user)
@@ -45,7 +45,7 @@ def get_my_profile(
 
 @router.patch(
     "/me/profile",
-    response_model=UserResponse
+    response_model=UserProfileResponse
 )
 def update_my_profile(
     profile_data: UserProfileUpdate,
