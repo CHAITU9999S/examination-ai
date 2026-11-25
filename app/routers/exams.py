@@ -1824,17 +1824,16 @@ def delete_exam(
     db: Session = Depends(get_db),
     current_user=Depends(require_role("examiner", "admin")),
 ):
-    """Delete an exam and its attempts while keeping shared question-bank questions."""
+    """Allow only the examination creator to delete the exam and its attempts."""
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
 
-    # Examiners may delete only their own examinations. Admins may delete
-    # any examination from the central administration inventory.
-    if current_user.role != UserRole.ADMIN.value and exam.created_by != current_user.id:
+    # Admins may view every examination, but only its creator may modify or delete it.
+    if exam.created_by != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="You can delete only examinations you created.",
+            detail="Only the examination creator can delete this examination.",
         )
 
     session_ids = [
