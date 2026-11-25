@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -1141,7 +1141,6 @@ def get_historical_student_performance(
             db.query(Answer).filter(Answer.session_id == session.id).all()
             if session is not None else []
         )
-        answer_by_question = {answer.question_id: answer for answer in answers}
         evaluated_answers = [
             answer for answer in answers if answer.awarded_marks is not None
         ]
