@@ -1097,6 +1097,14 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
         Exam.id.desc(),
     ).limit(20000).all()
 
+    if not include_all_assignments:
+        assigned_student_ids = {student.id for _, _, student, _, _ in assignment_rows}
+        student_items = {
+            student_id: item
+            for student_id, item in student_items.items()
+            if student_id in assigned_student_ids
+        }
+
     flat_performance = []
     now = datetime.utcnow()
     for assignment, exam, student, creator, assigner in assignment_rows:
