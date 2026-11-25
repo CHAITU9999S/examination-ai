@@ -1397,3 +1397,43 @@ def test_admin_can_delete_examination_created_by_another_user(client, db_session
 
     assert deleted.status_code == 200
     assert db_session.query(Exam).filter(Exam.id == exam_id).first() is None
+
+def test_exam_creator_cannot_assign_students_after_schedule_end(client, db_session):
+    creator = create_user(
+        db_session,
+        "admin",
+        "assignment_deadline_creator@test.com",
+    )
+    student = create_user(
+        db_session,
+        "student",
+        "assignment_deadline_student@test.com",
+    )
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam = Exam(
+        title="Ended Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=1),
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    response = client.post(
+        f"/exams/{exam.id}/assignments",
+        json={"student_ids": [student.id]},
+        headers=get_auth_headers(creator),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Exam has ended. New students cannot be assigned."
+    assignment = db_session.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == student.id,
+    ).first()
+    assert assignment is None
+
