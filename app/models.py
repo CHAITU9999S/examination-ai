@@ -668,6 +668,10 @@ class Result(Base):
 
     percentage = Column(Float, nullable=True)
 
+    # Optional grade entered by the examiner at result publication.
+    # When empty, the student-facing API derives the standard letter grade.
+    grade = Column(String(20), nullable=True)
+
     evaluated_at = Column(DateTime(), nullable=True)
 
     is_published = Column(
