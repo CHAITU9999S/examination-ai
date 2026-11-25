@@ -178,3 +178,48 @@ def test_student_cannot_open_unpublished_result(client, db_session):
     )
 
     assert response.status_code == 404
+
+
+def test_student_can_view_only_their_published_result_face_photo(client, db_session):
+    student = create_user(db_session, "result-photo-owner@example.com")
+    other_student = create_user(db_session, "result-photo-other@example.com")
+    exam = Exam(title="Face Photo Result", duration_minutes=30, total_questions=1)
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+    session, _ = create_published_result(db_session, student, exam, published=True)
+    session.face_capture_data = b"private-face-photo-bytes"
+    session.face_capture_mime_type = "image/jpeg"
+    db_session.commit()
+
+    photo = client.get(
+        f"/results/sessions/{session.id}/face-photo",
+        headers=login_headers(client, student.email),
+    )
+    assert photo.status_code == 200
+    assert photo.content == b"private-face-photo-bytes"
+    assert photo.headers.get("cache-control") == "private, no-store"
+
+    denied = client.get(
+        f"/results/sessions/{session.id}/face-photo",
+        headers=login_headers(client, other_student.email),
+    )
+    assert denied.status_code == 403
+
+
+def test_student_cannot_view_face_photo_before_result_publication(client, db_session):
+    student = create_user(db_session, "result-photo-unpublished@example.com")
+    exam = Exam(title="Unpublished Face Photo", duration_minutes=30, total_questions=1)
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+    session, _ = create_published_result(db_session, student, exam, published=False)
+    session.face_capture_data = b"private-face-photo-bytes"
+    session.face_capture_mime_type = "image/jpeg"
+    db_session.commit()
+
+    response = client.get(
+        f"/results/sessions/{session.id}/face-photo",
+        headers=login_headers(client, student.email),
+    )
+    assert response.status_code == 404
