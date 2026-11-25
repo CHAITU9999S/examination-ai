@@ -1,7 +1,10 @@
 import pytest
 
 from app.auth import hash_password, verify_password
-from app.models import AdminActivityLog, User
+from app.models import (
+    AdminActivityLog, Answer, Exam, ExamQuestion, ExamSession,
+    Option, QuestionBank, Result, User,
+)
 
 
 @pytest.fixture
@@ -262,4 +265,83 @@ def test_examiner_cannot_create_users(client, examiner):
             "role": "examiner",
         },
     )
+    assert response.status_code == 403
+
+
+def test_admin_can_delete_all_questions_once_and_preserve_result_history(
+    client, db_session, admin, student
+):
+    question = QuestionBank(
+        question_text="What is 2 + 2?",
+        question_type="MCQ",
+        difficulty="easy",
+        marks=1,
+        created_by=admin.id,
+    )
+    db_session.add(question)
+    db_session.flush()
+    option = Option(question_id=question.id, option_text="4", is_correct=True)
+    exam = Exam(
+        title="History preservation exam",
+        subject="Mathematics",
+        duration_minutes=30,
+        created_by=admin.id,
+    )
+    db_session.add_all([option, exam])
+    db_session.flush()
+    db_session.add(ExamQuestion(exam_id=exam.id, question_id=question.id))
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        started_at=None,
+        submitted_at=None,
+        status="submitted",
+        expires_at=None,
+        selected_question_ids=[question.id],
+    )
+    db_session.add(session)
+    db_session.flush()
+    answer = Answer(
+        session_id=session.id,
+        question_id=question.id,
+        answer_text="4",
+        awarded_marks=1,
+    )
+    db_session.add(answer)
+    db_session.flush()
+    result = Result(
+        session_id=session.id,
+        total_marks=1,
+        obtained_marks=1,
+        percentage=100,
+        is_published=True,
+    )
+    db_session.add(result)
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    status_response = client.get("/admin/questions/reset-status", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["available"] is True
+
+    response = client.delete("/admin/questions/all", headers=headers)
+    assert response.status_code == 200
+    assert db_session.query(QuestionBank).count() == 0
+    assert db_session.query(Option).count() == 0
+    assert db_session.query(ExamQuestion).count() == 0
+    assert db_session.query(Answer).count() == 0
+    assert db_session.query(ExamSession).filter(ExamSession.id == session.id).count() == 1
+    assert db_session.query(Result).filter(Result.id == result.id).count() == 1
+
+    status_response = client.get("/admin/questions/reset-status", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["available"] is False
+
+    second_response = client.delete("/admin/questions/all", headers=headers)
+    assert second_response.status_code == 409
+
+
+def test_student_cannot_use_global_question_deletion(client, student):
+    headers = get_auth_headers(client, student.email, "StudentPass123!")
+    response = client.delete("/admin/questions/all", headers=headers)
     assert response.status_code == 403
