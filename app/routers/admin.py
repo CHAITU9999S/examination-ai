@@ -169,6 +169,7 @@ def list_admin_activity_logs(
         db.query(AdminActivityLog, actor, target)
         .join(actor, AdminActivityLog.actor_user_id == actor.id)
         .outerjoin(target, AdminActivityLog.target_user_id == target.id)
+        .filter(actor.role == UserRole.ADMIN.value)
         .order_by(AdminActivityLog.created_at.desc(), AdminActivityLog.id.desc())
         .limit(100)
         .all()
@@ -190,6 +191,51 @@ def list_admin_activity_logs(
             ),
         }
         for log, actor_user, target_user in rows
+    ]
+
+
+@router.get("/examiner-activity-logs")
+def list_examiner_activity_logs(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Return recent examination and question-bank actions performed by Examiners."""
+    actor = aliased(User)
+    rows = (
+        db.query(AdminActivityLog, actor)
+        .join(actor, AdminActivityLog.actor_user_id == actor.id)
+        .filter(
+            actor.role == UserRole.EXAMINER.value,
+            AdminActivityLog.action.in_([
+                "examination_created",
+                "examination_updated",
+                "examination_deleted",
+                "exam_question_added",
+                "exam_question_removed_from_bank",
+                "exam_questions_copied_from_banks",
+                "question_bank_created",
+                "question_bank_updated",
+                "question_bank_deleted",
+                "question_added_to_bank",
+                "question_updated_in_bank",
+                "question_deleted_from_bank",
+                "question_removed_from_bank",
+            ]),
+        )
+        .order_by(AdminActivityLog.created_at.desc(), AdminActivityLog.id.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {
+            "id": log.id,
+            "actor_user_id": log.actor_user_id,
+            "actor_name": actor_user.full_name,
+            "action": log.action,
+            "details": log.details or {},
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        }
+        for log, actor_user in rows
     ]
 
 
