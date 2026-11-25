@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../../admin/components/AdminSectionNavigation";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -48,6 +48,8 @@ function formatDate(value?: string | null) {
 
 export default function StaffProctoringReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedSessionId = searchParams.get("session_id");
   const [sessions, setSessions] = useState<FlaggedSession[]>([]);
   const [selected, setSelected] = useState<FlaggedSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,12 +87,18 @@ export default function StaffProctoringReviewPage() {
       const data = await response.json();
       const list = Array.isArray(data.sessions) ? data.sessions : [];
       setSessions(list);
+      if (requestedSessionId && /^\\d+$/.test(requestedSessionId)) {
+        const historyResponse = await fetch(`${API_URL}/exam-sessions/${requestedSessionId}/proctoring/history`, { headers, cache: "no-store" });
+        const historyData = await historyResponse.json().catch(() => ({}));
+        if (!historyResponse.ok) throw new Error(historyData.detail || "Unable to load this student's proctoring details.");
+        setSelected(historyData as FlaggedSession);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load proctoring review.");
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, requestedSessionId]);
 
   useEffect(() => {
     loadFlaggedSessions();
