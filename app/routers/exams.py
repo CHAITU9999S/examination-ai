@@ -194,6 +194,8 @@ def list_exams(
     # If the selected paper cannot be calculated safely, return no value
     # rather than showing an incorrect total.
     max_marks_by_exam = {}
+    exam_summary_by_id = {}
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     for exam in exams:
         assigned_questions = db.query(
             QuestionBank.question_type,
@@ -234,6 +236,39 @@ def list_exams(
                 maximum = next(iter(available_marks)) * int(exam.total_questions or 0)
 
         max_marks_by_exam[exam.id] = round(maximum, 2) if maximum is not None else None
+        active_assignments = db.query(ExamAssignment.id).filter(
+            ExamAssignment.exam_id == exam.id,
+            ExamAssignment.is_active.is_(True),
+        ).count()
+        completed_sessions = db.query(ExamSession.id).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.status.in_(("submitted", "auto_submitted", "expired")),
+        ).count()
+        published_results = db.query(Result.id).join(
+            ExamSession, Result.session_id == ExamSession.id
+        ).filter(
+            ExamSession.exam_id == exam.id,
+            Result.is_published.is_(True),
+        ).count()
+        start_at = normalize_to_naive_utc(exam.start_time)
+        end_at = normalize_to_naive_utc(exam.end_time)
+        if start_at is None or end_at is None:
+            exam_status = "schedule_not_assigned"
+        elif now_utc < start_at:
+            exam_status = "scheduled"
+        elif now_utc <= end_at:
+            exam_status = "ongoing"
+        elif completed_sessions > 0 and published_results >= completed_sessions:
+            exam_status = "results_published"
+        else:
+            exam_status = "completed_not_evaluated"
+        exam_summary_by_id[exam.id] = {
+            "assigned_question_count": len(assigned_questions),
+            "active_assignment_count": active_assignments,
+            "completed_session_count": completed_sessions,
+            "published_result_count": published_results,
+            "exam_status": exam_status,
+        }
 
     return [
         {
@@ -243,6 +278,7 @@ def list_exams(
             "duration_minutes": exam.duration_minutes,
             "total_questions": exam.total_questions,
             "max_marks": max_marks_by_exam.get(exam.id),
+            **exam_summary_by_id.get(exam.id, {}),
             "randomize_questions": exam.randomize_questions,
             "selection_rules": exam.selection_rules,
             "start_time": utc_timestamp(exam.start_time),
