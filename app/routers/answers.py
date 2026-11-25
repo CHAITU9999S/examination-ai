@@ -610,7 +610,9 @@ def delete_saved_answer(
 
     if answer is not None:
         try:
-            db.delete(answer)
+            # Keep the answer row because it also stores the per-question timer.
+            # Clearing text must never reset elapsed time or unlock a question.
+            answer.answer_text = None
             db.commit()
         except SQLAlchemyError:
             db.rollback()
