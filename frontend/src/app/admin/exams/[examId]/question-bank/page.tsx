@@ -23,6 +23,8 @@ interface Question {
 }
 interface BankData {
   exam_id: number;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
   total_assigned: number;
   questions: Question[];
 }
@@ -93,6 +95,7 @@ export default function AdminQuestionBankViewPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold">Examination Question Bank</h1>
+            <p className="mt-2 text-sm text-slate-400">Created by: <span className="font-medium text-slate-200">{bank?.created_by_name || "Unknown"}</span> {bank?.created_by_role ? <span className="capitalize">({bank.created_by_role})</span> : null}</p>
             <p className="mt-2 text-sm text-slate-400">Admin inspection view. Other creators' question banks are read-only.</p>
           </div>
 
