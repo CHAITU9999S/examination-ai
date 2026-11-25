@@ -859,7 +859,7 @@ def get_session_answer_review(
                 }
                 for revision in revisions
             ] if revisions else (
-                [{"evaluation_number": 1, "marks": current_marks, "created_at": answer.updated_at}]
+                [{"evaluation_number": 1, "marks": current_marks, "created_at": None}]
                 if answer is not None and current_marks is not None else []
             ),
             "examiner_feedback": answer.examiner_feedback if answer is not None else None,
@@ -880,7 +880,7 @@ def get_session_answer_review(
         "result_published": bool(result and result.is_published),
         "result_obtained_marks": result.obtained_marks if result else None,
         "result_total_marks": result.total_marks if result else None,
-        "result_grade": _letter_grade(result.percentage) if result and result.is_published else None,
+        "result_grade": ("A+" if float(result.percentage or 0) >= 90 else "A" if float(result.percentage or 0) >= 80 else "B" if float(result.percentage or 0) >= 70 else "C" if float(result.percentage or 0) >= 60 else "D" if float(result.percentage or 0) >= 50 else "F") if result and result.is_published else None,
         "questions": review_items,
     }
 
