@@ -21,6 +21,10 @@ interface FlaggedSession {
   session_id: number;
   exam_id: number;
   exam_title: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   student_id: number;
   student_name: string;
   session_status: string;
@@ -181,6 +185,7 @@ export default function StaffProctoringReviewPage() {
                   <div>
                     <p className="font-semibold">{session.exam_title}</p>
                     <p className="mt-1 text-sm text-slate-400">{session.student_name}</p>
+                    <p className="mt-1 text-xs text-slate-400">Created by: {session.creator_name || "Unknown"} · Assigned by: {session.assigned_by_name || "Unknown"}</p>
                     <p className="mt-1 text-xs text-slate-500">Session #{session.session_id} · {session.session_status}</p>
                   </div>
                   <span className="rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300">
@@ -198,6 +203,7 @@ export default function StaffProctoringReviewPage() {
               <>
                 <h2 className="text-xl font-bold">{selected.exam_title}</h2>
                 <p className="mt-1 text-sm text-slate-400">{selected.student_name} · Session #{selected.session_id}</p>
+                <p className="mt-1 text-xs text-slate-400">Created by: {selected.creator_name || "Unknown"} · Assigned by: {selected.assigned_by_name || "Unknown"}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg bg-slate-800 p-4">
                     <p className="text-xs text-slate-400">Suspicion score</p>
