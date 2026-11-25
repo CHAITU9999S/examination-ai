@@ -1375,3 +1375,25 @@ def test_imported_questions_must_match_exam_configured_type_and_difficulty(clien
     assert all(question.difficulty == "easy" and question.question_type == "MCQ" for question in copied_questions)
     assert all(question.marks == 1 for question in copied_questions)
     assert all(question.negative_marks == 0 for question in copied_questions)
+
+
+
+def test_admin_can_delete_examination_created_by_another_user(client, db_session):
+    owner = create_user(db_session, "examiner", "exam_owner_for_admin_delete@test.com")
+    admin = create_user(db_session, "admin", "exam_admin_delete@test.com")
+
+    created = client.post(
+        "/exams/",
+        json=valid_exam_data(),
+        headers=get_auth_headers(owner),
+    )
+    assert created.status_code == 201
+    exam_id = created.json()["exam_id"]
+
+    deleted = client.delete(
+        f"/exams/{exam_id}",
+        headers=get_auth_headers(admin),
+    )
+
+    assert deleted.status_code == 200
+    assert db_session.query(Exam).filter(Exam.id == exam_id).first() is None

@@ -51,8 +51,13 @@ const navigation = [
   },
   {
     title: "Examinations",
-    description: "View all examinations created by Admins and Examiners.",
-    href: "/staff/examinations",
+    description: "View all examinations created by Admins and Examiners, with Admin deletion controls.",
+    href: "/admin/exams",
+  },
+  {
+    title: "All Questions",
+    description: "View every existing question across the platform and safely delete individual questions.",
+    href: "/admin/questions",
   },
   {
     title: "Manage Examination",

@@ -388,3 +388,27 @@ def test_student_cannot_list_questions(client, db_session):
     )
 
     assert response.status_code == 403
+
+
+
+def test_admin_can_delete_question_created_by_another_user(client, db_session):
+    owner = create_user(db_session, "examiner", "question_owner_for_admin_delete@test.com")
+    admin = create_user(db_session, "admin", "question_admin_delete@test.com")
+
+    created = client.post(
+        "/questions/",
+        json=valid_mcq_data(),
+        headers=get_auth_headers(owner),
+    )
+    assert created.status_code == 201
+    question_id = created.json()["question_id"]
+
+    deleted = client.delete(
+        f"/questions/{question_id}",
+        headers=get_auth_headers(admin),
+    )
+
+    assert deleted.status_code == 200
+    assert db_session.query(QuestionBank).filter(
+        QuestionBank.id == question_id
+    ).first() is None

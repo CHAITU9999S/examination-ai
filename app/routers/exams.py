@@ -1682,8 +1682,9 @@ def delete_exam(
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
 
-    # Only the examination creator can delete this examination.
-    if exam.created_by != current_user.id:
+    # Examiners may delete only their own examinations. Admins may delete
+    # any examination from the central administration inventory.
+    if current_user.role != UserRole.ADMIN.value and exam.created_by != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="You can delete only examinations you created.",

@@ -74,6 +74,8 @@ export default function AdminExamsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [deletingExamId, setDeletingExamId] = useState<number | null>(null);
+  const [actionMessage, setActionMessage] = useState("");
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
@@ -157,6 +159,35 @@ export default function AdminExamsPage() {
   useEffect(() => {
     loadExams();
   }, [loadExams]);
+
+  async function deleteExam(exam: Exam) {
+    const confirmed = window.confirm(
+      `Permanently delete "${exam.title}"? This removes its assignments, attempts, answers, marks, results, and proctoring records. Questions still used by other examinations or question banks will be preserved. This cannot be undone.`
+    );
+    if (!confirmed || deletingExamId !== null) return;
+
+    const headers = getHeaders();
+    if (!headers) return;
+
+    setDeletingExamId(exam.id);
+    setActionMessage("");
+    try {
+      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to delete this examination.");
+      }
+      setExams((current) => current.filter((item) => item.id !== exam.id));
+      setActionMessage(data.message || "Examination and its dependent records were deleted.");
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : "Unable to delete this examination.");
+    } finally {
+      setDeletingExamId(null);
+    }
+  }
 
   const visibleExams = [...exams]
     .filter((exam) => {
@@ -248,6 +279,11 @@ export default function AdminExamsPage() {
             {error}
           </div>
         )}
+        {actionMessage && (
+          <div role="status" className="mt-6 rounded-xl border border-white/10 bg-slate-900 px-5 py-4 text-sm text-slate-200">
+            {actionMessage}
+          </div>
+        )}
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -315,6 +351,7 @@ export default function AdminExamsPage() {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Settings</th>
                     <th className="px-4 py-3">Questions</th>
+                    <th className="px-4 py-3">Admin Actions</th>
                   </tr>
                 </thead>
 
@@ -388,6 +425,16 @@ export default function AdminExamsPage() {
                             View Questions
                           </Link>
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => deleteExam(exam)}
+                          disabled={deletingExamId !== null}
+                          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingExamId === exam.id ? "Deleting..." : "Delete Examination"}
+                        </button>
                       </td>
                     </tr>
                   ))}

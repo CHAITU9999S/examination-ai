@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import QuestionBank, Option, ExamQuestion, ExamSession, Answer
+from app.models import QuestionBank, Option, ExamQuestion, ExamSession, Answer, User
 from app.schemas import QuestionCreate
 from app.dependencies import require_role
 from app.services.question_validation import validate_question
@@ -144,6 +144,10 @@ def list_questions(
             Option.id
         ).all()
 
+    creator_ids = {question.created_by for question in questions if question.created_by is not None}
+    creators = db.query(User).filter(User.id.in_(creator_ids)).all() if creator_ids else []
+    creator_names = {creator.id: creator.full_name for creator in creators}
+
     options_by_question = {}
 
     for option in all_options:
@@ -173,6 +177,7 @@ def list_questions(
             "negative_marks": question.negative_marks,
             "question_image_available": bool(question.question_image_path),
             "created_by": question.created_by,
+            "created_by_name": creator_names.get(question.created_by, "Unknown"),
             "tags": question.tags or [],
             "options": options_by_question.get(
                 question.id,
@@ -464,10 +469,10 @@ def delete_question(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found."
         )
-    if question.created_by != current_user.id:
+    if current_user.role != "admin" and question.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the question creator can delete this question.",
+            detail="Only the question creator or an Admin can delete this question.",
         )
 
     if db.query(ExamQuestion.id).filter(
