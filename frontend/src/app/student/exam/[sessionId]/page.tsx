@@ -38,6 +38,10 @@ interface ExamPaper {
   remaining_seconds?: number | null;
   exam_id?: number;
   exam_title?: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   duration_minutes?: number;
   questions: ExamQuestion[];
   proctoring_enabled?: boolean;
@@ -49,7 +53,8 @@ interface ExamPaper {
   prestart_stage?: string;
   face_captured?: boolean;
   exam_summary?: {
-    exam_title: string; subject?: string | null; creator_name: string; student_name: string;
+    exam_title: string; subject?: string | null; creator_name: string; creator_role?: string | null;
+    assigned_by_name?: string | null; assigned_by_role?: string | null; student_name: string;
     student_email?: string | null; student_department?: string | null; total_questions: number;
     question_type_breakdown: Record<string, number>;
     marking_scheme: Array<{ question_type: string; difficulty: string; count: number; positive_marks_per_question: number; negative_marks_per_question: number }>;
@@ -1220,7 +1225,9 @@ export default function StudentExamPage() {
                 <p className="text-sm leading-6 text-slate-300">Review the details below. This summary must remain on screen for at least 60 seconds. You may continue after the first minute or wait until the full two minutes finish.</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    ["Subject", summary.subject || "Not specified"], ["Created by", summary.creator_name],
+                    ["Subject", summary.subject || "Not specified"],
+                    ["Created by", summary.creator_name + (summary.creator_role ? " (" + summary.creator_role + ")" : "")],
+                    ["Assigned by", (summary.assigned_by_name || "Not available") + (summary.assigned_by_role ? " (" + summary.assigned_by_role + ")" : "")],
                     ["Student", summary.student_name], ["Student email", summary.student_email || "—"],
                     ["Department", summary.student_department || "—"], ["Total questions", String(summary.total_questions)],
                     ["Duration", summary.duration_minutes + " minutes"], ["Maximum marks", String(summary.maximum_marks)],
@@ -1296,6 +1303,9 @@ export default function StudentExamPage() {
 
             <p className="text-xs text-slate-400">
               Session #{sessionId}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Created by: {paper.creator_name || "Not available"} · Assigned by: {paper.assigned_by_name || "Not available"}
             </p>
           </div>
 
