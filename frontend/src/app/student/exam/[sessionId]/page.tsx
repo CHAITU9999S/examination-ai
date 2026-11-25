@@ -229,7 +229,7 @@ export default function StudentExamPage() {
     void proctoringService.submitEvent(Number(sessionId), event).catch((requestError) => {
       setError(requestError instanceof Error ? requestError.message : "Unable to record a proctoring event.");
     });
-  }, [sessionId]);
+  }, [sessionId, setError]);
 
   const proctoring = useProctoring({
     enabled: Boolean(paper?.status === "in_progress"),
@@ -670,7 +670,7 @@ export default function StudentExamPage() {
     } finally {
       setPauseBusy(false);
     }
-  }, [getHeaders, isPaused, pauseBusy, sessionId, paper, currentIndex, pauseQuestionTimer, loadQuestionTimer]);
+  }, [getHeaders, isPaused, pauseBusy, sessionId, paper, currentIndex, pauseQuestionTimer, loadQuestionTimer, setError]);
 
   const saveAnswer = useCallback(async (
     questionId: number,
@@ -754,7 +754,7 @@ export default function StudentExamPage() {
     } catch {
       return false;
     }
-  }, [paper, currentIndex, imageUploading, pendingImageFiles, uploadedImageQuestionIds, questionTimerLocked, savedAnswerQuestionIds, saveAnswer]);
+  }, [paper, currentIndex, imageUploading, pendingImageFiles, uploadedImageQuestionIds, questionTimerLocked, savedAnswerQuestionIds, saveAnswer, setError]);
 
   const handleQuestionNavigation = useCallback(async (nextIndex: number) => {
     if (!paper || nextIndex < 0 || nextIndex >= paper.questions.length || nextIndex === currentIndex || isPaused || submitting) return;
@@ -779,7 +779,7 @@ export default function StudentExamPage() {
     } catch (navigationError) {
       setError(navigationError instanceof Error ? navigationError.message : "Unable to move to that question.");
     }
-  }, [paper, currentIndex, isPaused, submitting, saveCurrentQuestion, pauseQuestionTimer, getHeaders, sessionId]);
+  }, [paper, currentIndex, isPaused, submitting, saveCurrentQuestion, pauseQuestionTimer, getHeaders, sessionId, setError]);
 
 
   const submitExam = useCallback(async (automatic = false) => {
@@ -1453,7 +1453,7 @@ export default function StudentExamPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <span className="rounded-full bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-300">● Proctoring Active</span>
+            <span className="rounded-full bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-300">● Proctoring Enabled</span>
             <button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold">{showCameraPreview ? "Hide camera preview" : "Show camera preview"}</button>
             <button type="button" onClick={() => setShowQuestionDrawer((visible) => !visible)} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold lg:hidden" aria-expanded={showQuestionDrawer} aria-label="Toggle question navigation">☰ Questions</button>
             <div className="text-right">
