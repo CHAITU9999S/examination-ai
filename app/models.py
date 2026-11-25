@@ -425,6 +425,8 @@ class ExamSession(Base):
     )
     paused_at = Column(DateTime(), nullable=True)
     current_question_index = Column(Integer, nullable=False, default=0, server_default="0")
+    # Question numbers visited by this student, persisted across reconnects.
+    visited_question_ids = Column(JSON, nullable=True)
 
     status = Column(
         String(20),
