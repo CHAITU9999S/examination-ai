@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -73,6 +74,10 @@ export default function AdminSectionPage() {
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const section = useMemo(() => sections[params.section], [params.section]);
+  const previousSectionHref = params.section === "admins" || params.section === "examiners" || params.section === "students"
+    ? "/admin/sections/users"
+    : "/admin/dashboard";
+  const previousSectionLabel = previousSectionHref === "/admin/dashboard" ? "Previous Section" : "Users";
 
   useEffect(() => {
     async function verifyAdmin() {
@@ -125,7 +130,7 @@ export default function AdminSectionPage() {
             <Link href="/admin/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
             <p className="mt-1 text-sm text-slate-400">Administrator / {section.title}</p>
           </div>
-          <Link href="/admin/dashboard" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Dashboard</Link>
+          <AdminSectionNavigation previousHref={previousSectionHref} previousLabel={previousSectionLabel} />
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-6 py-10">
