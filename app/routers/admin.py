@@ -1049,6 +1049,7 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
     """
     StudentAccount = aliased(User)
     CreatorAccount = aliased(User)
+    AssignerAccount = aliased(User)
 
     students = db.query(User).filter(
         User.role == UserRole.STUDENT.value,
@@ -1070,13 +1071,15 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
     }
 
     assignment_query = db.query(
-        ExamAssignment, Exam, StudentAccount, CreatorAccount
+        ExamAssignment, Exam, StudentAccount, CreatorAccount, AssignerAccount
     ).join(
         Exam, Exam.id == ExamAssignment.exam_id
     ).join(
         StudentAccount, StudentAccount.id == ExamAssignment.student_id
     ).outerjoin(
         CreatorAccount, CreatorAccount.id == Exam.created_by
+    ).outerjoin(
+        AssignerAccount, AssignerAccount.id == ExamAssignment.assigned_by
     ).filter(
         ExamAssignment.is_active.is_(True),
         StudentAccount.role == UserRole.STUDENT.value,
@@ -1095,7 +1098,7 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
     ).limit(20000).all()
 
     flat_performance = []
-    for assignment, exam, student, creator in assignment_rows:
+    for assignment, exam, student, creator, assigner in assignment_rows:
         session = db.query(ExamSession).filter(
             ExamSession.exam_id == exam.id,
             ExamSession.student_id == student.id,
@@ -1208,6 +1211,8 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             "exam_end_time": _utc_iso(exam.end_time),
             "creator_id": exam.created_by,
             "creator_name": creator.full_name if creator else "Deleted account",
+            "assigned_by_name": assigner.full_name if assigner else "Deleted account",
+            "assigned_by_role": assigner.role if assigner else None,
             "started_at": _utc_iso(session.started_at) if session else None,
             "submitted_at": _utc_iso(session.submitted_at) if session else None,
             "session_status": status_value,
