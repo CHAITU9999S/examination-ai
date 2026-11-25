@@ -1073,6 +1073,8 @@ def get_prestart_status(
     ).with_for_update().populate_existing().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
+    if expire_session_if_needed(session, db, get_current_utc_time()):
+        raise HTTPException(status_code=409, detail="The examination entry session has expired.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
@@ -1119,6 +1121,8 @@ async def save_face_capture(
     session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
+    if expire_session_if_needed(session, db, get_current_utc_time()):
+        raise HTTPException(status_code=409, detail="The examination entry session has expired.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     if session.status != "not_started" or session.prestart_stage != "face_capture":
@@ -1174,6 +1178,8 @@ def continue_after_exam_summary(
     session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
+    if expire_session_if_needed(session, db, get_current_utc_time()):
+        raise HTTPException(status_code=409, detail="The examination entry session has expired.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     if session.status != "not_started" or session.prestart_stage != "summary" or not session.summary_started_at:
@@ -1219,6 +1225,8 @@ def confirm_exam_start(
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found.")
     now = get_current_utc_time()
+    if expire_session_if_needed(session, db, now):
+        raise HTTPException(status_code=409, detail="The examination entry session has expired.")
     _advance_prestart_stage(session, exam, now)
     if session.status == "not_started":
         if session.prestart_stage != "start_window" or not session.start_window_expires_at:
