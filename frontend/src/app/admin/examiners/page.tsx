@@ -227,7 +227,7 @@ export default function ExaminerManagementPage() {
 
   async function deleteExaminer(examiner: Examiner) {
     const confirmed = window.confirm(
-      `Delete examiner ${examiner.full_name} (${examiner.email})? Existing examination records may prevent deletion.`
+      `Delete examiner ${examiner.full_name} (${examiner.email})? Scheduled exams and owned question banks will be removed. Completed exams, submissions, and grading history will be preserved for later review in Retained Data. The account will be anonymized.`
     );
 
     if (!confirmed) return;
@@ -257,7 +257,7 @@ export default function ExaminerManagementPage() {
         );
       }
 
-      setMessage("Examiner account deleted successfully.");
+      setMessage(data.message || "Examiner account deleted successfully.");
 
       await loadExaminers();
     } catch (err) {
