@@ -757,7 +757,12 @@ export default function StudentExamPage() {
   }, [paper, currentIndex, imageUploading, pendingImageFiles, uploadedImageQuestionIds, questionTimerLocked, savedAnswerQuestionIds, saveAnswer, setError]);
 
   const handleQuestionNavigation = useCallback(async (nextIndex: number) => {
-    if (!paper || nextIndex < 0 || nextIndex >= paper.questions.length || nextIndex === currentIndex || isPaused || submitting) return;
+    if (!paper || nextIndex < 0 || nextIndex >= paper.questions.length) return;
+    if (nextIndex === currentIndex) {
+      setShowQuestionDrawer(false);
+      return;
+    }
+    if (isPaused || submitting) return;
     const currentQuestion = paper.questions[currentIndex];
     if (!await saveCurrentQuestion()) return;
     try {
