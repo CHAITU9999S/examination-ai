@@ -30,6 +30,8 @@ function formatDate(value?: string | null) {
 export default function StudentResultsPage() {
   const router = useRouter();
   const [items, setItems] = useState<ExamResultItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("latest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const loadResults = useCallback(async () => {
@@ -58,6 +60,17 @@ export default function StudentResultsPage() {
   }, [router]);
   useEffect(() => { loadResults(); }, [loadResults]);
   const completedCount = useMemo(() => items.filter(item => item.category === "completed").length, [items]);
+  const visibleItems = useMemo(() => [...items]
+    .filter((item) => !searchTerm.trim() || [
+      item.title, item.subject, item.creator_name, item.assigned_by_name,
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "oldest") return new Date(a.end_time || 0).getTime() - new Date(b.end_time || 0).getTime();
+      if (sortBy === "name") return a.title.localeCompare(b.title);
+      if (sortBy === "completed") return Number(b.category === "completed") - Number(a.category === "completed");
+      if (sortBy === "marks") return Number(b.obtained_marks || 0) - Number(a.obtained_marks || 0);
+      return new Date(b.end_time || 0).getTime() - new Date(a.end_time || 0).getTime();
+    }), [items, searchTerm, sortBy]);
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
@@ -76,9 +89,18 @@ export default function StudentResultsPage() {
         </div>
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-400">{visibleItems.length} of {items.length} examination(s)</p>
+            <div className="flex flex-wrap gap-3">
+              <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search exam, subject, creator, or assigner" aria-label="Search examination results" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort examination results" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                <option value="latest">Latest ended first</option><option value="oldest">Earliest ended first</option><option value="name">Exam name A to Z</option><option value="completed">Completed first</option><option value="marks">Highest obtained marks</option>
+              </select>
+            </div>
+          </div>
           {loading ? <p className="py-12 text-center text-slate-400">Loading examination history...</p> :
-            items.length === 0 ? <p className="py-12 text-center text-slate-400">No examination schedules have ended yet.</p> :
-            <div className="grid gap-5 xl:grid-cols-2">{items.map(exam => <article key={exam.id} className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
+            visibleItems.length === 0 ? <p className="py-12 text-center text-slate-400">{items.length === 0 ? "No examination schedules have ended yet." : "No results match your search."}</p> :
+            <div className="grid gap-5 xl:grid-cols-2">{visibleItems.map(exam => <article key={exam.id} className="rounded-xl border border-white/10 bg-slate-800/60 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">{exam.title}</h2><p className="mt-1 text-sm text-slate-400">{exam.subject || "Subject not specified"}</p></div>
                 <span className={"rounded-full px-3 py-1 text-xs " + (exam.category === "completed" ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300")}>{exam.category === "completed" ? "Completed" : "Expired"}</span>
               </div>
