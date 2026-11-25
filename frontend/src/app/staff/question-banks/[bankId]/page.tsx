@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type Question = {
@@ -23,6 +24,7 @@ export default function QuestionBankViewPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dashboardHref, setDashboardHref] = useState("/admin/dashboard");
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("examguard_access_token");
@@ -30,10 +32,15 @@ export default function QuestionBankViewPage() {
     setLoading(true);
     try {
       const headers = { Authorization: "Bearer " + token };
-      const [banksResponse, questionsResponse] = await Promise.all([
+      const [profileResponse, banksResponse, questionsResponse] = await Promise.all([
+        fetch(API_URL + "/users/me", { headers, cache: "no-store" }),
         fetch(API_URL + "/question-banks/browse", { headers, cache: "no-store" }),
         fetch(API_URL + "/question-banks/" + bankId + "/questions", { headers, cache: "no-store" }),
       ]);
+      if (profileResponse.ok) {
+        const profile = await profileResponse.json().catch(() => ({}));
+        setDashboardHref(profile.role === "examiner" ? "/examiner/dashboard" : "/admin/dashboard");
+      }
       const banks = await banksResponse.json().catch(() => []);
       const questionsData = await questionsResponse.json().catch(() => ({}));
       if (!banksResponse.ok || !questionsResponse.ok) throw new Error(questionsData.detail || "Unable to open this question bank.");
@@ -53,7 +60,7 @@ export default function QuestionBankViewPage() {
       <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div><Link href="/staff/question-banks" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="text-sm text-slate-400">View Question Bank</p></div>
-          <Link href="/staff/question-banks" className="rounded-lg border border-white/20 px-4 py-2 text-sm">All Question Banks</Link>
+          <AdminSectionNavigation previousHref="/staff/question-banks" previousLabel="All Question Banks" dashboardHref={dashboardHref} />
         </div>
       </header>
       <div className="mx-auto max-w-6xl space-y-6 px-6 py-10">
