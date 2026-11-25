@@ -60,7 +60,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
     description: "Create, manage your own examinations, or view all examinations as an Admin.",
     items: [
       { title: "Create Examination", description: "Create a new examination and configure its question paper.", href: "/examiner/exams" },
-      { title: "Manage Examinations", description: "Manage examinations created by your Admin account.", href: "/staff/manage-exams" },
+      { title: "Manage Examinations", description: "Manage examinations created by the logged-in account.", href: "/staff/manage-exams" },
       { title: "Examinations", description: "View all examinations created by Admins and Examiners. This section is read-only.", href: "/admin/exams" },
     ],
   },
