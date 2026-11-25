@@ -88,10 +88,10 @@ export default function StudentPerformancePage() {
         return;
       }
 
-      const headers = { Authorization: \`Bearer \${token}\` };
+      const headers = { Authorization: `Bearer ${token}` };
       const [profileResponse, performanceResponse] = await Promise.all([
-        fetch(\`\${API_URL}/users/me\`, { headers, cache: "no-store" }),
-        fetch(\`\${API_URL}/admin/student-performance\`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/admin/student-performance`, { headers, cache: "no-store" }),
       ]);
 
       if (profileResponse.status === 401 || profileResponse.status === 403 ||
@@ -321,7 +321,7 @@ export default function StudentPerformancePage() {
                                         <div>
                                           <p className="text-xs text-slate-400">Marks awarded</p>
                                           <p className="mt-1 text-lg font-semibold">{marksText(attempt.obtained_marks)} / {marksText(attempt.total_marks)}</p>
-                                          <p className="mt-1 text-xs text-slate-400">{attempt.marks_status}{attempt.percentage !== null && attempt.percentage !== undefined ? \` · \${Number(attempt.percentage).toFixed(2)}%\` : ""}{attempt.grade ? \` · Grade \${attempt.grade}\` : ""}</p>
+                                          <p className="mt-1 text-xs text-slate-400">{attempt.marks_status}{attempt.percentage !== null && attempt.percentage !== undefined ? ` · ${Number(attempt.percentage).toFixed(2)}%` : ""}{attempt.grade ? ` · Grade ${attempt.grade}` : ""}</p>
                                         </div>
                                         <div>
                                           <p className="text-xs text-slate-400">Examination timing</p>
@@ -332,7 +332,7 @@ export default function StudentPerformancePage() {
                                       </div>
                                       {attempt.session_id && (
                                         <Link
-                                          href={\`/staff/manage-exams/\${attempt.exam_id}/evaluation/\${attempt.session_id}?view=1&return_to=%2Fadmin%2Fstudent-performance\`}
+                                          href={`/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=%2Fadmin%2Fstudent-performance`}
                                           className="mt-4 inline-flex rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"
                                         >
                                           View question-by-question answers
