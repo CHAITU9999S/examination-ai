@@ -129,6 +129,53 @@ def test_student_overview_returns_creator_and_assigner_and_only_own_assignments(
 
 
 
+
+def test_expired_student_session_is_not_reported_as_completed(
+    client, db_session
+):
+    examiner = create_user(db_session, "examiner", "expired_owner@test.com")
+    student = create_user(db_session, "student", "expired_student@test.com")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam = Exam(
+        title="Expired session status test",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(hours=1),
+        created_by=examiner.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=examiner.id,
+        is_active=True,
+    ))
+    db_session.add(ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        status="expired",
+    ))
+    db_session.commit()
+
+    headers = get_auth_headers(examiner)
+    assignments_response = client.get(
+        f"/exams/{exam.id}/assignments",
+        headers=headers,
+    )
+    exams_response = client.get("/exams?mine=true", headers=headers)
+
+    assert assignments_response.status_code == 200
+    assert assignments_response.json()["students"][0]["student_exam_status"] == "expired"
+    assert exams_response.status_code == 200
+    exam_row = exams_response.json()[0]
+    assert exam_row["completed_session_count"] == 0
+    assert exam_row["expired_session_count"] == 1
+
+
+
 def test_examiner_can_create_exam(client, db_session):
     examiner = create_user(
         db_session,
