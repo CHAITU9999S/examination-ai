@@ -1501,7 +1501,7 @@ export default function StudentExamPage() {
             <button
               type="button"
               onClick={() => setShowSubmitConfirmation(true)}
-              disabled={submitting || !faceVerified}
+              disabled={submitting || saving || imageUploading || !faceVerified}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Submit Examination
@@ -1733,7 +1733,7 @@ export default function StudentExamPage() {
             <button
               type="button"
               onClick={() => setShowSubmitConfirmation(true)}
-              disabled={submitting || !faceVerified}
+              disabled={submitting || saving || imageUploading || !faceVerified}
               className="mt-5 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Submit Examination
