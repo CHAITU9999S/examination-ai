@@ -431,17 +431,16 @@ def get_student_examination_overview(
         start_at = normalize_to_naive_utc(exam.start_time)
         end_at = normalize_to_naive_utc(exam.end_time)
         if session is not None and session.status == "in_progress":
-            if session.is_paused:
-                if end_at is not None and now >= end_at:
+            session_deadline = normalize_to_naive_utc(session.expires_at)
+            deadlines = [value for value in (session_deadline, end_at) if value is not None]
+            deadline = min(deadlines) if deadlines else None
+            if deadline is not None and now >= deadline:
+                if session.is_paused and end_at is not None and now >= end_at:
                     session.status = "expired"
                     session.exam_token_refresh_hash = None
                     db.commit()
                     db.refresh(session)
-            else:
-                session_deadline = normalize_to_naive_utc(session.expires_at)
-                deadlines = [value for value in (session_deadline, end_at) if value is not None]
-                deadline = min(deadlines) if deadlines else None
-                if deadline is not None and now >= deadline:
+                else:
                     session.status = "submitted"
                     session.submitted_at = deadline
                     db.commit()
