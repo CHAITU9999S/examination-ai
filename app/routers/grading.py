@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamSession, QuestionBank, Result, User
+from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamQuestion, ExamSession, QuestionBank, Result, User
 from app.services.evaluation_service import (
     calculate_session_result,
     evaluate_objective_answers,
@@ -780,6 +780,108 @@ def grade_subjective_answer(
         "maximum_marks": maximum_marks,
         "result": result,
         "result_ready": result.get("status") == "evaluated",
+    }
+
+
+@router.get("/sessions/{session_id}/review")
+def get_session_answer_review(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a student's complete paper in the exact delivered question order."""
+    require_examiner_or_admin(current_user)
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
+    exam = get_visible_exam(session.exam_id, current_user, db)
+    student = db.query(User).filter(User.id == session.student_id).first()
+    result = db.query(Result).filter(Result.session_id == session.id).first()
+
+    ordered_ids = list(session.selected_question_ids or [])
+    if not ordered_ids:
+        ordered_ids = [
+            row[0] for row in db.query(ExamQuestion.question_id).filter(
+                ExamQuestion.exam_id == exam.id
+            ).order_by(ExamQuestion.question_order.asc(), ExamQuestion.id.asc()).all()
+        ]
+    questions = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(ordered_ids or [-1])
+    ).all()
+    question_by_id = {question.id: question for question in questions}
+    answers = db.query(Answer).filter(Answer.session_id == session.id).all()
+    answer_by_question = {answer.question_id: answer for answer in answers}
+
+    review_items = []
+    for order, question_id in enumerate(ordered_ids, start=1):
+        question = question_by_id.get(question_id)
+        if question is None:
+            continue
+        answer = answer_by_question.get(question_id)
+        revisions = []
+        if answer is not None:
+            revisions = db.query(AnswerMarkRevision).filter(
+                AnswerMarkRevision.answer_id == answer.id
+            ).order_by(AnswerMarkRevision.revision_number.asc()).all()
+        current_marks = answer.awarded_marks if answer is not None else None
+        evaluation_count = (1 + len(revisions)) if current_marks is not None else 0
+        review_items.append({
+            "question_id": question.id,
+            "question_order": order,
+            "question_text": question.question_text,
+            "question_type": getattr(question.question_type, "value", question.question_type),
+            "difficulty": question.difficulty,
+            "maximum_marks": question.marks,
+            "expected_answer": question.expected_answer,
+            "model_answer_text": question.model_answer_text,
+            "options": [
+                {"id": option.id, "option_text": option.option_text, "is_correct": bool(option.is_correct)}
+                for option in question.options
+            ],
+            "answer_id": answer.id if answer is not None else None,
+            "answer_text": answer.answer_text if answer is not None else None,
+            "answer_image_url": f"/grading/answers/{answer.id}/image" if answer is not None and answer.image_path else None,
+            "ai_suggested_marks": answer.ai_suggested_marks if answer is not None else None,
+            "ai_justification": answer.ai_justification if answer is not None else None,
+            "awarded_marks": current_marks,
+            "evaluation_count": min(evaluation_count, 3),
+            "evaluation_history": [
+                {
+                    "evaluation_number": 1,
+                    "marks": revisions[0].previous_marks,
+                    "created_at": revisions[0].created_at,
+                }
+            ] + [
+                {
+                    "evaluation_number": revision.revision_number + 1,
+                    "marks": revision.new_marks,
+                    "created_at": revision.created_at,
+                }
+                for revision in revisions
+            ] if revisions else (
+                [{"evaluation_number": 1, "marks": current_marks, "created_at": answer.updated_at}]
+                if answer is not None and current_marks is not None else []
+            ),
+            "examiner_feedback": answer.examiner_feedback if answer is not None else None,
+            "is_objective": getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"},
+        })
+
+    return {
+        "session_id": session.id,
+        "exam_id": exam.id,
+        "exam_title": exam.title,
+        "student_id": student.id if student else session.student_id,
+        "student_name": student.full_name if student else "Unknown student",
+        "department": student.department if student else None,
+        "session_status": session.status,
+        "started_at": session.started_at,
+        "submitted_at": session.submitted_at,
+        "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
+        "result_published": bool(result and result.is_published),
+        "result_obtained_marks": result.obtained_marks if result else None,
+        "result_total_marks": result.total_marks if result else None,
+        "result_grade": _letter_grade(result.percentage) if result and result.is_published else None,
+        "questions": review_items,
     }
 
 
