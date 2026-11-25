@@ -109,6 +109,10 @@ def test_student_overview_returns_creator_and_assigner_and_only_own_assignments(
         "/exams/student-overview",
         headers=get_auth_headers(student),
     )
+    list_response = client.get(
+        "/exams",
+        headers=get_auth_headers(student),
+    )
     other_response = client.get(
         "/exams/student-overview",
         headers=get_auth_headers(other_student),
@@ -120,6 +124,10 @@ def test_student_overview_returns_creator_and_assigner_and_only_own_assignments(
     assert items[0]["title"] == exam.title
     assert items[0]["creator_name"] == creator.full_name
     assert items[0]["assigned_by_name"] == creator.full_name
+    assert list_response.status_code == 200
+    listed_exam = next(item for item in list_response.json() if item["id"] == exam.id)
+    assert listed_exam["created_by_name"] == creator.full_name
+    assert listed_exam["assigned_by_name"] == creator.full_name
     assert items[0]["category"] == "available"
     assert items[0]["can_start"] is False
     assert items[0]["question_breakdown"][0]["count"] == 1
