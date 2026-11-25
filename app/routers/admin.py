@@ -781,7 +781,10 @@ def update_user_status(
 ):
     """Allow Admins to activate or deactivate user accounts."""
 
-    target_user = db.query(User).filter(User.id == user_id).first()
+    target_user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted.is_(False),
+    ).first()
 
     if target_user is None:
         raise HTTPException(
