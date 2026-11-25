@@ -54,12 +54,21 @@ interface ResultDetails {
   question_results: QuestionResult[];
 }
 
+interface ResultStatus {
+  exam_title: string;
+  subject?: string | null;
+  session_status: string;
+  submitted_at?: string | null;
+  result_published: boolean;
+}
+
 export default function StudentResultDetailPage() {
   const router = useRouter();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
 
   const [result, setResult] = useState<ResultDetails | null>(null);
+  const [notDeclared, setNotDeclared] = useState<ResultStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [facePhotoUrl, setFacePhotoUrl] = useState("");
@@ -74,14 +83,29 @@ export default function StudentResultDetailPage() {
     }
 
     try {
+      const statusResponse = await fetch(`${API_URL}/results/session-status/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (statusResponse.status === 401 || statusResponse.status === 403) {
+        router.replace("/login");
+        return;
+      }
+      if (!statusResponse.ok) {
+        const data = await statusResponse.json().catch(() => ({}));
+        throw new Error(data.detail || "Unable to load examination status.");
+      }
+      const statusData: ResultStatus = await statusResponse.json();
+      if (!statusData.result_published) {
+        setNotDeclared(statusData);
+        setResult(null);
+        return;
+      }
+      setNotDeclared(null);
       const response = await fetch(`${API_URL}/results/${sessionId}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (response.status === 401 || response.status === 403) {
-        router.replace("/login");
-        return;
-      }
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || "Unable to load result details.");
@@ -128,7 +152,7 @@ export default function StudentResultDetailPage() {
             <Link href="/student/results" className="text-2xl font-bold">
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
-            <p className="mt-1 text-sm text-slate-400">Published Result Details</p>
+            <p className="mt-1 text-sm text-slate-400">Examination Performance</p>
           </div>
           <Link href="/student/results" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">
             ← My Results
@@ -143,6 +167,16 @@ export default function StudentResultDetailPage() {
           <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-300">
             {error}
           </div>
+        ) : notDeclared ? (
+          <section className="rounded-2xl border border-amber-500/20 bg-slate-900 p-8">
+            <h1 className="text-2xl font-bold">{notDeclared.exam_title}</h1>
+            <p className="mt-2 text-sm text-slate-400">{notDeclared.subject || "Examination performance"}</p>
+            <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+              <p className="font-semibold text-amber-300">Result Not Declared</p>
+              <p className="mt-2 text-sm text-slate-300">Your examination has been submitted or expired, but the result has not yet been published. Marks and question-wise evaluation will appear here after publication.</p>
+              <p className="mt-3 text-xs capitalize text-slate-400">Session status: {notDeclared.session_status.replaceAll("_", " ")}</p>
+            </div>
+          </section>
         ) : result ? (
           <>
             <h1 className="text-3xl font-bold">{result.exam_title}</h1>
