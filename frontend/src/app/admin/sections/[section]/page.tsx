@@ -16,6 +16,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
       { title: "User Management", description: "View, activate, deactivate, and manage all platform accounts.", href: "/admin/users" },
       { title: "Admin Management", description: "Create and manage Admin accounts.", href: "/admin/admins", related: [
         { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
+        { title: "Retained Data", description: "Review and delete completed examinations, submissions, and grading history retained after account deletion.", href: "/admin/retained-data" },
       ] },
       { title: "Examiner Management", description: "Create and manage Examiner accounts.", href: "/admin/examiners" },
       { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students", related: [
