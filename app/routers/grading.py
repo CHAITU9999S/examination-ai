@@ -844,7 +844,7 @@ def get_session_answer_review(
             ],
             "answer_id": answer.id if answer is not None else None,
             "answer_text": answer.answer_text if answer is not None else None,
-            "answer_image_url": f"/grading/answers/{answer.id}/image" if answer is not None and answer.image_path else None,
+            "answer_image_url": f"/grading/answers/{answer.id}/image" if answer is not None and (answer.image_data or answer.image_path) else None,
             "ai_suggested_marks": answer.ai_suggested_marks if answer is not None else None,
             "ai_justification": answer.ai_justification if answer is not None else None,
             "awarded_marks": current_marks,
