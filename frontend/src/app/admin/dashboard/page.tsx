@@ -28,13 +28,6 @@ interface Statistics {
   total_sessions: number;
 }
 
-interface NavigationItem {
-  title: string;
-  description: string;
-  href: string;
-  related?: NavigationItem[];
-}
-
 interface NavigationGroup {
   title: string;
   description: string;
@@ -305,7 +298,8 @@ export default function AdminDashboardPage() {
                 )}
               </Link>
             ))}
-          </div>ion>
+          </div>
+        </section>
       </div>
     </main>
   );
