@@ -70,15 +70,22 @@ export default function AdminSectionPage() {
   const params = useParams<{ section: string }>();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  const [role, setRole] = useState<"admin" | "examiner" | null>(null);
   const [loading, setLoading] = useState(true);
   const section = useMemo(() => sections[params.section], [params.section]);
-  const previousSectionHref = params.section === "admins" || params.section === "examiners" || params.section === "students"
-    ? "/admin/sections/users"
-    : "/admin/dashboard";
-  const previousSectionLabel = previousSectionHref === "/admin/dashboard" ? "Previous Section" : "Users";
+  const dashboardHref = role === "examiner" ? "/examiner/dashboard" : "/admin/dashboard";
+  const previousSectionHref = role === "examiner"
+    ? dashboardHref
+    : params.section === "admins" || params.section === "examiners" || params.section === "students"
+      ? "/admin/sections/users"
+      : dashboardHref;
+  const previousSectionLabel = previousSectionHref === dashboardHref ? "Dashboard" : "Users";
+  const visibleItems = role === "examiner" && params.section === "examinations"
+    ? section?.items.filter((item) => item.title !== "Examinations") || []
+    : section?.items || [];
 
   useEffect(() => {
-    async function verifyAdmin() {
+    async function verifySectionAccess() {
       const token = localStorage.getItem("examguard_access_token");
       if (!token) {
         router.replace("/login");
@@ -94,10 +101,15 @@ export default function AdminSectionPage() {
           return;
         }
         const user = await response.json();
-        if (user.role !== "admin") {
-          router.replace("/login");
+        const examinerAllowedSections = ["question-banks", "examinations"];
+        if (
+          user.role !== "admin" &&
+          !(user.role === "examiner" && examinerAllowedSections.includes(params.section))
+        ) {
+          router.replace(user.role === "examiner" ? "/examiner/dashboard" : "/login");
           return;
         }
+        setRole(user.role);
         setAuthorized(true);
       } catch {
         router.replace("/login");
@@ -105,8 +117,8 @@ export default function AdminSectionPage() {
         setLoading(false);
       }
     }
-    verifyAdmin();
-  }, [router]);
+    verifySectionAccess();
+  }, [router, params.section]);
 
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">Loading section...</main>;
@@ -115,7 +127,7 @@ export default function AdminSectionPage() {
     return (
       <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
         <p>{section ? "Verifying administrator access..." : "Section not found."}</p>
-        <Link href="/admin/dashboard" className="mt-4 inline-block text-blue-300">← Admin Dashboard</Link>
+        <Link href={dashboardHref} className="mt-4 inline-block text-blue-300">← Dashboard</Link>
       </main>
     );
   }
@@ -125,17 +137,17 @@ export default function AdminSectionPage() {
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
           <div>
-            <Link href="/admin/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
-            <p className="mt-1 text-sm text-slate-400">Administrator / {section.title}</p>
+            <Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
+            <p className="mt-1 text-sm text-slate-400">{role === "admin" ? "Administrator" : "Examiner"} / {section.title}</p>
           </div>
-          <AdminSectionNavigation previousHref={previousSectionHref} previousLabel={previousSectionLabel} />
+          <AdminSectionNavigation previousHref={previousSectionHref} previousLabel={previousSectionLabel} dashboardHref={dashboardHref} />
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-6 py-10">
         <h1 className="text-3xl font-bold">{section.title}</h1>
         <p className="mt-2 text-slate-400">{section.description}</p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {section.items.map((item) => (
+          {visibleItems.map((item) => (
             <article key={item.href} className="rounded-xl border border-white/10 bg-slate-900 p-5">
               <Link href={item.href} className="font-semibold hover:text-blue-300">
                 {item.title} <span className="text-blue-300">→</span>
