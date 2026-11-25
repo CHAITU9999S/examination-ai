@@ -79,6 +79,7 @@ export default function ExaminerGradingPage() {
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [markRevisionInfo, setMarkRevisionInfo] = useState<{
     revisions_used: number;
+    evaluation_count: number;
     revisions_remaining: number;
     history: Array<{
       revision_number: number;
@@ -921,7 +922,7 @@ export default function ExaminerGradingPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="font-semibold">Mark Revision History</h3>
                   <span className="text-xs text-cyan-300">
-                    {markRevisionInfo ? `${markRevisionInfo.revisions_used}/3 revisions used` : "Loading history..."}
+                    {markRevisionInfo ? `${markRevisionInfo.evaluation_count}/3 evaluations completed` : "Loading history..."}
                   </span>
                 </div>
                 {markRevisionInfo?.history?.length ? (
@@ -1231,10 +1232,10 @@ export default function ExaminerGradingPage() {
               <button
                 type="button"
                 onClick={saveFinalMarks}
-                disabled={saving}
+                disabled={saving || (markRevisionInfo?.evaluation_count ?? 0) >= 3}
                 className="rounded-lg bg-green-600 px-6 py-3 font-semibold transition hover:bg-green-500 disabled:opacity-50"
               >
-                {saving ? "Saving Marks..." : "Save Final Marks"}
+                {saving ? "Saving Marks..." : (markRevisionInfo?.evaluation_count ?? 0) >= 3 ? "Evaluation limit reached" : "Save Final Marks"}
               </button>
             </div>
           </section>
