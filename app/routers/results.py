@@ -179,6 +179,34 @@ def get_my_result_face_photo(
     )
 
 
+@router.get("/session-status/{session_id}")
+def get_my_result_session_status(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return non-sensitive status for a student's own examination session."""
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Examination session not found.")
+    if current_user.role != "student" or session.student_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only view your own examination performance.")
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+    result = db.query(Result).filter(
+        Result.session_id == session.id,
+        Result.is_published.is_(True),
+    ).first()
+    return {
+        "session_id": session.id,
+        "exam_id": session.exam_id,
+        "exam_title": exam.title if exam else "Examination",
+        "subject": exam.subject if exam else None,
+        "session_status": session.status,
+        "submitted_at": session.submitted_at,
+        "result_published": bool(result),
+    }
+
+
 @router.get("/{session_id}")
 def get_my_result_details(
     session_id: int,
