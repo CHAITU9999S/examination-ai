@@ -10,6 +10,8 @@ type Breadcrumbs = { ancestors: Crumb[]; current: string };
 const ADMIN_USERS: Crumb = { href: "/admin/sections/users", label: "Users" };
 const ADMIN_EXAMS: Crumb = { href: "/admin/sections/examinations", label: "Examinations" };
 const ADMIN_BANKS: Crumb = { href: "/admin/sections/question-banks", label: "Question Bank" };
+const EXAMINER_EXAMS: Crumb = { href: "/admin/sections/examinations", label: "Examinations" };
+const EXAMINER_BANKS: Crumb = { href: "/admin/sections/question-banks", label: "Question Bank" };
 
 const adminSectionLabels: Record<string, string> = {
   users: "Users",
@@ -51,8 +53,8 @@ function adminBreadcrumbs(pathname: string): Breadcrumbs | null {
 
 function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
   const isAdmin = role === "admin";
-  const examParent = isAdmin ? ADMIN_EXAMS : null;
-  const bankParent = isAdmin ? ADMIN_BANKS : null;
+  const examParent = isAdmin ? ADMIN_EXAMS : EXAMINER_EXAMS;
+  const bankParent = isAdmin ? ADMIN_BANKS : EXAMINER_BANKS;
 
   if (pathname === "/staff/question-banks") {
     return { ancestors: bankParent ? [bankParent] : [], current: "All Question Banks" };
@@ -89,18 +91,21 @@ function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
 
 function examinerBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
   const isAdmin = role === "admin";
-  const bankAncestors: Crumb[] = isAdmin
-    ? [ADMIN_BANKS, { href: "/examiner/question-banks", label: "Manage Question Banks" }]
-    : [{ href: "/examiner/question-banks", label: "Manage Question Banks" }];
+  const bankParent = isAdmin ? ADMIN_BANKS : EXAMINER_BANKS;
+  const examParent = isAdmin ? ADMIN_EXAMS : EXAMINER_EXAMS;
+  const bankAncestors: Crumb[] = [
+    bankParent,
+    { href: "/examiner/question-banks", label: "Manage Question Banks" },
+  ];
   const createExamAncestors: Crumb[] = isAdmin
     ? [ADMIN_EXAMS, { href: "/examiner/exams", label: "Create Examination" }]
     : [{ href: "/examiner/exams", label: "Create Examination" }];
 
   if (pathname === "/examiner/exams") {
-    return { ancestors: isAdmin ? [ADMIN_EXAMS] : [], current: "Create Examination" };
+    return { ancestors: [examParent], current: "Create Examination" };
   }
   if (pathname === "/examiner/question-banks") {
-    return { ancestors: isAdmin ? [ADMIN_BANKS] : [], current: "Manage Question Banks" };
+    return { ancestors: [bankParent], current: "Manage Question Banks" };
   }
   if (/^\/examiner\/question-banks\/[^/]+$/.test(pathname)) {
     return { ancestors: bankAncestors, current: "Question Bank Details" };
@@ -119,10 +124,10 @@ function examinerBreadcrumbs(pathname: string, role: string): Breadcrumbs | null
     return { ancestors: bankAncestors, current: "Questions" };
   }
   if (pathname === "/examiner/grading") {
-    return { ancestors: isAdmin ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }] : [], current: "Evaluation" };
+    return { ancestors: [examParent, { href: "/staff/manage-exams", label: "Manage Examinations" }], current: "Evaluation" };
   }
   if (pathname === "/examiner/results") {
-    return { ancestors: isAdmin ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }] : [], current: "Results" };
+    return { ancestors: [examParent, { href: "/staff/manage-exams", label: "Manage Examinations" }], current: "Results" };
   }
   return null;
 }
