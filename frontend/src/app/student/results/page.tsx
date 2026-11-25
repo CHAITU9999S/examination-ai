@@ -92,7 +92,7 @@ export default function StudentResultsPage() {
                 <p><span className="text-slate-500">Negative marking:</span> {exam.negative_marking ? "Enabled" : "Disabled"}</p>
               </div>
               {exam.question_breakdown.length > 0 && <div className="mt-4 rounded-lg border border-white/10 bg-slate-900 p-3"><p className="text-xs font-semibold text-slate-300">Question breakdown</p><div className="mt-2 flex flex-wrap gap-2">{exam.question_breakdown.map((group, index) =>
-                <span key={index} className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300">{group.question_type.replaceAll("_", " ")} · {group.difficulty} · {group.count}</span>)}</div></div>}
+                <span key={index} className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300">{group.question_type.replaceAll("_", " ")} · {group.difficulty} · {group.count} × {group.marks_per_question} marks</span>)}</div></div>}
               <p className="mt-3 text-sm text-slate-400">Question order: {exam.randomize_questions ? "Randomized" : "Configured order"} · AI proctoring: {exam.proctoring_enabled ? "Enabled" : "Disabled"}</p>
               {exam.instructions.length > 0 && <div className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3">
                 <p className="text-sm font-semibold text-blue-200">Creator instructions</p>
