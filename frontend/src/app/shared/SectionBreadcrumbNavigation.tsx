@@ -148,7 +148,9 @@ export default function SectionBreadcrumbNavigation() {
           ? staffBreadcrumbs(pathname, role)
           : examinerBreadcrumbs(pathname);
 
-  const current = breadcrumbs?.current || pathname.split("/").filter(Boolean).at(-1)?.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Details";
+  const pathParts = pathname.split("/").filter(Boolean);
+  const lastPart = pathParts[pathParts.length - 1];
+  const current = breadcrumbs?.current || lastPart?.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Details";
   const ancestors = breadcrumbs?.ancestors || [];
 
   return (
