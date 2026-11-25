@@ -12,7 +12,7 @@ interface QuestionGroup {
 }
 interface ExamResultItem {
   id: number; title: string; subject?: string | null; creator_name: string;
-  creator_role?: string | null; duration_minutes: number; total_questions: number;
+  creator_role?: string | null; assigned_by_name?: string | null; assigned_by_role?: string | null; duration_minutes: number; total_questions: number;
   question_breakdown: QuestionGroup[]; maximum_marks: number;
   negative_marking: boolean; total_possible_negative_marks: number;
   start_time?: string | null; end_time?: string | null;
@@ -84,6 +84,7 @@ export default function StudentResultsPage() {
               </div>
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
                 <p><span className="text-slate-500">Created by:</span> {exam.creator_name} {exam.creator_role ? "(" + exam.creator_role + ")" : ""}</p>
+                <p><span className="text-slate-500">Assigned by:</span> {exam.assigned_by_name || "Unknown"} {exam.assigned_by_role ? "(" + exam.assigned_by_role + ")" : ""}</p>
                 <p><span className="text-slate-500">Duration:</span> {exam.duration_minutes} minutes</p>
                 <p><span className="text-slate-500">Questions:</span> {exam.total_questions}</p>
                 <p><span className="text-slate-500">Maximum marks:</span> {exam.maximum_marks}</p>
