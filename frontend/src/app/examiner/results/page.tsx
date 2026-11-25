@@ -25,6 +25,7 @@ interface ReviewSession {
   exam_title: string;
   student_id: number;
   student_name: string;
+  session_status: string;
   submitted_at?: string | null;
   face_photo_url?: string | null;
   result_ready: boolean;
@@ -207,6 +208,7 @@ export default function ExaminerResultsPage() {
                     <th className="px-4 py-3">Examination</th>
                     <th className="px-4 py-3">Student</th>
                     <th className="px-4 py-3">Candidate photo</th>
+                    <th className="px-4 py-3">Progress</th>
                     <th className="px-4 py-3">Submitted</th>
                     <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Publication</th>
@@ -219,6 +221,7 @@ export default function ExaminerResultsPage() {
                       <td className="px-4 py-4 font-semibold">{session.exam_title}</td>
                       <td className="px-4 py-4">{session.student_name}</td>
                       <td className="px-4 py-4">{facePhotoUrls[session.session_id] ? <img src={facePhotoUrls[session.session_id]} alt="Candidate face captured before the examination" className="h-14 w-14 rounded-lg object-cover" /> : "—"}</td>
+                      <td className="px-4 py-4">{session.session_status === "in_progress" ? "In progress" : session.session_status === "not_started" ? "Pre-start" : session.session_status === "auto_submitted" ? "Auto-submitted" : "Submitted"}</td>
                       <td className="px-4 py-4 text-slate-400">{formatDate(session.submitted_at)}</td>
                       <td className="px-4 py-4 tabular-nums">
                         {session.result_ready
@@ -231,15 +234,17 @@ export default function ExaminerResultsPage() {
                       <td className="px-4 py-4">
                         {session.is_published ? (
                           <span className="text-green-300">Student can view</span>
-                        ) : (
+                        ) : session.session_status === "submitted" || session.session_status === "auto_submitted" ? (
                           <button
                             type="button"
                             onClick={() => publishResult(session.session_id)}
-                            disabled={publishingId === session.session_id}
+                            disabled={publishingId === session.session_id || !session.result_ready}
                             className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500 disabled:opacity-50"
                           >
-                            {publishingId === session.session_id ? "Publishing..." : "Publish result"}
+                            {publishingId === session.session_id ? "Publishing..." : session.result_ready ? "Publish result" : "Awaiting grading"}
                           </button>
+                        ) : (
+                          <span className="text-slate-400">Awaiting submission</span>
                         )}
                       </td>
                     </tr>
