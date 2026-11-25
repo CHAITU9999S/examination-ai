@@ -649,6 +649,12 @@ def test_admin_performance_lists_students_and_their_completed_attempt_details(
     )
     db_session.add(exam)
     db_session.flush()
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=admin.id,
+        is_active=True,
+    ))
     session = ExamSession(
         exam_id=exam.id,
         student_id=student.id,
