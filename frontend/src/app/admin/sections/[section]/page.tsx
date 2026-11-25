@@ -51,7 +51,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
     title: "Question Bank",
     description: "Browse available banks or manage banks you own.",
     items: [
-      { title: "Question Bank", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
+      { title: "All Question Banks", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
       { title: "Manage Question Banks", description: "Create and manage your own question banks.", href: "/examiner/question-banks" },
     ],
   },
