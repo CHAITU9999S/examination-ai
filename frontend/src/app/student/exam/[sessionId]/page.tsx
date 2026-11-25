@@ -551,7 +551,28 @@ export default function StudentExamPage() {
     }
   }, [getHeaders, loadPrestartStatus, sessionId, setError]);
 
+  const requestExamFullscreen = useCallback(async (): Promise<boolean> => {
+    if (typeof document === "undefined") return false;
+    if (!document.fullscreenEnabled || !document.documentElement.requestFullscreen) {
+      setFullscreenSupported(false);
+      setFullscreenReentryRequired(false);
+      return true;
+    }
+    try {
+      await document.documentElement.requestFullscreen();
+      fullscreenExitLoggedRef.current = false;
+      setFullscreenReentryRequired(false);
+      return true;
+    } catch {
+      setFullscreenReentryRequired(true);
+      setError("Please allow full-screen mode to continue the examination.");
+      return false;
+    }
+  }, [setError]);
+
   const confirmExamStart = useCallback(async () => {
+    const fullscreenReady = await requestExamFullscreen();
+    if (!fullscreenReady) return;
     const headers = getHeaders();
     if (!headers) return;
     try {
@@ -566,7 +587,7 @@ export default function StudentExamPage() {
     } catch (startError) {
       setError(startError instanceof Error ? startError.message : "Unable to start the examination.");
     }
-  }, [getHeaders, loadPaper, loadRemainingTime, sessionId, setError]);
+  }, [getHeaders, loadPaper, loadRemainingTime, requestExamFullscreen, sessionId, setError]);
 
   const retryFaceCapture = useCallback(async () => {
     const video = captureVideoRef.current;
