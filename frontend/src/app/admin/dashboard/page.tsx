@@ -28,6 +28,12 @@ interface Statistics {
   total_sessions: number;
 }
 
+interface NavigationItem {
+  title: string;
+  description: string;
+  href: string;
+}
+
 interface NavigationGroup {
   title: string;
   description: string;
@@ -152,7 +158,6 @@ export default function AdminDashboardPage() {
     loadDashboard();
   }, [router]);
 
-
   function handleLogout() {
     localStorage.removeItem("examguard_access_token");
     localStorage.removeItem("examguard_user");
@@ -160,42 +165,15 @@ export default function AdminDashboardPage() {
   }
 
   const statisticCards = [
-    {
-      label: "Total Users",
-      value: statistics?.total_users,
-    },
-    {
-      label: "Students",
-      value: statistics?.total_students,
-    },
-    {
-      label: "Examiners",
-      value: statistics?.total_examiners,
-    },
-    {
-      label: "Administrators",
-      value: statistics?.total_admins,
-    },
-    {
-      label: "Active Users",
-      value: statistics?.active_users,
-    },
-    {
-      label: "Inactive Users",
-      value: statistics?.inactive_users,
-    },
-    {
-      label: "Examinations",
-      value: statistics?.total_exams,
-    },
-    {
-      label: "Questions",
-      value: statistics?.total_questions,
-    },
-    {
-      label: "Exam Sessions",
-      value: statistics?.total_sessions,
-    },
+    { label: "Total Users", value: statistics?.total_users },
+    { label: "Students", value: statistics?.total_students },
+    { label: "Examiners", value: statistics?.total_examiners },
+    { label: "Administrators", value: statistics?.total_admins },
+    { label: "Active Users", value: statistics?.active_users },
+    { label: "Inactive Users", value: statistics?.inactive_users },
+    { label: "Examinations", value: statistics?.total_exams },
+    { label: "Questions", value: statistics?.total_questions },
+    { label: "Exam Sessions", value: statistics?.total_sessions },
   ];
 
   if (loading) {
@@ -218,7 +196,6 @@ export default function AdminDashboardPage() {
               Administrator Dashboard
             </p>
           </div>
-
           <button
             onClick={handleLogout}
             className="rounded-lg border border-red-400/30 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10"
@@ -230,14 +207,10 @@ export default function AdminDashboardPage() {
 
       <div className="mx-auto max-w-7xl px-6 py-10">
         <section className="mb-10">
-          <p className="text-sm font-medium text-blue-400">
-            ADMINISTRATION
-          </p>
-
+          <p className="text-sm font-medium text-blue-400">ADMINISTRATION</p>
           <h1 className="mt-2 text-3xl font-bold">
             Welcome, {user?.full_name || "Administrator"}
           </h1>
-
           <p className="mt-2 text-slate-400">
             Manage users, examinations, and platform access.
           </p>
@@ -252,26 +225,17 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-
         <section className="mb-12">
-          <h2 className="mb-5 text-xl font-bold">
-            Platform Overview
-          </h2>
-
+          <h2 className="mb-5 text-xl font-bold">Platform Overview</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {statisticCards.map((card) => (
               <article
                 key={card.label}
                 className="rounded-xl border border-white/10 bg-slate-900 p-6"
               >
-                <p className="text-sm text-slate-400">
-                  {card.label}
-                </p>
-
+                <p className="text-sm text-slate-400">{card.label}</p>
                 <p className="mt-3 text-3xl font-bold">
-                  {card.value === undefined
-                    ? "—"
-                    : card.value.toLocaleString()}
+                  {card.value === undefined ? "—" : card.value.toLocaleString()}
                 </p>
               </article>
             ))}
@@ -279,10 +243,7 @@ export default function AdminDashboardPage() {
         </section>
 
         <section>
-          <h2 className="mb-5 text-xl font-bold">
-            Management
-          </h2>
-
+          <h2 className="mb-5 text-xl font-bold">Management</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {navigationGroups.map((group) => (
               <Link
