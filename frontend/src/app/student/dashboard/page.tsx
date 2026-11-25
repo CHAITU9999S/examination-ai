@@ -19,7 +19,7 @@ interface Exam {
   total_possible_negative_marks: number; randomize_questions: boolean; proctoring_enabled: boolean;
   start_time?: string | null; end_time?: string | null; instructions: string[];
   session_id?: number | null; session_status?: string | null; is_paused: boolean;
-  is_pending: boolean; can_start: boolean;
+  is_pending: boolean; is_in_progress: boolean; can_start: boolean;
   category: "available" | "upcoming" | "completed" | "expired";
   submitted_at?: string | null; result_published: boolean;
   obtained_marks?: number | null; negative_marks?: number | null;
@@ -52,7 +52,8 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
         <div className="flex flex-wrap gap-2">
           {expiringSoon(exam) && <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Expiring Soon</span>}
           {exam.is_pending && <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">Pending</span>}
-          {!expiringSoon(exam) && !exam.is_pending && <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs capitalize text-blue-300">{exam.category}</span>}
+          {exam.is_in_progress && <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-300">In Progress</span>}
+          {!expiringSoon(exam) && !exam.is_pending && !exam.is_in_progress && <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs capitalize text-blue-300">{exam.category}</span>}
         </div>
       </div>
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -178,7 +179,7 @@ export default function StudentDashboardPage() {
         <div className="mt-5 grid gap-5 xl:grid-cols-2">{items.map(exam => <ExamCard key={exam.id} exam={exam} action={
           kind === "available" ? <button type="button" onClick={() => startExam(exam)} disabled={!exam.can_start}
             className="w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
-            {exam.is_pending ? "Resume Examination" : exam.can_start ? "Start Examination" : "Not Started Yet"}
+            {exam.is_pending || exam.is_in_progress ? "Resume Examination" : exam.can_start ? "Start Examination" : "Not Started Yet"}
           </button> :
           kind === "completed" ? <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-emerald-900/50 px-5 py-3 font-semibold text-emerald-300">Completed</button> :
           kind === "expired" ? <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-red-900/50 px-5 py-3 font-semibold text-red-300">Expired</button> :
@@ -218,7 +219,7 @@ export default function StudentDashboardPage() {
             </div>
             {overview.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No matching examinations.</p> :
               <div className="mt-5 grid gap-5 xl:grid-cols-2">{overview.map(exam => <ExamCard key={exam.id} exam={exam} action={
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="capitalize text-slate-300">{exam.category === "available" && expiringSoon(exam) ? "Expiring Soon" : exam.is_pending ? "Pending" : exam.category}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="capitalize text-slate-300">{exam.category === "available" && expiringSoon(exam) ? "Expiring Soon" : exam.is_pending ? "Pending" : exam.is_in_progress ? "In Progress" : exam.category}</span>
                   {exam.session_id ? <Link className="font-semibold text-blue-300 hover:text-blue-200" href={"/student/results/" + exam.session_id}>{exam.result_published ? "View published result →" : "View performance status →"}</Link> :
                     <span className="text-slate-500">{exam.category === "completed" ? "Result Not Declared" : ""}</span>}</div>
               } />)}</div>}
