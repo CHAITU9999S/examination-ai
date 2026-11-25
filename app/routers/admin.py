@@ -423,40 +423,8 @@ def delete_examiner_with_records(
         ).all()
     ]
 
-    # Keep another Examiner's examination history if this Examiner reviewed it.
-    outside_exam_filter = Exam.created_by != examiner.id
-    outside_config_changes = db.query(ExamConfigurationRevision.id).join(
-        Exam, Exam.id == ExamConfigurationRevision.exam_id
-    ).filter(
-        ExamConfigurationRevision.changed_by == examiner.id,
-        outside_exam_filter,
-    ).count()
-    outside_marks_changes = db.query(ExamQuestionMarksRevision.id).join(
-        Exam, Exam.id == ExamQuestionMarksRevision.exam_id
-    ).filter(
-        ExamQuestionMarksRevision.changed_by == examiner.id,
-        outside_exam_filter,
-    ).count()
-    outside_answer_revisions = db.query(AnswerMarkRevision.id).join(
-        Answer, Answer.id == AnswerMarkRevision.answer_id
-    ).join(
-        ExamSession, ExamSession.id == Answer.session_id
-    ).join(
-        Exam, Exam.id == ExamSession.exam_id
-    ).filter(
-        AnswerMarkRevision.revised_by == examiner.id,
-        outside_exam_filter,
-    ).count()
-
-    if outside_config_changes or outside_marks_changes or outside_answer_revisions:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "This Examiner has review or change history in another "
-                "Examiner's examination. That history will be kept. Please "
-                "resolve those records before deleting this account."
-            ),
-        )
+    # Audit revisions authored by the deleted account are removed below;
+    # revisions authored by other staff and all examination data are retained.
 
     try:
         session_conditions = [
@@ -521,6 +489,19 @@ def delete_examiner_with_records(
             db.query(ExamQuestion).filter(
                 ExamQuestion.exam_id.in_(exam_ids)
             ).delete(synchronize_session=False)
+
+        # Remove only revision rows authored by this account, including work
+        # recorded against examinations owned by other staff. The examinations,
+        # final marks, and other reviewers' history remain intact.
+        db.query(ExamConfigurationRevision).filter(
+            ExamConfigurationRevision.changed_by == examiner.id,
+        ).delete(synchronize_session=False)
+        db.query(ExamQuestionMarksRevision).filter(
+            ExamQuestionMarksRevision.changed_by == examiner.id,
+        ).delete(synchronize_session=False)
+        db.query(AnswerMarkRevision).filter(
+            AnswerMarkRevision.revised_by == examiner.id,
+        ).delete(synchronize_session=False)
 
         # Remove assignments created by this Examiner, including assignments
         # they made for examinations owned by someone else.
@@ -682,43 +663,8 @@ def delete_admin_with_records(
         ).all()
     ]
 
-    # Keep another person's examination history if this Admin reviewed it.
-    outside_exam_filter = or_(
-        Exam.created_by != admin_to_delete.id,
-        Exam.created_by.is_(None),
-    )
-    outside_config_changes = db.query(ExamConfigurationRevision.id).join(
-        Exam, Exam.id == ExamConfigurationRevision.exam_id
-    ).filter(
-        ExamConfigurationRevision.changed_by == admin_to_delete.id,
-        outside_exam_filter,
-    ).count()
-    outside_marks_changes = db.query(ExamQuestionMarksRevision.id).join(
-        Exam, Exam.id == ExamQuestionMarksRevision.exam_id
-    ).filter(
-        ExamQuestionMarksRevision.changed_by == admin_to_delete.id,
-        outside_exam_filter,
-    ).count()
-    outside_answer_revisions = db.query(AnswerMarkRevision.id).join(
-        Answer, Answer.id == AnswerMarkRevision.answer_id
-    ).join(
-        ExamSession, ExamSession.id == Answer.session_id
-    ).join(
-        Exam, Exam.id == ExamSession.exam_id
-    ).filter(
-        AnswerMarkRevision.revised_by == admin_to_delete.id,
-        outside_exam_filter,
-    ).count()
-
-    if outside_config_changes or outside_marks_changes or outside_answer_revisions:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "This Admin has review or change history in another person's "
-                "examination. That history will be kept. Please resolve those "
-                "records before deleting this account."
-            ),
-        )
+    # Audit revisions authored by the deleted account are removed below;
+    # revisions authored by other staff and all examination data are retained.
 
     try:
         session_conditions = [
@@ -783,6 +729,18 @@ def delete_admin_with_records(
             db.query(ExamQuestion).filter(
                 ExamQuestion.exam_id.in_(exam_ids)
             ).delete(synchronize_session=False)
+
+        # Remove revision history authored by this Admin, while preserving
+        # examinations, final marks, and revisions authored by other staff.
+        db.query(ExamConfigurationRevision).filter(
+            ExamConfigurationRevision.changed_by == admin_to_delete.id,
+        ).delete(synchronize_session=False)
+        db.query(ExamQuestionMarksRevision).filter(
+            ExamQuestionMarksRevision.changed_by == admin_to_delete.id,
+        ).delete(synchronize_session=False)
+        db.query(AnswerMarkRevision).filter(
+            AnswerMarkRevision.revised_by == admin_to_delete.id,
+        ).delete(synchronize_session=False)
 
         # Remove assignments made by this Admin and assignments where
         # this Admin was added as a student.
