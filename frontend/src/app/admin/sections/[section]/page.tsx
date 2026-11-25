@@ -44,7 +44,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
     items: [
       { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students" },
       { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
-      { title: "Student Performance", description: "Review students and their completed examination attempts, marks, and question papers.", href: "/admin/performance" },
+      { title: "Student Performance", description: "Review all students and examination performance across Admin- and Examiner-assigned examinations.", href: "/admin/student-performance" },
     ],
   },
   "question-banks": {
