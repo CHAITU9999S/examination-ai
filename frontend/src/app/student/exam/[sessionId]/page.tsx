@@ -739,15 +739,15 @@ export default function StudentExamPage() {
       }
       return true;
     }
-    if (questionTimerLocked) return true;
-    const answerText = answersRef.current[question.id] || "";
-    const wasSaved = savedAnswerQuestionIds.includes(question.id);
-    if (!answerText.trim() && !wasSaved) return true;
     const pendingTimeout = saveTimeoutsRef.current[question.id];
     if (pendingTimeout) {
       clearTimeout(pendingTimeout);
       delete saveTimeoutsRef.current[question.id];
     }
+    if (questionTimerLocked) return true;
+    const answerText = answersRef.current[question.id] || "";
+    const wasSaved = savedAnswerQuestionIds.includes(question.id);
+    if (!answerText.trim() && !wasSaved && !pendingTimeout) return true;
     try {
       await saveAnswer(question.id, answerText);
       return true;
