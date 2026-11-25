@@ -70,7 +70,7 @@ function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
     };
   }
   if (/^\/staff\/question-banks\/[^/]+$/.test(pathname)) {
-    return { ancestors: [{ href: "/staff/question-banks", label: "All Question Banks" }], current: "Question Bank Details" };
+    return { ancestors: [...(bankParent ? [bankParent] : []), { href: "/staff/question-banks", label: "All Question Banks" }], current: "Question Bank Details" };
   }
   if (/^\/staff\/examinations\/[^/]+$/.test(pathname)) {
     return { ancestors: [...(examParent ? [examParent] : []), { href: "/staff/examinations", label: "Examinations" }], current: "Examination Details" };
