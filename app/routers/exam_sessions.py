@@ -447,7 +447,7 @@ def start_exam(
         )
         try:
             db.add(session)
-            db.commit()
+            db.flush()
             db.refresh(session)
         except IntegrityError:
             db.rollback()
