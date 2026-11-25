@@ -380,7 +380,7 @@ export default function ExaminerQuestionsPage() {
           </div>
 
           <Link
-            href="/examiner/dashboard"
+            href={dashboardHref}
             className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
           >
             ← Dashboard
