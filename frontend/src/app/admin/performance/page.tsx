@@ -124,7 +124,7 @@ export default function AdminPerformancePage() {
                         <div key={attempt.session_id} className="rounded-lg border border-white/10 bg-slate-900/80 p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div><h3 className="font-semibold">{attempt.exam_title}</h3><p className="mt-1 text-xs text-slate-400">{attempt.exam_subject || "Subject not specified"} · Created by {attempt.creator_name || "Not available"}</p></div>
-                            <Link href={`/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1`} className="rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">View Questions</Link>
+                            <Link href={`/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=%2Fadmin%2Fperformance`} className="rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">View Questions</Link>
                           </div>
                           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                             <div><p className="text-xs text-slate-500">Exam date and time</p><p className="mt-1 text-slate-300">Start: {dateText(attempt.exam_start_time)}</p><p className="mt-1 text-slate-300">End: {dateText(attempt.exam_end_time)}</p></div>
