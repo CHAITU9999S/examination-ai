@@ -647,6 +647,10 @@ async def upload_image_answer_legacy(
     "/{session_id}/{question_id}",
     status_code=status.HTTP_200_OK,
 )
+@legacy_router.post(
+    "/{session_id}/answers/{question_id}",
+    status_code=status.HTTP_200_OK,
+)
 @router.post(
     "/{session_id}/answers/{question_id}",
     status_code=status.HTTP_200_OK,
