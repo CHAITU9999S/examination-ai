@@ -151,6 +151,7 @@ export default function StudentExamPage() {
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
   const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const savePromisesRef = useRef<Record<number, Promise<boolean>>>({});
   const refreshInFlightRef = useRef(false);
   const activePaperLoadedRef = useRef(false);
   const fullscreenExitLoggedRef = useRef(false);
@@ -745,10 +746,15 @@ export default function StudentExamPage() {
       clearTimeout(pendingTimeout);
       delete saveTimeoutsRef.current[question.id];
     }
+    const previousSave = savePromisesRef.current[question.id];
     const answerText = answersRef.current[question.id] || "";
     const wasSaved = savedAnswerQuestionIds.includes(question.id);
-    if (!answerText.trim() && !wasSaved && !pendingTimeout) return true;
+    if (!answerText.trim() && !wasSaved && !pendingTimeout && !previousSave) return true;
     try {
+      if (previousSave) {
+        const previousResult = await previousSave;
+        if (previousResult === false) throw new Error("The previous answer save did not complete.");
+      }
       await saveAnswer(question.id, answerText);
       return true;
     } catch {
@@ -813,9 +819,12 @@ export default function StudentExamPage() {
         .filter(([questionId]) =>
           paper?.questions.find((question) => question.id === Number(questionId))?.question_type !== "image_upload"
         )
-        .map(([questionId, answerText]) =>
-          saveAnswer(Number(questionId), answerText)
-        );
+        .map(async ([questionId, answerText]) => {
+          const numericQuestionId = Number(questionId);
+          const previousSave = savePromisesRef.current[numericQuestionId];
+          if (previousSave) await previousSave;
+          return saveAnswer(numericQuestionId, answerText);
+        });
 
       const saveResults = await Promise.allSettled(pendingSaves);
       const saveFailed = saveResults.some(
@@ -900,8 +909,18 @@ export default function StudentExamPage() {
 
     saveTimeoutsRef.current[questionId] = setTimeout(() => {
       delete saveTimeoutsRef.current[questionId];
-      void saveAnswer(questionId, answerText).catch(() => {
+      const previousSave = savePromisesRef.current[questionId];
+      const savePromise = (async () => {
+        if (previousSave) await previousSave;
+        return saveAnswer(questionId, answerText);
+      })();
+      savePromisesRef.current[questionId] = savePromise;
+      void savePromise.catch(() => {
         // The visible error state is set by saveAnswer.
+      }).finally(() => {
+        if (savePromisesRef.current[questionId] === savePromise) {
+          delete savePromisesRef.current[questionId];
+        }
       });
     }, 300);
   }
