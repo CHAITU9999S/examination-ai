@@ -916,10 +916,13 @@ def list_exam_questions(
         ExamQuestion.question_order.asc(),
         ExamQuestion.id.asc(),
     ).all()
+    creator = db.query(User).filter(User.id == exam.created_by).first()
 
     return {
         "exam_id": exam_id,
         "created_by": exam.created_by,
+        "created_by_name": creator.full_name if creator else "Unknown",
+        "created_by_role": creator.role if creator else None,
         "total_assigned": len(assignments),
         "questions": [
             {
