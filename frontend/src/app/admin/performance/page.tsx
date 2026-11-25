@@ -334,7 +334,7 @@ export default function StudentTrackingPage() {
                                       </div>
                                       {attempt.session_id && (
                                         <Link
-                                          href={\`/staff/manage-exams/\${attempt.exam_id}/evaluation/\${attempt.session_id}?view=1&return_to=%2Fadmin%2Fperformance\`}
+                                          href={\`/staff/manage-exams/\${attempt.exam_id}/evaluation/\${attempt.session_id}?view=1&return_to=%2Fadmin%2Fperformance%3Ffrom%3Dexaminations\`}
                                           className="mt-4 inline-flex rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"
                                         >
                                           View question-by-question answers
