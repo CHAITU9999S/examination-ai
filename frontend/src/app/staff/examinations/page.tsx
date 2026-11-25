@@ -78,7 +78,7 @@ export default function StaffExaminationsPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
-          <div><Link href="/" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Examinations</p></div>
+          <div><Link href={role === "admin" ? "/admin/dashboard" : "/examiner/dashboard"} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Examinations</p></div>
           <div className="flex flex-wrap gap-2">
             <Link href="/staff/manage-exams" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10">Manage My Examinations</Link>
             <Link href="/examiner/exams" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">Create Examination</Link>
