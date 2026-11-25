@@ -1395,15 +1395,15 @@ def list_exam_assignments(
             if exam.start_time is None or now < exam.start_time:
                 return "schedule_not_started"
             return "not_taken"
-        if session.status == "in_progress":
-            return "partially_attempted"
-        if session.status == "expired":
-            return "expired"
         if session.status in {"submitted", "auto_submitted"}:
             return "completed"
+        if session.status == "expired":
+            return "expired"
+        if exam.end_time is not None and now >= exam.end_time:
+            return "expired"
+        if session.status == "in_progress":
+            return "partially_attempted"
         if session.status == "not_started":
-            if exam.end_time is not None and now >= exam.end_time:
-                return "expired"
             if exam.start_time is None or now < exam.start_time:
                 return "schedule_not_started"
             return "not_taken"
