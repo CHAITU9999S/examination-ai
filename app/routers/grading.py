@@ -202,10 +202,10 @@ def _record_mark_revision(
     revision_count = db.query(AnswerMarkRevision).filter(
         AnswerMarkRevision.answer_id == answer.id
     ).count()
-    if revision_count >= 3:
+    if revision_count >= 2:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The three allowed mark revisions for this answer have been used.",
+            detail="The three allowed evaluations for this answer have been used.",
         )
 
     db.add(AnswerMarkRevision(
@@ -1294,7 +1294,8 @@ def get_answer_mark_revisions(
         "current_final_marks": answer.awarded_marks,
         "revision_limit": 3,
         "revisions_used": len(revisions),
-        "revisions_remaining": max(0, 3 - len(revisions)),
+        "evaluation_count": (1 + len(revisions)) if answer.awarded_marks is not None else 0,
+        "revisions_remaining": max(0, 3 - ((1 + len(revisions)) if answer.awarded_marks is not None else 0)),
         "history": [
             {
                 "revision_number": item.revision_number,
