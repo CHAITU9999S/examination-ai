@@ -628,6 +628,22 @@ export default function StudentExamPage() {
     }
   }, [getHeaders, sessionId]);
 
+  const pauseQuestionTimer = useCallback(async (questionId: number) => {
+    const headers = getHeaders();
+    if (!headers) throw new Error("Examination authentication is unavailable.");
+    const response = await fetch(
+      API_URL + "/exam-sessions/" + sessionId + "/question-timer/" + questionId + "/pause",
+      { method: "POST", headers, cache: "no-store" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "Unable to pause the question timer.");
+    if (data.remaining_seconds !== null && data.remaining_seconds !== undefined) {
+      setQuestionRemainingSeconds(Math.max(0, Number(data.remaining_seconds)));
+    }
+    if (data.is_locked) setQuestionTimerLocked(true);
+    return data;
+  }, [getHeaders, sessionId]);
+
   const togglePause = useCallback(async () => {
     if (pauseBusy) return;
     const headers = getHeaders();
@@ -635,6 +651,8 @@ export default function StudentExamPage() {
     setPauseBusy(true);
     setError("");
     try {
+      const currentQuestion = paper?.questions[currentIndex];
+      if (!isPaused && currentQuestion) await pauseQuestionTimer(currentQuestion.id);
       const action = isPaused ? "resume" : "pause";
       const response = await fetch(
         `${API_URL}/exam-sessions/${action}/${sessionId}`,
@@ -645,12 +663,13 @@ export default function StudentExamPage() {
       setIsPaused(Boolean(data.is_paused));
       setRemainingSeconds(Number(data.remaining_seconds));
       setMessage(data.message || (data.is_paused ? "Exam paused." : "Exam resumed."));
+      if (!data.is_paused && currentQuestion) void loadQuestionTimer(currentQuestion.id);
     } catch (pauseError) {
       setError(pauseError instanceof Error ? pauseError.message : "Unable to change exam pause state.");
     } finally {
       setPauseBusy(false);
     }
-  }, [getHeaders, isPaused, pauseBusy, sessionId]);
+  }, [getHeaders, isPaused, pauseBusy, sessionId, paper, currentIndex, pauseQuestionTimer, loadQuestionTimer]);
 
   const saveAnswer = useCallback(async (
     questionId: number,
@@ -685,6 +704,10 @@ export default function StudentExamPage() {
         throw new Error(data.detail || "Unable to save answer.");
       }
 
+      setSavedAnswerQuestionIds((current) => clearingAnswer
+        ? current.filter((id) => id !== questionId)
+        : current.includes(questionId) ? current : [...current, questionId]
+      );
       setMessage("Answer saved.");
       setError("");
       return true;
