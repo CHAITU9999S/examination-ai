@@ -1093,6 +1093,9 @@ async def save_face_capture(
     db: Session = Depends(get_db),
 ):
     _, session = validate_exam_token(credentials, db)
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     if session.status != "not_started" or session.prestart_stage != "face_capture":
@@ -1137,6 +1140,9 @@ def continue_after_exam_summary(
     db: Session = Depends(get_db),
 ):
     _, session = validate_exam_token(credentials, db)
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     if session.status != "not_started" or session.prestart_stage != "summary" or not session.summary_started_at:
