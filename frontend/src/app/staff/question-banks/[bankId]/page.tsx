@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminSectionNavigation from "../../../admin/components/AdminSectionNavigation";
@@ -32,6 +32,8 @@ export default function QuestionBankViewPage() {
   const router = useRouter();
   const [bank, setBank] = useState<Bank | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionSearch, setQuestionSearch] = useState("");
+  const [questionSort, setQuestionSort] = useState("bank-order");
   const [previews, setPreviews] = useState<Record<number, Preview>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -88,6 +90,23 @@ export default function QuestionBankViewPage() {
     });
   }, [previews]);
 
+  const visibleQuestions = useMemo(() => {
+    const term = questionSearch.trim().toLowerCase();
+    const filtered = questions.filter((question) => !term || [
+      question.question_text, question.question_type, question.difficulty,
+      question.expected_answer, question.model_answer_text, String(question.id),
+    ].some((value) => String(value || "").toLowerCase().includes(term)));
+    if (questionSort === "bank-order") return filtered;
+    return filtered.sort((a, b) => {
+      if (questionSort === "name") return a.question_text.localeCompare(b.question_text);
+      if (questionSort === "type") return a.question_type.localeCompare(b.question_type);
+      if (questionSort === "difficulty") return a.difficulty.localeCompare(b.difficulty);
+      if (questionSort === "marks-low") return a.marks - b.marks;
+      if (questionSort === "marks-high") return b.marks - a.marks;
+      return b.id - a.id;
+    });
+  }, [questions, questionSearch, questionSort]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
@@ -119,9 +138,17 @@ export default function QuestionBankViewPage() {
               <p className="mt-4 text-sm text-slate-400">This section is read-only. The question order and saved question content are shown as stored by the creator.</p>
             </section>
             <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-              <h2 className="text-xl font-semibold">Questions ({questions.length})</h2>
-              {questions.length === 0 ? <p className="py-8 text-slate-400">This question bank has no questions.</p> : (
-                <div className="mt-4 space-y-4">{questions.map((question, index) => (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold">Questions ({visibleQuestions.length} of {questions.length})</h2>
+                <div className="flex flex-wrap gap-3">
+                  <input type="search" value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} placeholder="Search questions in this bank" aria-label="Search bank questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+                  <select value={questionSort} onChange={(event) => setQuestionSort(event.target.value)} aria-label="Sort bank questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                    <option value="bank-order">Saved bank order</option><option value="newest">Newest first</option><option value="name">Question A to Z</option><option value="type">Question type</option><option value="difficulty">Difficulty</option><option value="marks-low">Lowest marks</option><option value="marks-high">Highest marks</option>
+                  </select>
+                </div>
+              </div>
+              {questions.length === 0 ? <p className="py-8 text-slate-400">This question bank has no questions.</p> : visibleQuestions.length === 0 ? <p className="py-8 text-slate-400">No questions match your search.</p> : (
+                <div className="mt-4 space-y-4">{visibleQuestions.map((question, index) => (
                   <article key={question.id} className="rounded-xl border border-white/10 bg-slate-800/70 p-5">
                     <p className="text-xs text-cyan-300">Question {index + 1} · {question.question_type} · {question.difficulty} · {question.marks} marks</p>
                     {question.question_text && <p className="mt-3 whitespace-pre-wrap">{question.question_text}</p>}
