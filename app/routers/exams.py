@@ -291,8 +291,10 @@ def list_exams(
             exam_status = "ongoing"
         elif completed_sessions > 0 and published_results >= completed_sessions:
             exam_status = "results_published"
-        else:
+        elif completed_sessions > 0:
             exam_status = "completed_not_evaluated"
+        else:
+            exam_status = "schedule_ended"
         exam_summary_by_id[exam.id] = {
             "assigned_question_count": len(assigned_questions),
             "active_assignment_count": active_assignments,
@@ -1388,6 +1390,8 @@ def list_exam_assignments(
 
     def student_exam_status(session):
         if session is None:
+            if exam.end_time is not None and now >= exam.end_time:
+                return "expired"
             if exam.start_time is None or now < exam.start_time:
                 return "schedule_not_started"
             return "not_taken"
@@ -1398,6 +1402,8 @@ def list_exam_assignments(
         if session.status in {"submitted", "auto_submitted"}:
             return "completed"
         if session.status == "not_started":
+            if exam.end_time is not None and now >= exam.end_time:
+                return "expired"
             if exam.start_time is None or now < exam.start_time:
                 return "schedule_not_started"
             return "not_taken"
