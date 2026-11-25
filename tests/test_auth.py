@@ -1,4 +1,7 @@
 
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
@@ -78,3 +81,55 @@ def test_expired_token_rejected():
 def test_invalid_token_rejected():
     assert verify_token("invalid.token.value") is None
     
+
+
+def test_legacy_secret_key_environment_variable_is_supported():
+    expected_secret = "legacy-render-secret-for-automated-test-only"
+    env = os.environ.copy()
+    env.pop("JWT_SECRET_KEY", None)
+    env["SECRET_KEY"] = expected_secret
+
+    check = """
+from app.auth import JWT_SECRET_KEY as auth_secret
+from app.dependencies import JWT_SECRET_KEY as dependency_secret
+from app.main import JWT_SECRET_KEY as application_secret
+
+expected = "legacy-render-secret-for-automated-test-only"
+assert auth_secret == expected
+assert dependency_secret == expected
+assert application_secret == expected
+"""
+
+    subprocess.run(
+        [sys.executable, "-c", check],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_jwt_secret_key_takes_precedence_over_legacy_secret_key():
+    expected_secret = "primary-jwt-secret-for-automated-test-only"
+    env = os.environ.copy()
+    env["JWT_SECRET_KEY"] = expected_secret
+    env["SECRET_KEY"] = "legacy-render-secret-for-automated-test-only"
+
+    check = """
+from app.auth import JWT_SECRET_KEY as auth_secret
+from app.dependencies import JWT_SECRET_KEY as dependency_secret
+from app.main import JWT_SECRET_KEY as application_secret
+
+expected = "primary-jwt-secret-for-automated-test-only"
+assert auth_secret == expected
+assert dependency_secret == expected
+assert application_secret == expected
+"""
+
+    subprocess.run(
+        [sys.executable, "-c", check],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
