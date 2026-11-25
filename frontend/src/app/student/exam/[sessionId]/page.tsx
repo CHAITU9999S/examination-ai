@@ -724,6 +724,63 @@ export default function StudentExamPage() {
   }, [getHeaders, sessionId]);
 
 
+  const saveCurrentQuestion = useCallback(async (): Promise<boolean> => {
+    const question = paper?.questions[currentIndex];
+    if (!question) return false;
+    if (imageUploading) {
+      setError("Please wait for the answer image upload to finish before moving on.");
+      return false;
+    }
+    if (question.question_type === "image_upload") {
+      if (pendingImageFiles[question.id] && !uploadedImageQuestionIds.includes(question.id)) {
+        setError("Please upload the selected answer image before moving to another question.");
+        return false;
+      }
+      return true;
+    }
+    if (questionTimerLocked) return true;
+    const answerText = answersRef.current[question.id] || "";
+    const wasSaved = savedAnswerQuestionIds.includes(question.id);
+    if (!answerText.trim() && !wasSaved) return true;
+    const pendingTimeout = saveTimeoutsRef.current[question.id];
+    if (pendingTimeout) {
+      clearTimeout(pendingTimeout);
+      delete saveTimeoutsRef.current[question.id];
+    }
+    try {
+      await saveAnswer(question.id, answerText);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [paper, currentIndex, imageUploading, pendingImageFiles, uploadedImageQuestionIds, questionTimerLocked, savedAnswerQuestionIds, saveAnswer]);
+
+  const handleQuestionNavigation = useCallback(async (nextIndex: number) => {
+    if (!paper || nextIndex < 0 || nextIndex >= paper.questions.length || nextIndex === currentIndex || isPaused || submitting) return;
+    const currentQuestion = paper.questions[currentIndex];
+    if (!await saveCurrentQuestion()) return;
+    try {
+      if (currentQuestion) await pauseQuestionTimer(currentQuestion.id);
+      const headers = getHeaders();
+      if (!headers) return;
+      const response = await fetch(API_URL + "/exam-sessions/progress/" + sessionId, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ current_question_index: nextIndex }),
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to save question navigation.");
+      setVisitedQuestionIds(Array.isArray(data.visited_question_ids) ? data.visited_question_ids : []);
+      setCurrentIndex(nextIndex);
+      setShowQuestionDrawer(false);
+      setError("");
+    } catch (navigationError) {
+      setError(navigationError instanceof Error ? navigationError.message : "Unable to move to that question.");
+    }
+  }, [paper, currentIndex, isPaused, submitting, saveCurrentQuestion, pauseQuestionTimer, getHeaders, sessionId]);
+
+
   const submitExam = useCallback(async (automatic = false) => {
     if (submittedRef.current || submitting) return;
 
