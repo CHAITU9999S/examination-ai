@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
@@ -41,6 +41,8 @@ function describeActivity(log: ExaminerActivity) {
 export default function ExaminerActivityLogsPage() {
   const router = useRouter();
   const [logs, setLogs] = useState<ExaminerActivity[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -76,6 +78,22 @@ export default function ExaminerActivityLogsPage() {
     loadLogs();
   }, [loadLogs]);
 
+  const visibleLogs = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return [...logs]
+      .filter((log) => {
+        if (!term) return true;
+        return [log.actor_name, log.action, formatAction(log.action), describeActivity(log), JSON.stringify(log.details || {})]
+          .some((value) => String(value || "").toLowerCase().includes(term));
+      })
+      .sort((a, b) => {
+        if (sortBy === "oldest") return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        if (sortBy === "examiner") return a.actor_name.localeCompare(b.actor_name);
+        if (sortBy === "action") return formatAction(a.action).localeCompare(formatAction(b.action));
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
+  }, [logs, searchTerm, sortBy]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -103,11 +121,23 @@ export default function ExaminerActivityLogsPage() {
 
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
 
-        <section className="mt-8 rounded-xl border border-white/10 bg-slate-900 p-5">
+        <div className="mt-8 flex flex-wrap gap-3">
+          <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search Examiner, action, examination, bank, or details" aria-label="Search Examiner activity logs" className="min-w-[240px] flex-1 rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort Examiner activity logs" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="examiner">Examiner A to Z</option>
+            <option value="action">Action A to Z</option>
+          </select>
+        </div>
+
+        <section className="mt-4 rounded-xl border border-white/10 bg-slate-900 p-5">
           {loading ? (
             <p className="py-12 text-center text-slate-400">Loading Examiner activity logs...</p>
-          ) : logs.length === 0 ? (
-            <p className="py-12 text-center text-slate-400">No Examiner examination or question-bank activity has been recorded yet.</p>
+          ) : visibleLogs.length === 0 ? (
+            <p className="py-12 text-center text-slate-400">
+              {logs.length === 0 ? "No Examiner examination or question-bank activity has been recorded yet." : "No activity logs match your search."}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-left text-sm">
@@ -121,7 +151,7 @@ export default function ExaminerActivityLogsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log) => (
+                  {visibleLogs.map((log) => (
                     <tr key={log.id} className="border-b border-white/5 align-top last:border-0">
                       <td className="whitespace-nowrap px-4 py-4 text-slate-300">{formatDate(log.created_at)}</td>
                       <td className="px-4 py-4 font-medium">{log.actor_name}</td>
