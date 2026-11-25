@@ -297,6 +297,13 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
     creator = db.query(User).filter(User.id == exam.created_by).first()
     student = db.query(User).filter(User.id == session.student_id).first()
     settings = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+    raw_instructions = settings.get("instructions") or settings.get("exam_instructions") or []
+    if isinstance(raw_instructions, str):
+        instructions = [raw_instructions]
+    elif isinstance(raw_instructions, list):
+        instructions = [item for item in raw_instructions if isinstance(item, str) and item.strip()]
+    else:
+        instructions = []
     return {
         "exam_title": exam.title,
         "subject": exam.subject,
@@ -310,7 +317,7 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "maximum_marks": round(maximum_marks, 2),
         "negative_marking_enabled": bool(exam.negative_marking),
         "total_possible_negative_marks": round(negative_marks, 2),
-        "instructions": settings.get("instructions") or settings.get("exam_instructions") or [],
+        "instructions": instructions,
     }
 
 # ==========================================
@@ -1040,6 +1047,11 @@ def get_prestart_status(
     db: Session = Depends(get_db),
 ):
     _, session = validate_exam_token(credentials, db)
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+    ).with_for_update().populate_existing().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
