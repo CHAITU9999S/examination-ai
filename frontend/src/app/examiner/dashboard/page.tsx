@@ -29,54 +29,19 @@ interface Exam {
 
 const navigation = [
   {
-    title: "Question Banks",
-    description: "Browse question banks created by all Admins and Examiners.",
-    href: "/staff/question-banks",
-  },
-  {
-    title: "Manage Question Bank",
-    description: "Create and manage your own question banks and questions.",
-    href: "/examiner/question-banks",
-  },
-  {
-    title: "Question Library",
-    description: "Create and manage standalone questions for examination preparation.",
-    href: "/examiner/questions",
+    title: "Question Bank",
+    description: "Access all question-bank subsections, browse available banks, and manage your own banks and questions.",
+    href: "/admin/sections/question-banks",
   },
   {
     title: "Examinations",
-    description: "View examinations created by your account.",
-    href: "/staff/examinations",
-  },
-  {
-    title: "Manage Examination",
-    description: "Edit, delete, and manage examinations you created.",
-    href: "/staff/manage-exams",
-  },
-  {
-    title: "Create Examination",
-    description: "Create a new examination.",
-    href: "/examiner/exams",
-  },
-  {
-    title: "Answer Grading",
-    description: "Review and grade submitted subjective answers.",
-    href: "/examiner/grading",
-  },
-  {
-    title: "Result Publication",
-    description: "Review completed grading and publish student results.",
-    href: "/examiner/results",
+    description: "Create and manage examinations that you own. The Admin-only Examinations subsection is not available.",
+    href: "/admin/sections/examinations",
   },
   {
     title: "Account Management",
     description: "Manage your personal details, password, and recent login history.",
     href: "/account/management",
-  },
-  {
-    title: "Proctoring Review",
-    description: "Review flagged sessions and recorded proctoring events.",
-    href: "/staff/proctoring",
   },
 ];
 
