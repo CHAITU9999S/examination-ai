@@ -1268,6 +1268,7 @@ def get_previously_graded_subjective_answers(
                 "image_annotations": answer.image_annotations or [],
                 "rubric_scores": answer.rubric_scores or [],
                 "submitted_at": session.submitted_at,
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
             }
             for answer, session, question, exam, student, result in rows
         ],
