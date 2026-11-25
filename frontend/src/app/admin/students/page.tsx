@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -39,7 +40,7 @@ export default function StudentManagementPage() {
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5">
           <div><Link href="/admin/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Administrator / Student Management</p></div>
-          <Link href="/admin/dashboard" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Dashboard</Link>
+          <AdminSectionNavigation previousHref="/admin/sections/students" previousLabel="Students" />
         </div>
       </header>
       <div className="mx-auto max-w-6xl px-5 py-8">
