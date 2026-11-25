@@ -467,10 +467,7 @@ def get_student_examination_overview(
             session_status in submitted_statuses
             or (session is not None and session.submitted_at is not None and session_status != "expired")
         )
-        is_expired = (
-            session_status == "expired"
-            or (has_schedule and now >= end_at and not is_submitted)
-        )
+        is_expired = has_schedule and now >= end_at and not is_submitted
 
         if is_submitted:
             category = "completed"
@@ -490,7 +487,7 @@ def get_student_examination_overview(
             category == "available"
             and now >= start_at
             and now < end_at
-            and (session is None or session_status in {"not_started", "in_progress"})
+            and (session is None or session_status in {"not_started", "in_progress", "expired"})
         )
 
         items.append({
