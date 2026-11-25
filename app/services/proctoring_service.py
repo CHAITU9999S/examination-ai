@@ -26,6 +26,7 @@ EVENT_SUSPICION_POINTS = {
     "multiple_faces": 20,
     "gaze_away": 3,
     "webcam_error": 2,
+    "fullscreen_exit": 0,
     "heartbeat": 0,
 }
 
@@ -125,11 +126,7 @@ def _validate_proctoring_enabled(
         session.exam_id,
     )
 
-    if not exam.proctoring_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Proctoring is not enabled for this examination.",
-        )
+    # Proctoring is mandatory for every active examination session.
 
     return exam
 
