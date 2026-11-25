@@ -539,7 +539,7 @@ def test_face_capture_requires_summary_minute_and_starts_timer_only_on_start(
     assert paper.json()["exam_summary"]["total_questions"] == 1
 
     answer_before_start = client.post(
-        f"/answers/{session.id}/{question.id}",
+        f"/answers/{session.id}/answers/{question.id}",
         headers=exam_headers,
         json={"answer_text": "Must remain locked until the exam starts."},
     )
