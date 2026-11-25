@@ -1029,37 +1029,125 @@ def get_historical_student_performance(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Return published historical performance across all examinations."""
-    rows = db.query(Result, ExamSession, Exam, User).join(
-        ExamSession, Result.session_id == ExamSession.id
+    """Return each active Student and their completed examination attempts."""
+    StudentAccount = aliased(User)
+    CreatorAccount = aliased(User)
+    students = db.query(User).filter(
+        User.role == UserRole.STUDENT.value,
+        User.is_deleted.is_(False),
+    ).order_by(User.full_name.asc()).all()
+
+    student_items = {
+        student.id: {
+            "student_id": student.id,
+            "student_name": student.full_name,
+            "student_email": student.email,
+            "department": student.department,
+            "attempts": [],
+        }
+        for student in students
+    }
+
+    rows = db.query(
+        ExamSession, Exam, StudentAccount, CreatorAccount, Result
     ).join(
         Exam, Exam.id == ExamSession.exam_id
     ).join(
-        User, User.id == ExamSession.student_id
+        StudentAccount, StudentAccount.id == ExamSession.student_id
+    ).outerjoin(
+        CreatorAccount, CreatorAccount.id == Exam.created_by
+    ).outerjoin(
+        Result, Result.session_id == ExamSession.id
     ).filter(
-        Result.is_published.is_(True)
+        StudentAccount.role == UserRole.STUDENT.value,
+        StudentAccount.is_deleted.is_(False),
+        or_(
+            ExamSession.status.in_(("submitted", "auto_submitted", "expired", "completed")),
+            ExamSession.submitted_at.is_not(None),
+        ),
     ).order_by(
-        Result.published_at.desc(),
-        Result.id.desc(),
-    ).limit(2000).all()
+        ExamSession.submitted_at.desc(),
+        ExamSession.id.desc(),
+    ).limit(5000).all()
+
+    flat_performance = []
+    for session, exam, student, creator, result in rows:
+        question_ids = list(session.selected_question_ids or [])
+        answers = db.query(Answer).filter(
+            Answer.session_id == session.id
+        ).all()
+        marked_values = [
+            float(answer.awarded_marks)
+            for answer in answers
+            if answer.awarded_marks is not None
+        ]
+        obtained_marks = (
+            result.obtained_marks
+            if result is not None and result.obtained_marks is not None
+            else (sum(marked_values) if marked_values else None)
+        )
+        if result is not None and result.total_marks is not None:
+            total_marks = result.total_marks
+        else:
+            total_marks = (
+                db.query(func.sum(QuestionBank.marks))
+                .filter(QuestionBank.id.in_(question_ids or [-1]))
+                .scalar()
+            )
+        percentage = (
+            result.percentage
+            if result is not None and result.percentage is not None
+            else (
+                round(float(obtained_marks) / float(total_marks) * 100, 2)
+                if obtained_marks is not None and total_marks
+                else None
+            )
+        )
+        published = bool(result and result.is_published)
+        attempt = {
+            "session_id": session.id,
+            "exam_id": exam.id,
+            "exam_title": exam.title,
+            "exam_subject": exam.subject,
+            "exam_start_time": _utc_iso(exam.start_time),
+            "exam_end_time": _utc_iso(exam.end_time),
+            "creator_id": exam.created_by,
+            "creator_name": creator.full_name if creator else "Deleted account",
+            "started_at": _utc_iso(session.started_at),
+            "submitted_at": _utc_iso(session.submitted_at),
+            "session_status": session.status,
+            "obtained_marks": obtained_marks,
+            "total_marks": total_marks,
+            "percentage": percentage,
+            "grade": (
+                (result.grade or _performance_grade(result.percentage))
+                if published and result is not None
+                else None
+            ),
+            "result_published": published,
+            "marks_status": (
+                "Result published" if published
+                else "Evaluated — awaiting publication" if result is not None
+                else "Evaluation in progress" if marked_values
+                else "Not evaluated"
+            ),
+            "published_at": _utc_iso(result.published_at) if result else None,
+        }
+        if student.id in student_items:
+            student_items[student.id]["attempts"].append(attempt)
+        flat_performance.append({
+            "result_id": result.id if result else None,
+            "student_id": student.id,
+            "student_name": student.full_name,
+            **attempt,
+        })
 
     return {
-        "total_published_results": len(rows),
-        "performance": [
-            {
-                "result_id": result.id,
-                "student_id": student.id,
-                "student_name": student.full_name,
-                "exam_id": exam.id,
-                "exam_title": exam.title,
-                "obtained_marks": result.obtained_marks,
-                "total_marks": result.total_marks,
-                "percentage": result.percentage,
-                "grade": result.grade or _performance_grade(result.percentage),
-                "published_at": result.published_at,
-            }
-            for result, session, exam, student in rows
-        ],
+        "total_students": len(student_items),
+        "total_attempts": len(flat_performance),
+        "students": list(student_items.values()),
+        # Keep the earlier flat response key for existing API consumers.
+        "performance": flat_performance,
     }
 
 
@@ -1080,7 +1168,10 @@ def list_all_exam_schedules(
     ).outerjoin(
         CreatorAccount, CreatorAccount.id == Exam.created_by
     ).filter(
-        ExamAssignment.is_active.is_(True)
+        ExamAssignment.is_active.is_(True),
+        Exam.start_time.is_not(None),
+        Exam.start_time > datetime.now(timezone.utc).replace(tzinfo=None),
+        StudentAccount.is_deleted.is_(False),
     ).order_by(
         Exam.start_time.asc(),
         Exam.title.asc(),
