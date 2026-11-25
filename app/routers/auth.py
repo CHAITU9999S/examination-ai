@@ -240,7 +240,14 @@ def login(
         {ExamSession.exam_token_refresh_hash: None},
         synchronize_session=False,
     )
-    client_ip = request.client.host if request.client else None
+    # Render and other trusted reverse proxies provide the original client
+    # address in X-Forwarded-For. Keep the first client entry for display.
+    forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = (
+        forwarded_for.split(",")[0].strip()
+        if forwarded_for
+        else request.client.host if request.client else None
+    )
     user_agent = request.headers.get("user-agent")
     db.add(LoginHistory(
         user_id=user.id,
