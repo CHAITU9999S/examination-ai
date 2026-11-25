@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -66,6 +66,8 @@ function marksText(value?: number | null) {
 
 export default function StudentTrackingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromExaminations = searchParams.get("from") === "examinations";
   const [students, setStudents] = useState<StudentPerformance[]>([]);
   const [role, setRole] = useState<"admin" | "examiner" | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
@@ -157,8 +159,8 @@ export default function StudentTrackingPage() {
             <p className="mt-1 text-sm text-slate-400">{role === "examiner" ? "Examiner" : "Administrator"} / Student Tracking</p>
           </div>
           <AdminSectionNavigation
-            previousHref="/admin/sections/examinations"
-            previousLabel="Examinations"
+            previousHref={role === "examiner" || fromExaminations ? "/admin/sections/examinations" : "/admin/sections/students"}
+            previousLabel={role === "examiner" || fromExaminations ? "Examinations" : "Students"}
             dashboardHref={dashboardHref}
           />
         </div>
