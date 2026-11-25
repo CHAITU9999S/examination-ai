@@ -49,23 +49,31 @@ export default function ExaminationDetailsPage() {
     setLoading(true);
     setError("");
     try {
-      const [profileResponse, examResponse, questionsResponse, listResponse] = await Promise.all([
-        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+      const profileResponse = await fetch(`${API_URL}/users/me`, { headers, cache: "no-store" });
+      if (profileResponse.status === 401 || profileResponse.status === 403) { router.replace("/login"); return; }
+      const profileData = await profileResponse.json().catch(() => ({}));
+      if (!profileResponse.ok) throw new Error(profileData.detail || "Unable to verify your account.");
+      if (profileData.role !== "admin") {
+        router.replace(profileData.role === "examiner" ? "/staff/manage-exams" : "/login");
+        return;
+      }
+
+      // The all-examinations view (Section C) and its detail pages are Admin-only.
+      const [examResponse, questionsResponse, listResponse] = await Promise.all([
         fetch(`${API_URL}/exams/${examId}`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams/${examId}/questions`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
       ]);
-      if ([profileResponse, examResponse, questionsResponse, listResponse].some((response) => response.status === 401)) { router.replace("/login"); return; }
-      const profileData = await profileResponse.json().catch(() => ({}));
+      if ([examResponse, questionsResponse, listResponse].some((response) => response.status === 401 || response.status === 403)) { router.replace("/login"); return; }
       const examData = await examResponse.json().catch(() => ({}));
       const questionData = await questionsResponse.json().catch(() => ({}));
       const listData = await listResponse.json().catch(() => []);
-      if (!profileResponse.ok || !examResponse.ok || !questionsResponse.ok || !listResponse.ok) {
+      if (!examResponse.ok || !questionsResponse.ok || !listResponse.ok) {
         throw new Error(examData.detail || questionData.detail || "Unable to open this examination.");
       }
       const examList = Array.isArray(listData) ? listData : Array.isArray(listData.exams) ? listData.exams : [];
       const listedExam = examList.find((item: { id: number }) => Number(item.id) === Number(examId));
-      const isAdmin = profileData.role === "admin";
+      const isAdmin = true;
       setDashboardHref(isAdmin ? "/admin/dashboard" : "/examiner/dashboard");
       setPreviousHref(isAdmin ? "/admin/exams" : "/staff/examinations");
       setExam({ ...examData, max_marks: listedExam?.max_marks ?? null });
