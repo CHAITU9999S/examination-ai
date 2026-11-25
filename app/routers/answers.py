@@ -310,8 +310,7 @@ def get_or_start_question_timer(
     question_id: int,
     db: Session,
 ):
-    """Start a question timer once and enforce its persisted deadline."""
-
+    """Start or resume a persisted question timer without resetting elapsed time."""
     assignment = db.query(ExamQuestion).filter(
         ExamQuestion.exam_id == session.exam_id,
         ExamQuestion.question_id == question_id,
@@ -336,31 +335,33 @@ def get_or_start_question_timer(
             "is_locked": bool(answer.is_locked) if answer else False,
         }
 
+    now = datetime.utcnow()
     if answer is None:
         answer = Answer(
             session_id=session.id,
             question_id=question_id,
-            question_started_at=datetime.utcnow(),
+            question_started_at=now,
             question_elapsed_seconds=0,
         )
         db.add(answer)
         db.flush()
-    elif answer.question_started_at is None:
-        answer.question_started_at = datetime.utcnow()
+    elif answer.question_started_at is None and not answer.is_locked:
+        # A null start timestamp with accumulated elapsed time means the
+        # student left this question. Resume from the saved remaining time.
+        answer.question_started_at = now
 
-    now = datetime.utcnow()
-    started_at = answer.question_started_at or now
-    elapsed = max(
-        0,
-        int((now - started_at).total_seconds()),
+    elapsed_before = max(0, int(answer.question_elapsed_seconds or 0))
+    elapsed_this_visit = (
+        max(0, int((now - answer.question_started_at).total_seconds()))
+        if answer.question_started_at is not None else 0
     )
+    elapsed = elapsed_before + elapsed_this_visit
     remaining = max(0, int(limit_seconds) - elapsed)
+
     if remaining == 0:
         answer.is_locked = True
-        answer.question_elapsed_seconds = max(
-            int(answer.question_elapsed_seconds or 0),
-            int(limit_seconds),
-        )
+        answer.question_elapsed_seconds = int(limit_seconds)
+        answer.question_started_at = None
     db.commit()
 
     return {
@@ -378,8 +379,7 @@ def get_question_timer(
     credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    """Start or resume a question timer without resetting it on refresh."""
-
+    """Start or resume the current question's server-enforced timer."""
     session = validate_student_exam_token(credentials, session_id, db)
     session = get_active_session_for_update(
         session_id=session_id,
@@ -387,16 +387,81 @@ def get_question_timer(
         student_id=session.student_id,
         db=db,
     )
+    selected_ids = session.selected_question_ids or []
     if question_id not in get_session_question_ids(session):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This question does not belong to your examination paper.",
-        )
+        raise HTTPException(status_code=403, detail="This question does not belong to your examination paper.")
+    if selected_ids and selected_ids[int(session.current_question_index or 0)] != question_id:
+        raise HTTPException(status_code=409, detail="Only the current question timer can be started.")
     timer = get_or_start_question_timer(session, question_id, db)
+    return {"session_id": session.id, "question_id": question_id, **timer}
+
+
+@router.post("/{session_id}/question-timer/{question_id}/pause")
+def pause_question_timer(
+    session_id: int,
+    question_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
+    db: Session = Depends(get_db),
+):
+    """Persist elapsed time and pause this question when the student leaves it."""
+    validated_session = validate_student_exam_token(credentials, session_id, db)
+    session = get_active_session_for_update(
+        session_id=session_id,
+        exam_id=validated_session.exam_id,
+        student_id=validated_session.student_id,
+        db=db,
+    )
+    selected_ids = session.selected_question_ids or []
+    if question_id not in get_session_question_ids(session):
+        raise HTTPException(status_code=403, detail="This question does not belong to your examination paper.")
+    if selected_ids and selected_ids[int(session.current_question_index or 0)] != question_id:
+        raise HTTPException(status_code=409, detail="Only the current question timer can be paused.")
+
+    assignment = db.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == session.exam_id,
+        ExamQuestion.question_id == question_id,
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=403, detail="This question is not assigned to the examination.")
+    limit_seconds = assignment.question_time_limit_seconds
+    answer = db.query(Answer).filter(
+        Answer.session_id == session.id,
+        Answer.question_id == question_id,
+    ).with_for_update().first()
+    if limit_seconds is None:
+        return {"session_id": session.id, "question_id": question_id, "remaining_seconds": None, "is_locked": bool(answer.is_locked) if answer else False, "paused": True}
+
+    now = datetime.utcnow()
+    if answer is None:
+        answer = Answer(
+            session_id=session.id,
+            question_id=question_id,
+            question_started_at=None,
+            question_elapsed_seconds=0,
+        )
+        db.add(answer)
+    elif answer.question_started_at is not None and not answer.is_locked:
+        elapsed = max(0, int((now - answer.question_started_at).total_seconds()))
+        answer.question_elapsed_seconds = min(
+            int(limit_seconds),
+            max(0, int(answer.question_elapsed_seconds or 0)) + elapsed,
+        )
+        answer.question_started_at = None
+
+    elapsed_total = min(int(limit_seconds), max(0, int(answer.question_elapsed_seconds or 0)))
+    remaining = max(0, int(limit_seconds) - elapsed_total)
+    if remaining == 0:
+        answer.is_locked = True
+        answer.question_elapsed_seconds = int(limit_seconds)
+        answer.question_started_at = None
+    db.commit()
     return {
         "session_id": session.id,
         "question_id": question_id,
-        **timer,
+        "elapsed_seconds": elapsed_total,
+        "remaining_seconds": remaining,
+        "is_locked": bool(answer.is_locked),
+        "paused": True,
     }
 
 
