@@ -11,7 +11,7 @@ from app.dependencies import get_current_admin
 from app.models import (
     AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment,
     ExamConfigurationRevision, ExamQuestion, ExamQuestionMarksRevision,
-    ExamSession, Option, ProctorEvent, QuestionBank, Result, User,
+    ExamSession, Option, PlatformSetting, ProctorEvent, QuestionBank, Result, User,
 )
 from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 from app.schemas import (
@@ -893,6 +893,115 @@ def delete_admin_with_records(
         message=(
             "The Admin account and its examination records were deleted. "
             "Questions still used elsewhere were kept."
+        )
+    )
+
+
+@router.get("/questions/reset-status")
+def get_all_questions_reset_status(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Report whether the one-time global question deletion is still available."""
+    setting = db.query(PlatformSetting).filter(
+        PlatformSetting.setting_key == "all_questions_deleted_once",
+    ).first()
+    used = bool(setting and setting.setting_value == "true")
+    return {
+        "available": not used,
+        "used": used,
+        "message": (
+            "The one-time question deletion has already been used."
+            if used else
+            "The one-time question deletion is available to an Admin."
+        ),
+    }
+
+
+@router.delete("/questions/all", response_model=MessageResponse)
+def delete_all_questions_once(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete every question and dependent answer row exactly once."""
+    try:
+        setting = db.query(PlatformSetting).filter(
+            PlatformSetting.setting_key == "all_questions_deleted_once",
+        ).with_for_update().first()
+        if setting is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The one-time deletion setting is not initialized. Apply the platform settings migration first.",
+            )
+        if setting.setting_value == "true":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The one-time deletion of all questions has already been used.",
+            )
+
+        # Lock the Admin rows as an additional serialization guard. The setting
+        # row lock is the primary cross-Admin concurrency protection.
+        db.query(User.id).filter(
+            User.role == UserRole.ADMIN.value,
+        ).order_by(User.id).with_for_update().all()
+
+        question_ids = [row[0] for row in db.query(QuestionBank.id).all()]
+        answer_ids = [row[0] for row in db.query(Answer.id).all()]
+
+        if answer_ids:
+            db.query(AnswerMarkRevision).filter(
+                AnswerMarkRevision.answer_id.in_(answer_ids),
+            ).delete(synchronize_session=False)
+            db.query(Answer).filter(
+                Answer.id.in_(answer_ids),
+            ).delete(synchronize_session=False)
+
+        # Keep examination sessions and Result snapshots, but remove the
+        # question-dependent paper and answer rows that prevent question deletion.
+        db.query(ExamQuestion).delete(synchronize_session=False)
+        db.query(QuestionCollectionItem).delete(synchronize_session=False)
+        if question_ids:
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(question_ids),
+            ).update(
+                {QuestionBank.source_question_id: None},
+                synchronize_session=False,
+            )
+            db.query(Option).filter(
+                Option.question_id.in_(question_ids),
+            ).delete(synchronize_session=False)
+            db.query(QuestionBank).filter(
+                QuestionBank.id.in_(question_ids),
+            ).delete(synchronize_session=False)
+
+        setting.setting_value = "true"
+        setting.updated_by = current_admin.id
+        setting.updated_at = datetime.utcnow()
+        record_admin_activity(
+            db=db,
+            actor_user_id=current_admin.id,
+            target_user_id=None,
+            action="all_questions_deleted_once",
+            details={
+                "deleted_questions": len(question_ids),
+                "deleted_answers": len(answer_ids),
+                "deleted_exam_question_links": True,
+                "exam_sessions_and_result_snapshots_preserved": True,
+            },
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+    return MessageResponse(
+        message=(
+            f"Deleted {len(question_ids)} questions and {len(answer_ids)} dependent answers. "
+            "Examinations, sessions, and existing result snapshots were retained. "
+            "This one-time action is now permanently disabled."
         )
     )
 
