@@ -626,6 +626,29 @@ def test_prestart_auto_starts_after_seventeen_second_window(
     assert session.started_at == summary_start + timedelta(seconds=137)
     assert session.expires_at == session.started_at + timedelta(minutes=exam.duration_minutes)
 
+
+def test_question_progress_persists_visited_question_ids(client, db_session):
+    student = create_student(db_session, email="visited-progress@test.com")
+    exam = create_exam(db_session, title="Visited Progress Exam")
+    session = create_active_session(db_session, exam, student, selected_question_ids=[101, 202, 303])
+    token = create_exam_token(exam, student, session)
+
+    response = client.put(
+        f"/exam-sessions/progress/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_question_index": 1},
+    )
+    assert response.status_code == 200
+    assert response.json()["visited_question_ids"] == [202]
+
+    response = client.put(
+        f"/exam-sessions/progress/{session.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_question_index": 2},
+    )
+    assert response.status_code == 200
+    assert response.json()["visited_question_ids"] == [202, 303]
+
 def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
     client,
     db_session,
