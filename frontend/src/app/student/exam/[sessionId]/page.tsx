@@ -311,6 +311,7 @@ export default function StudentExamPage() {
       setUploadedImageQuestionIds((current) =>
         current.includes(questionId) ? current : [...current, questionId]
       );
+      setSavedAnswerQuestionIds((current) => current.includes(questionId) ? current : [...current, questionId]);
       setPendingImageFiles((current) => {
         const next = { ...current };
         delete next[questionId];
@@ -884,6 +885,7 @@ export default function StudentExamPage() {
 
     answersRef.current = updated;
     setAnswers(updated);
+    setSavedAnswerQuestionIds((current) => current.filter((id) => id !== questionId));
     setMessage("");
 
     const existingTimeout = saveTimeoutsRef.current[questionId];
@@ -1059,9 +1061,9 @@ export default function StudentExamPage() {
   useEffect(() => {
     if (!questionTimerLocked || isPaused || !paper) return;
     if (currentIndex < paper.questions.length - 1) {
-      setCurrentIndex((index) => Math.min(paper.questions.length - 1, index + 1));
+      void handleQuestionNavigation(currentIndex + 1);
     }
-  }, [questionTimerLocked, isPaused, paper, currentIndex]);
+  }, [questionTimerLocked, isPaused, paper, currentIndex, handleQuestionNavigation]);
 
   const heartbeatToken = examAccessToken;
   const heartbeatUrl = paper?.status === "in_progress" && heartbeatToken
