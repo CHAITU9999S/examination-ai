@@ -97,9 +97,10 @@ function examinerBreadcrumbs(pathname: string, role: string): Breadcrumbs | null
     bankParent,
     { href: "/examiner/question-banks", label: "Manage Question Banks" },
   ];
-  const createExamAncestors: Crumb[] = isAdmin
-    ? [ADMIN_EXAMS, { href: "/examiner/exams", label: "Create Examination" }]
-    : [{ href: "/examiner/exams", label: "Create Examination" }];
+  const createExamAncestors: Crumb[] = [
+    examParent,
+    { href: "/examiner/exams", label: "Create Examination" },
+  ];
 
   if (pathname === "/examiner/exams") {
     return { ancestors: [examParent], current: "Create Examination" };
@@ -114,7 +115,7 @@ function examinerBreadcrumbs(pathname: string, role: string): Breadcrumbs | null
   if (examQuestionBank) {
     const ancestors = isAdmin
       ? [ADMIN_EXAMS, { href: "/staff/manage-exams", label: "Manage Examinations" }, { href: `/staff/manage-exams/${examQuestionBank[1]}`, label: "Examination Details" }]
-      : [{ href: "/examiner/exams", label: "Create Examination" }];
+      : [EXAMINER_EXAMS, { href: "/examiner/exams", label: "Create Examination" }];
     return { ancestors, current: "Examination Bank" };
   }
   if (/^\/examiner\/exams\/[^/]+\/select-question-bank$/.test(pathname)) {
