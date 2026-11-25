@@ -22,6 +22,8 @@ export default function AdminManagementPage() {
   const router = useRouter();
 
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [actionId, setActionId] = useState<number | null>(null);
@@ -99,6 +101,15 @@ export default function AdminManagementPage() {
   useEffect(() => {
     loadAdmins();
   }, [loadAdmins]);
+
+  const visibleAdmins = [...admins]
+    .filter((admin) => !searchTerm.trim() || [admin.full_name, admin.email, admin.department].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name-desc") return b.full_name.localeCompare(a.full_name);
+      if (sortBy === "department") return String(a.department || "").localeCompare(String(b.department || ""));
+      if (sortBy === "status") return Number(Boolean(b.is_active)) - Number(Boolean(a.is_active));
+      return a.full_name.localeCompare(b.full_name);
+    });
 
   async function createAdmin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -453,10 +464,12 @@ export default function AdminManagementPage() {
                 Administrator Accounts
               </h2>
               <p className="mt-1 text-sm text-slate-400">
-                {admins.length} administrator account(s)
+                {visibleAdmins.length} administrator account(s)
               </p>
             </div>
 
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search admin name, email, department" aria-label="Search administrators" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort administrators" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option><option value="status">Status</option></select>
             <button
               type="button"
               onClick={loadAdmins}
@@ -471,7 +484,7 @@ export default function AdminManagementPage() {
             <p className="py-10 text-center text-slate-400">
               Loading administrator accounts...
             </p>
-          ) : admins.length === 0 ? (
+          ) : visibleAdmins.length === 0 ? (
             <p className="py-10 text-center text-slate-400">
               No administrator accounts found.
             </p>
@@ -488,7 +501,7 @@ export default function AdminManagementPage() {
                 </thead>
 
                 <tbody>
-                  {admins.map((admin) => (
+                  {visibleAdmins.map((admin) => (
                     <tr
                       key={admin.id}
                       className="border-b border-white/5 last:border-0"
