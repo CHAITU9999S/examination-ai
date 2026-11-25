@@ -382,6 +382,7 @@ export default function StudentExamPage() {
       )));
       setIsPaused(Boolean(normalizedPaper.is_paused));
     } catch (err) {
+      activePaperLoadedRef.current = false;
       setError(
         err instanceof Error
           ? err.message
