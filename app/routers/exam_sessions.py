@@ -317,6 +317,8 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "maximum_marks": round(maximum_marks, 2),
         "negative_marking_enabled": bool(exam.negative_marking),
         "total_possible_negative_marks": round(negative_marks, 2),
+        "proctoring_enabled": bool(exam.proctoring_enabled),
+        "randomize_questions": bool(exam.randomize_questions),
         "instructions": instructions,
     }
 
@@ -1103,11 +1105,16 @@ async def save_face_capture(
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Upload the face capture as a JPEG, PNG, or WebP image.")
+    declared_length = request.headers.get("content-length")
+    if declared_length and declared_length.isdigit() and int(declared_length) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="The face capture must be smaller than 2 MB.")
     image_bytes = await request.body()
     if not image_bytes or len(image_bytes) > 2 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="The face capture must be smaller than 2 MB.")
     try:
         with Image.open(io.BytesIO(image_bytes)) as source:
+            if source.width <= 0 or source.height <= 0 or source.width * source.height > 8_000_000:
+                raise ValueError("Image dimensions are too large.")
             source = ImageOps.exif_transpose(source).convert("RGB")
             source.thumbnail((640, 480))
             output = io.BytesIO()
