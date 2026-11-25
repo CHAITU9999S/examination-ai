@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
@@ -40,6 +40,8 @@ function formatDate(value: string | null) {
 export default function AdminActivityLogsPage() {
   const router = useRouter();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,6 +90,23 @@ export default function AdminActivityLogsPage() {
     loadLogs();
   }, [loadLogs]);
 
+  const visibleLogs = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return [...logs]
+      .filter((log) => {
+        if (!term) return true;
+        const target = log.target_name || (typeof log.details?.full_name === "string" ? log.details.full_name : "");
+        return [log.actor_name, log.action, formatAction(log.action), target, JSON.stringify(log.details || {})]
+          .some((value) => String(value || "").toLowerCase().includes(term));
+      })
+      .sort((a, b) => {
+        if (sortBy === "oldest") return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        if (sortBy === "administrator") return a.actor_name.localeCompare(b.actor_name);
+        if (sortBy === "action") return formatAction(a.action).localeCompare(formatAction(b.action));
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
+  }, [logs, searchTerm, sortBy]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -131,14 +150,24 @@ export default function AdminActivityLogsPage() {
           </div>
         )}
 
-        <section className="mt-8 rounded-xl border border-white/10 bg-slate-900 p-5">
+        <div className="mt-8 flex flex-wrap gap-3">
+          <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search administrator, action, target, or details" aria-label="Search Admin activity logs" className="min-w-[240px] flex-1 rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort Admin activity logs" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="administrator">Administrator A to Z</option>
+            <option value="action">Action A to Z</option>
+          </select>
+        </div>
+
+        <section className="mt-4 rounded-xl border border-white/10 bg-slate-900 p-5">
           {loading ? (
             <p className="py-12 text-center text-slate-400">
               Loading activity logs...
             </p>
-          ) : logs.length === 0 ? (
+          ) : visibleLogs.length === 0 ? (
             <p className="py-12 text-center text-slate-400">
-              No administrator activity has been recorded yet.
+              {logs.length === 0 ? "No administrator activity has been recorded yet." : "No activity logs match your search."}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -153,7 +182,7 @@ export default function AdminActivityLogsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log) => (
+                  {visibleLogs.map((log) => (
                     <tr
                       key={log.id}
                       className="border-b border-white/5 align-top last:border-0"
