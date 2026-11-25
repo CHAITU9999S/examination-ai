@@ -3,6 +3,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
 
 const API_URL =
@@ -270,12 +271,7 @@ export default function AdminManagementPage() {
             </p>
           </div>
 
-          <Link
-            href="/admin/dashboard"
-            className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
-          >
-            ← Dashboard
-          </Link>
+          <AdminSectionNavigation previousHref="/admin/sections/admins" previousLabel="Admins" />
         </div>
       </header>
 
