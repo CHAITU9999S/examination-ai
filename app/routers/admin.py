@@ -1051,8 +1051,8 @@ def get_historical_student_performance(
 ):
     """Return assigned examinations and performance summaries for Student Tracking.
 
-    Admins see every active assignment. Examiners see only assignments made
-    by their own account. The same response shape is used for both roles.
+    Both roles see only active assignments made by their own account. The same
+    response shape and permission rule are used for Admins and Examiners.
     """
     StudentAccount = aliased(User)
     CreatorAccount = aliased(User)
@@ -1090,10 +1090,9 @@ def get_historical_student_performance(
         StudentAccount.is_deleted.is_(False),
     )
 
-    if current_user.role == UserRole.EXAMINER.value:
-        assignment_query = assignment_query.filter(
-            ExamAssignment.assigned_by == current_user.id
-        )
+    assignment_query = assignment_query.filter(
+        ExamAssignment.assigned_by == current_user.id
+    )
 
     assignment_rows = assignment_query.order_by(
         StudentAccount.full_name.asc(),
