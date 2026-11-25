@@ -417,10 +417,16 @@ class ExamSession(Base):
 
     suspicion_score = Column(Float, nullable=True)
 
-    expires_at = Column(
-        DateTime(),
-        nullable=False
-    )
+    # The exam clock is deliberately unset until the 17-second start window
+    # is completed. Pre-start deadlines are stored independently for reload safety.
+    expires_at = Column(DateTime(), nullable=True)
+    prestart_stage = Column(String(20), nullable=True)
+    prestart_expires_at = Column(DateTime(), nullable=True)
+    summary_started_at = Column(DateTime(), nullable=True)
+    start_window_expires_at = Column(DateTime(), nullable=True)
+    face_capture_data = Column(LargeBinary, nullable=True)
+    face_capture_mime_type = Column(String(50), nullable=True)
+    face_captured_at = Column(DateTime(), nullable=True)
 
     last_heartbeat_at = Column(DateTime(), nullable=True)
     last_heartbeat_signals = Column(JSON, nullable=True)
