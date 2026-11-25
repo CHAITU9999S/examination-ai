@@ -206,11 +206,16 @@ def list_examiner_activity_logs(
         .join(actor, AdminActivityLog.actor_user_id == actor.id)
         .filter(
             actor.role == UserRole.EXAMINER.value,
-            or_(
-                AdminActivityLog.action.like("exam%"),
-                AdminActivityLog.action.like("examination%"),
-                AdminActivityLog.action.like("question_bank%"),
-                AdminActivityLog.action.like("question_%"),
+            AdminActivityLog.action.in_(
+                (
+                    "examination_created",
+                    "exam_configuration_updated",
+                    "examination_scheduled",
+                    "examination_deleted",
+                    "question_bank_created",
+                    "question_bank_updated",
+                    "question_bank_deleted",
+                )
             ),
         )
         .order_by(AdminActivityLog.created_at.desc(), AdminActivityLog.id.desc())
