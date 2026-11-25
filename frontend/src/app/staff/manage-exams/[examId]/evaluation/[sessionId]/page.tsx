@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
@@ -16,7 +16,7 @@ type QuestionReview={
 };
 type ReviewData={session_id:number;exam_id:number;exam_title:string;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
 function dateText(value?:string|null){if(!value)return "—";const d=new Date(value);return Number.isNaN(d.getTime())?"—":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
-export default function SessionEvaluationPage(){
+function SessionEvaluationPageContent(){
  const params=useParams<{examId:string;sessionId:string}>();
  const router=useRouter();const search=useSearchParams();
  const examId=String(params.examId||"");const sessionId=String(params.sessionId||"");
@@ -142,4 +142,12 @@ export default function SessionEvaluationPage(){
    {!readOnly&&<section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="font-semibold">Publish Student Result</h2><p className="mt-1 text-sm text-slate-400">The student sees the latest saved marks after publication. Grade is optional; if left blank, the standard grade is calculated from the percentage.</p>{!data.result_published&&<label className="mt-3 block max-w-xs text-sm text-slate-300">Optional grade<input value={grade} onChange={e=>setGrade(e.target.value)} maxLength={20} placeholder="e.g. A, Distinction, Pass" className="mt-1 block w-full rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-white"/></label>}</div><button type="button" onClick={publishResult} disabled={working||data.result_published||!canPublish||!allSubjectiveComplete} className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{data.result_published?"Result Published":working?"Publishing...":"Publish Result"}</button></div>{!allSubjectiveComplete&&<p className="mt-3 text-xs text-amber-300">Complete evaluation of all submitted subjective answers before publishing.</p>}{data.result_published&&<p className="mt-3 text-sm text-green-300">Published result: {data.result_obtained_marks} / {data.result_total_marks} · Grade {data.result_grade||"—"}</p>}</section>}
   </div>
  </main>;
+}
+
+export default function SessionEvaluationPage() {
+ return (
+  <Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-center text-slate-400">Loading student evaluation...</main>}>
+   <SessionEvaluationPageContent />
+  </Suspense>
+ );
 }
