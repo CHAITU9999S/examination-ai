@@ -804,7 +804,7 @@ export default function StudentExamPage() {
       if (cancelled) return;
       const entryStatus = await loadPrestartStatus();
       if (cancelled || entryStatus !== "in_progress") return;
-      await loadPaper();
+      if (!activePaperLoadedRef.current) await loadPaper();
       if (cancelled) return;
       await loadRemainingTime();
       if (cancelled) return;
