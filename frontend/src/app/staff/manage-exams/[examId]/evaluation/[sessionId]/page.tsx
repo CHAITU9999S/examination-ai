@@ -22,13 +22,13 @@ export default function SessionEvaluationPage(){
  const examId=String(params.examId||"");const sessionId=String(params.sessionId||"");
  const readOnly=search.get("view")==="1";
  const [data,setData]=useState<ReviewData|null>(null);const [index,setIndex]=useState(0);
- const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");
+ const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");const [grade,setGrade]=useState("");
  const [photo,setPhoto]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
  const [loading,setLoading]=useState(true);const [working,setWorking]=useState(false);const [error,setError]=useState("");const [message,setMessage]=useState("");
  const headers=()=>{const token=localStorage.getItem("examguard_access_token");if(!token){router.replace("/login");return null;}return {Authorization:`Bearer ${token}`,"Content-Type":"application/json"};};
  const load=useCallback(async()=>{
   setLoading(true);setError("");
-  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/review`,{headers:h,cache:"no-store"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to load student answers.");setData(result);setIndex(0);}
+  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/review`,{headers:h,cache:"no-store"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to load student answers.");setData(result);setGrade(result.result_grade||"");setIndex(0);}
   catch(err){setError(err instanceof Error?err.message:"Unable to load evaluation.");}
   finally{setLoading(false);}
  },[sessionId]);
@@ -54,7 +54,7 @@ export default function SessionEvaluationPage(){
  }
  async function publishResult(){
   if(readOnly||!data)return;setWorking(true);setError("");setMessage("");
-  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/publish`,{method:"POST",headers:h});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to publish result.");setMessage("Result published successfully to the student's account.");await load();}
+  try{const h=headers();if(!h)return;const response=await fetch(`${API_URL}/grading/sessions/${sessionId}/publish`,{method:"POST",headers:h,body:JSON.stringify({grade:grade.trim()||null})});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.detail||"Unable to publish result.");setMessage("Result published successfully to the student's account.");await load();}
   catch(err){setError(err instanceof Error?err.message:"Unable to publish result.");}finally{setWorking(false);}
  }
  if(loading)return <main className="min-h-screen bg-slate-950 p-10 text-center text-slate-300">Loading student evaluation...</main>;
@@ -99,7 +99,7 @@ export default function SessionEvaluationPage(){
     </div>}
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"><button type="button" onClick={()=>setIndex(i=>Math.max(0,i-1))} disabled={index===0} className="rounded-lg border border-white/20 px-4 py-2 text-sm disabled:opacity-40">Previous Question</button><button type="button" onClick={()=>setIndex(i=>Math.min(data.questions.length-1,i+1))} disabled={index>=data.questions.length-1} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-40">Next Question</button></div>
    </section>
-   {!readOnly&&<section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Publish Student Result</h2><p className="mt-1 text-sm text-slate-400">The student sees the latest saved marks after publication.</p></div><button type="button" onClick={publishResult} disabled={working||data.result_published||!canPublish||!allSubjectiveComplete} className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{data.result_published?"Result Published":working?"Publishing...":"Publish Result"}</button></div>{!allSubjectiveComplete&&<p className="mt-3 text-xs text-amber-300">Complete evaluation of all submitted subjective answers before publishing.</p>}{data.result_published&&<p className="mt-3 text-sm text-green-300">Published result: {data.result_obtained_marks} / {data.result_total_marks} · Grade {data.result_grade||"—"}</p>}</section>}
+   {!readOnly&&<section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="font-semibold">Publish Student Result</h2><p className="mt-1 text-sm text-slate-400">The student sees the latest saved marks after publication. Grade is optional; if left blank, the standard grade is calculated from the percentage.</p>{!data.result_published&&<label className="mt-3 block max-w-xs text-sm text-slate-300">Optional grade<input value={grade} onChange={e=>setGrade(e.target.value)} maxLength={20} placeholder="e.g. A, Distinction, Pass" className="mt-1 block w-full rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-white"/></label>}</div><button type="button" onClick={publishResult} disabled={working||data.result_published||!canPublish||!allSubjectiveComplete} className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{data.result_published?"Result Published":working?"Publishing...":"Publish Result"}</button></div>{!allSubjectiveComplete&&<p className="mt-3 text-xs text-amber-300">Complete evaluation of all submitted subjective answers before publishing.</p>}{data.result_published&&<p className="mt-3 text-sm text-green-300">Published result: {data.result_obtained_marks} / {data.result_total_marks} · Grade {data.result_grade||"—"}</p>}</section>}
   </div>
  </main>;
 }
