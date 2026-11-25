@@ -123,6 +123,9 @@ export default function AdminDashboardPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [questionResetAvailable, setQuestionResetAvailable] = useState<boolean | null>(null);
+  const [questionResetBusy, setQuestionResetBusy] = useState(false);
+  const [questionResetMessage, setQuestionResetMessage] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -156,6 +159,17 @@ export default function AdminDashboardPage() {
 
         setUser(currentUser);
 
+        const resetStatusResponse = await fetch(
+          `${API_URL}/admin/questions/reset-status`,
+          { headers, cache: "no-store" }
+        );
+        if (resetStatusResponse.ok) {
+          const resetStatus = await resetStatusResponse.json();
+          setQuestionResetAvailable(Boolean(resetStatus.available));
+        } else {
+          setQuestionResetAvailable(false);
+        }
+
         const statsResponse = await fetch(
           `${API_URL}/admin/dashboard`,
           { headers }
@@ -185,6 +199,44 @@ export default function AdminDashboardPage() {
 
     loadDashboard();
   }, [router]);
+
+
+  async function deleteAllQuestionsOnce() {
+    if (questionResetBusy || !questionResetAvailable) return;
+    const confirmed = window.confirm(
+      "DANGER: This permanently deletes every question, its options, exam-paper links, and dependent student answer records. Existing examinations may become unusable. Examination sessions and existing result snapshots will be retained. This action can be used only once. Continue?"
+    );
+    if (!confirmed) return;
+    const finalConfirmation = window.confirm(
+      "Final confirmation: permanently delete ALL questions from ExamGuard AI now?"
+    );
+    if (!finalConfirmation) return;
+
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    setQuestionResetBusy(true);
+    setQuestionResetMessage("");
+    try {
+      const response = await fetch(`${API_URL}/admin/questions/all`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to delete all questions.");
+      setQuestionResetAvailable(false);
+      setQuestionResetMessage(data.message || "All questions were deleted. This action is now disabled.");
+      setStatistics((current) => current ? { ...current, total_questions: 0 } : current);
+    } catch (resetError) {
+      setQuestionResetMessage(
+        resetError instanceof Error ? resetError.message : "Unable to delete all questions."
+      );
+    } finally {
+      setQuestionResetBusy(false);
+    }
+  }
 
   function handleLogout() {
     localStorage.removeItem("examguard_access_token");
@@ -283,6 +335,30 @@ export default function AdminDashboardPage() {
           >
             {error}
           </div>
+        )}
+
+
+        {questionResetAvailable && (
+          <section className="mb-10 rounded-xl border border-red-500/40 bg-red-950/30 p-6">
+            <h2 className="text-lg font-bold text-red-300">One-time question reset</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              Permanently delete all questions and dependent answer records from the database. Existing examinations may become unusable. Examination sessions and saved result snapshots are retained where possible. This option disappears permanently after successful use.
+            </p>
+            <button
+              type="button"
+              onClick={deleteAllQuestionsOnce}
+              disabled={questionResetBusy}
+              className="mt-4 rounded-lg bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+            >
+              {questionResetBusy ? "Deleting questions..." : "Delete all questions (one time only)"}
+            </button>
+            {questionResetMessage && (
+              <p role="status" className="mt-3 text-sm text-red-200">{questionResetMessage}</p>
+            )}
+          </section>
+        )}
+        {!questionResetAvailable && questionResetMessage && (
+          <p role="status" className="mb-8 text-sm text-slate-300">{questionResetMessage}</p>
         )}
 
         <section className="mb-12">
