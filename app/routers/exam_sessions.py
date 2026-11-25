@@ -121,7 +121,6 @@ def expire_session_if_needed(
                 db.commit()
                 db.refresh(session)
                 return True
-            return False
 
         session.status = "submitted"
         session.submitted_at = now
