@@ -41,6 +41,8 @@ export default function QuestionBankDetailPage() {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [imagePreviews, setImagePreviews] = useState<Record<number, { prompt?: string; expected?: string }>>({});
   const [bankName, setBankName] = useState("Question Bank");
+  const [bankCreatorName, setBankCreatorName] = useState("Unknown");
+  const [bankCreatorRole, setBankCreatorRole] = useState("");
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [text, setText] = useState("");
   const [type, setType] = useState("MCQ");
@@ -82,6 +84,8 @@ export default function QuestionBankDetailPage() {
     const bank = banks.find((item: { id: number; name: string }) => item.id === Number(bankId));
     if (!bank) throw new Error("You can manage only question banks you created.");
     setBankName(bank.name);
+    setBankCreatorName(bank.created_by_name || "Unknown");
+    setBankCreatorRole(bank.created_by_role || "");
     const loadedQuestions: Question[] = await questionsRes.json();
     setQuestions(loadedQuestions);
     const previews: Record<number, { prompt?: string; expected?: string }> = {};
@@ -336,6 +340,7 @@ export default function QuestionBankDetailPage() {
       <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
         <div>
           <h1 className="text-3xl font-bold">{bankName}</h1>
+          <p className="mt-2 text-sm text-slate-400">Created by: <span className="font-medium text-slate-200">{bankCreatorName}</span> {bankCreatorRole ? <span className="capitalize">({bankCreatorRole})</span> : null}</p>
           <p className="mt-2 text-slate-400">Add questions now and use them in examinations later.</p>
         </div>
 
