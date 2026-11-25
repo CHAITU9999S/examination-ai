@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +27,7 @@ interface QuestionOption {
 interface Question {
   id: number;
   created_by: number;
+  created_by_name?: string | null;
   question_text: string;
   question_type: QuestionType;
   subject?: string | null;
@@ -44,6 +45,8 @@ export default function ExaminerQuestionsPage() {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [loading, setLoading] = useState(true);
@@ -361,6 +364,21 @@ export default function ExaminerQuestionsPage() {
       setCreating(false);
     }
   }
+
+  const visibleQuestions = useMemo(() => [...questions]
+    .filter((question) => !searchTerm.trim() || [
+      question.question_text, question.subject, question.question_type,
+      question.difficulty, question.created_by_name, String(question.id),
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name") return a.question_text.localeCompare(b.question_text);
+      if (sortBy === "type") return a.question_type.localeCompare(b.question_type);
+      if (sortBy === "difficulty") return String(a.difficulty || "").localeCompare(String(b.difficulty || ""));
+      if (sortBy === "marks-low") return a.marks - b.marks;
+      if (sortBy === "marks-high") return b.marks - a.marks;
+      if (sortBy === "oldest") return a.id - b.id;
+      return b.id - a.id;
+    }), [questions, searchTerm, sortBy]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -687,11 +705,23 @@ export default function ExaminerQuestionsPage() {
               <h2 className="text-xl font-bold">Existing Questions</h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                {questions.length} question(s) available
+                {visibleQuestions.length} of {questions.length} question(s) available
               </p>
             </div>
 
-            <button
+            <div className="flex flex-wrap gap-3">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search question, subject, type, or creator"
+                aria-label="Search questions"
+                className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"
+              />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Question A to Z</option><option value="type">Question type</option><option value="difficulty">Difficulty</option><option value="marks-low">Lowest marks</option><option value="marks-high">Highest marks</option>
+              </select>
+                          <button
               type="button"
               onClick={loadQuestions}
               disabled={loading}
@@ -699,19 +729,20 @@ export default function ExaminerQuestionsPage() {
             >
               Refresh
             </button>
+            </div>
           </div>
 
           {loading ? (
             <p className="py-10 text-center text-slate-400">
               Loading questions...
             </p>
-          ) : questions.length === 0 ? (
+          ) : visibleQuestions.length === 0 ? (
             <p className="py-10 text-center text-slate-400">
-              No questions found.
+              {questions.length === 0 ? "No questions found." : "No questions match your search."}
             </p>
           ) : (
             <div className="mt-6 space-y-4">
-              {questions.map((question) => (
+              {visibleQuestions.map((question) => (
                 <article
                   key={question.id}
                   className="rounded-xl border border-white/10 bg-slate-800/60 p-5"
@@ -726,6 +757,7 @@ export default function ExaminerQuestionsPage() {
                       <h3 className="mt-2 font-semibold">
                         {question.question_text}
                       </h3>
+                      <p className="mt-2 text-xs text-slate-400">Created by: {question.created_by_name || "Unknown"}</p>
                       {question.tags && question.tags.length > 0 && (
                         <p className="mt-2 text-xs text-slate-400">Tags: {question.tags.join(", ")}</p>
                       )}
