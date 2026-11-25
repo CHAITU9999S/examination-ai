@@ -1073,6 +1073,12 @@ def get_historical_student_performance(
     flat_performance = []
     for session, exam, student, creator, result in rows:
         question_ids = list(session.selected_question_ids or [])
+        if not question_ids:
+            question_ids = [
+                row[0] for row in db.query(ExamQuestion.question_id).filter(
+                    ExamQuestion.exam_id == exam.id
+                ).order_by(ExamQuestion.question_order.asc(), ExamQuestion.id.asc()).all()
+            ]
         answers = db.query(Answer).filter(
             Answer.session_id == session.id
         ).all()
