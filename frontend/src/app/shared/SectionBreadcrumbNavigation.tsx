@@ -40,7 +40,8 @@ function adminBreadcrumbs(pathname: string): Breadcrumbs | null {
   if (pathname === "/admin/examiner-activity-logs") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/examiners", label: "Examiners" }], current: "Examiner Activity Logs" };
   if (pathname === "/admin/students") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Management" };
   if (pathname === "/admin/schedules") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Schedule" };
-  if (pathname === "/admin/performance") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Performance" };
+  if (pathname === "/admin/performance") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Tracking" };
+  if (pathname === "/admin/student-performance") return { ancestors: [ADMIN_USERS, { href: "/admin/sections/students", label: "Students" }], current: "Student Performance" };
   if (pathname === "/admin/questions") return { ancestors: [ADMIN_BANKS], current: "Questions" };
   if (pathname === "/admin/exams") return { ancestors: [ADMIN_EXAMS], current: "Examinations" };
 
