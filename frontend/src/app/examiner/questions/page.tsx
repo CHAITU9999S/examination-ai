@@ -45,6 +45,7 @@ export default function ExaminerQuestionsPage() {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState<number | null>(null);
@@ -107,6 +108,11 @@ export default function ExaminerQuestionsPage() {
       }
 
       const profile = await profileResponse.json();
+      if (profile.role !== "admin" && profile.role !== "examiner") {
+        router.replace("/login");
+        return;
+      }
+      setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
       setCurrentUserId(Number(profile.id));
       const data = await response.json();
 
@@ -362,7 +368,7 @@ export default function ExaminerQuestionsPage() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
             <Link
-              href="/examiner/dashboard"
+              href={dashboardHref}
               className="text-2xl font-bold"
             >
               ExamGuard <span className="text-blue-400">AI</span>
