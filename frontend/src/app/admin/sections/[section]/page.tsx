@@ -83,6 +83,9 @@ export default function AdminSectionPage() {
   const visibleItems = role === "examiner" && params.section === "examinations"
     ? section?.items.filter((item) => item.title !== "Examinations") || []
     : section?.items || [];
+  const sectionDescription = role === "examiner" && params.section === "examinations"
+    ? "Create and manage examinations created by your account."
+    : section?.description || "";
 
   useEffect(() => {
     async function verifySectionAccess() {
@@ -145,7 +148,7 @@ export default function AdminSectionPage() {
       </header>
       <div className="mx-auto max-w-7xl px-6 py-10">
         <h1 className="text-3xl font-bold">{section.title}</h1>
-        <p className="mt-2 text-slate-400">{section.description}</p>
+        <p className="mt-2 text-slate-400">{sectionDescription}</p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleItems.map((item) => (
             <article key={item.href} className="rounded-xl border border-white/10 bg-slate-900 p-5">
