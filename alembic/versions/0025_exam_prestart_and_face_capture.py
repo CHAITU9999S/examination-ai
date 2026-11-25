@@ -27,6 +27,14 @@ def upgrade():
 
 
 def downgrade():
+    # Restore a non-null deadline before reverting the legacy column constraint.
+    connection = op.get_bind()
+    connection.execute(
+        sa.text(
+            "UPDATE exam_sessions SET expires_at = COALESCE(expires_at, prestart_expires_at, CURRENT_TIMESTAMP) "
+            "WHERE expires_at IS NULL"
+        )
+    )
     op.drop_column("exam_sessions", "face_captured_at")
     op.drop_column("exam_sessions", "face_capture_mime_type")
     op.drop_column("exam_sessions", "face_capture_data")
