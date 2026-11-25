@@ -496,12 +496,24 @@ def get_student_examination_overview(
             "result_published": bool(result),
             "obtained_marks": result.obtained_marks if result else None,
             "negative_marks": (
-                round(max(0.0, -float(result.obtained_marks or 0)), 2)
+                round(sum(
+                    abs(float(score.get("awarded_marks") or 0))
+                    for score in (result.question_scores or [])
+                    if isinstance(score, dict) and float(score.get("awarded_marks") or 0) < 0
+                ), 2)
                 if result else None
             ),
             "result_total_marks": result.total_marks if result else None,
             "percentage": result.percentage if result else None,
-            "grade": result.grade if result else None,
+            "grade": (
+                result.grade or (
+                    "A+" if float(result.percentage or 0) >= 90 else
+                    "A" if float(result.percentage or 0) >= 80 else
+                    "B" if float(result.percentage or 0) >= 70 else
+                    "C" if float(result.percentage or 0) >= 60 else
+                    "D" if float(result.percentage or 0) >= 50 else "F"
+                )
+            ) if result else None,
             "published_at": as_utc(result.published_at) if result else None,
         })
 
