@@ -509,6 +509,7 @@ def list_retained_data(
         User.is_deleted.is_(True)
     ).order_by(User.deleted_at.desc()).all()
     items = []
+    seen_activity_ids = set()
 
     for deleted_user in deleted_users:
         if deleted_user.role in {UserRole.ADMIN.value, UserRole.EXAMINER.value}:
@@ -571,6 +572,9 @@ def list_retained_data(
             )
         ).order_by(AdminActivityLog.id.desc()).all()
         for activity in activity_rows:
+            if activity.id in seen_activity_ids:
+                continue
+            seen_activity_ids.add(activity.id)
             items.append({
                 "kind": "admin_activity_log",
                 "id": activity.id,
@@ -884,7 +888,8 @@ def update_user_status(
     ):
         active_admin_count = db.query(User).filter(
             User.role == UserRole.ADMIN.value,
-            User.is_active.is_(True)
+            User.is_active.is_(True),
+            User.is_deleted.is_(False),
         ).count()
 
         if active_admin_count <= 1:
