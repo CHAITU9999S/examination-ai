@@ -9,6 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 interface Exam {
   id: number; title: string; subject?: string | null; duration_minutes: number;
   total_questions: number; start_time?: string | null; end_time?: string | null;
+  published_at?: string | null;
   created_by_name?: string | null; created_by_role?: string | null; max_marks?: number | null;
   selection_rules?: { group_counts?: Record<string, number> } | null;
   assigned_question_count?: number;
@@ -94,7 +95,9 @@ export default function AdminExamsPage() {
                   <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
                   <p className="mt-3 text-sm text-slate-300">Created by: <span className="font-semibold text-white">{exam.created_by_name || "Unknown"}</span> <span className="capitalize text-slate-400">({exam.created_by_role || "—"})</span></p>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div><dt className="text-xs text-slate-500">Start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div><div><dt className="text-xs text-slate-500">End</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Published</dt><dd className="mt-1">{formatDate(exam.published_at)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Scheduled start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Scheduled end</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
                     <div><dt className="text-xs text-slate-500">Questions in bank</dt><dd className="mt-1">{exam.assigned_question_count ?? "—"}</dd></div><div><dt className="text-xs text-slate-500">Questions per student</dt><dd className="mt-1">{exam.total_questions}</dd></div><div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
                     <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div><div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
                   </dl>
