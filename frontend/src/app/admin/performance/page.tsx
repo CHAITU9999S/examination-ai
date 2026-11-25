@@ -26,6 +26,7 @@ interface Attempt {
   total_questions: number;
   correct_answers: number;
   wrong_answers: number;
+  partially_correct_answers: number;
   unanswered_questions: number;
   positive_marks: number;
   negative_marks: number;
@@ -300,6 +301,10 @@ export default function StudentTrackingPage() {
                                         <div className="rounded-lg bg-slate-800 p-3">
                                           <p className="text-xs text-slate-400">Wrong answers</p>
                                           <p className="mt-1 text-xl font-semibold text-red-300">{attempt.wrong_answers}</p>
+                                        </div>
+                                        <div className="rounded-lg bg-slate-800 p-3">
+                                          <p className="text-xs text-slate-400">Partially correct answers</p>
+                                          <p className="mt-1 text-xl font-semibold text-amber-300">{attempt.partially_correct_answers}</p>
                                         </div>
                                         <div className="rounded-lg bg-slate-800 p-3">
                                           <p className="text-xs text-slate-400">Unanswered questions</p>
