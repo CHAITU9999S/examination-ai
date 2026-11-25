@@ -505,7 +505,12 @@ def get_student_examination_overview(
         is_pending = bool(
             session is not None
             and session_status == "in_progress"
-            and (session.is_paused or session.started_at is not None)
+            and session.is_paused
+        )
+        is_in_progress = bool(
+            session is not None
+            and session_status == "in_progress"
+            and not session.is_paused
         )
         can_start = bool(
             category == "available"
@@ -537,6 +542,7 @@ def get_student_examination_overview(
             "session_status": session_status,
             "is_paused": bool(session.is_paused) if session else False,
             "is_pending": is_pending,
+            "is_in_progress": is_in_progress,
             "can_start": can_start,
             "category": category,
             "submitted_at": as_utc(session.submitted_at) if session else None,
