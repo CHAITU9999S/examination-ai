@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-type SectionItem = { title: string; description: string; href: string };
+type SectionItem = { title: string; description: string; href: string; related?: SectionItem[] };
 
 const sections: Record<string, { title: string; description: string; items: SectionItem[] }> = {
   "user-management": {
@@ -14,12 +14,14 @@ const sections: Record<string, { title: string; description: string; items: Sect
     description: "All account-management areas are grouped here.",
     items: [
       { title: "User Management", description: "View, activate, deactivate, and manage all platform accounts.", href: "/admin/users" },
-      { title: "Admin Management", description: "Create and manage Admin accounts.", href: "/admin/admins" },
+      { title: "Admin Management", description: "Create and manage Admin accounts.", href: "/admin/admins", related: [
+        { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
+      ] },
       { title: "Examiner Management", description: "Create and manage Examiner accounts.", href: "/admin/examiners" },
-      { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students" },
-      { title: "Student Schedule", description: "View student assignments and examination schedules.", href: "/admin/schedules" },
-      { title: "Student Performance", description: "Review student performance and published results.", href: "/admin/performance" },
-      { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
+      { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students", related: [
+        { title: "Student Schedule", description: "View student assignments and examination schedules.", href: "/admin/schedules" },
+        { title: "Student Performance", description: "Review student performance and published results.", href: "/admin/performance" },
+      ] },
     ],
   },
   "question-banks": {
@@ -35,7 +37,8 @@ const sections: Record<string, { title: string; description: string; items: Sect
     description: "All examination operations are grouped here.",
     items: [
       { title: "Examinations", description: "View examinations created by Admins and Examiners.", href: "/admin/exams" },
-      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams" },
+      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams", related: [
+        ] },
       { title: "Answer Grading", description: "Review answers and manage marks for examinations you own.", href: "/examiner/grading" },
       { title: "Result Publication", description: "Approve and publish results for examinations you own.", href: "/examiner/results" },
       { title: "Proctoring Review", description: "Review flagged sessions and proctoring events.", href: "/staff/proctoring" },
@@ -109,10 +112,24 @@ export default function AdminSectionPage() {
         <p className="mt-2 text-slate-400">{section.description}</p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {section.items.map((item) => (
-            <Link key={item.href} href={item.href} className="rounded-xl border border-white/10 bg-slate-900 p-5 transition hover:border-blue-400/50 hover:bg-slate-800">
-              <h2 className="font-semibold">{item.title} <span className="text-blue-300">→</span></h2>
+            <article key={item.href} className="rounded-xl border border-white/10 bg-slate-900 p-5">
+              <Link href={item.href} className="font-semibold hover:text-blue-300">
+                {item.title} <span className="text-blue-300">→</span>
+              </Link>
               <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
-            </Link>
+              {item.related && item.related.length > 0 && (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-3">
+                  {item.related.map((related) => (
+                    <div key={related.href}>
+                      <Link href={related.href} className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
+                        {related.title} →
+                      </Link>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{related.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
           ))}
         </div>
       </div>
