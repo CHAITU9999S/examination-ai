@@ -392,23 +392,17 @@ def test_student_cannot_submit_event_for_another_session(
     assert response.status_code == 403
 
 
-def test_proctoring_disabled_exam_rejects_events(
+def test_proctoring_is_mandatory_even_when_legacy_exam_setting_is_false(
     client,
     db_session,
     proctoring_data,
 ):
     data = proctoring_data
-
     data["exam"].proctoring_enabled = False
     db_session.commit()
 
-    response = submit_event(
-        client,
-        data,
-        "tab_switch",
-    )
-
-    assert response.status_code in (400, 403)
+    response = submit_event(client, data, "tab_switch")
+    assert response.status_code == 201
 
 
 def test_expired_session_rejects_events(
