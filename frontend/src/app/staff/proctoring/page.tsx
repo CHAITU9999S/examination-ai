@@ -49,6 +49,7 @@ function formatDate(value?: string | null) {
 export default function StaffProctoringReviewPage() {
   const router = useRouter();
   const [requestedSessionId, setRequestedSessionId] = useState<string | null>(null);
+  const [requestedReturnTo, setRequestedReturnTo] = useState<string | null>(null);
   const [sessions, setSessions] = useState<FlaggedSession[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -58,7 +59,9 @@ export default function StaffProctoringReviewPage() {
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
 
   useEffect(() => {
-    setRequestedSessionId(new URLSearchParams(window.location.search).get("session_id"));
+    const query = new URLSearchParams(window.location.search);
+    setRequestedSessionId(query.get("session_id"));
+    setRequestedReturnTo(query.get("return_to"));
   }, []);
 
   const loadFlaggedSessions = useCallback(async () => {
@@ -130,7 +133,7 @@ export default function StaffProctoringReviewPage() {
             <p className="mt-1 text-sm text-slate-400">Staff / Proctoring Review</p>
           </div>
           <AdminSectionNavigation
-            previousHref={dashboardHref === "/admin/dashboard" ? "/admin/sections/examinations" : "/examiner/dashboard"}
+            previousHref={requestedReturnTo && (requestedReturnTo.startsWith("/admin/exams/") || requestedReturnTo.startsWith("/staff/manage-exams/")) ? requestedReturnTo : dashboardHref === "/admin/dashboard" ? "/admin/sections/examinations" : "/examiner/dashboard"}
             previousLabel="Previous Section"
             dashboardHref={dashboardHref}
           />
