@@ -70,7 +70,7 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
         <h4 className="text-sm font-semibold">Question type and difficulty</h4>
         <div className="mt-3 flex flex-wrap gap-2">{exam.question_breakdown.map((group, index) =>
           <span key={index} className="rounded-lg bg-slate-700 px-3 py-2 text-xs text-slate-200">
-            {group.question_type.replaceAll("_", " ")} · {group.difficulty} · {group.count}
+            {group.question_type.replaceAll("_", " ")} · {group.difficulty} · {group.count} × {group.marks_per_question} marks{exam.negative_marking && group.negative_marks_per_question > 0 ? " · −" + group.negative_marks_per_question + " each" : ""}
           </span>)}</div>
         {exam.question_breakdown.some(group => group.question_time_limit_seconds) && <p className="mt-3 text-xs text-slate-400">
           Per-question time limits: {exam.question_breakdown.filter(group => group.question_time_limit_seconds).map(group =>
