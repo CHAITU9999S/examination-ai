@@ -92,8 +92,8 @@ function ExamCard({ exam, action }: { exam: Exam; action: ReactNode }) {
             <p>Total marks: <strong>{exam.result_total_marks ?? exam.maximum_marks}</strong></p>
             <p>Grade: <strong>{exam.grade || "—"}</strong></p>
           </div>
-          {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-3 inline-block text-sm font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
         </> : <p className="text-sm font-semibold text-amber-300">Result Not Declared</p>}
+        {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-3 inline-block text-sm font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
       </div>}
       <div className="mt-6">{action}</div>
     </article>
