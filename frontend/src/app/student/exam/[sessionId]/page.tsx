@@ -54,7 +54,10 @@ interface ExamPaper {
     marking_scheme: Array<{ question_type: string; difficulty: string; count: number; positive_marks_per_question: number; negative_marks_per_question: number }>;
     duration_minutes: number; maximum_marks: number;
     negative_marking_enabled: boolean; total_possible_negative_marks: number;
-    proctoring_enabled: boolean; randomize_questions: boolean; instructions?: string[] | string;
+    proctoring_enabled: boolean; randomize_questions: boolean;
+    scheduled_start?: string | null; scheduled_end?: string | null;
+    max_tab_switch_warnings?: number | null; gaze_tracking_sensitivity?: number | null;
+    instructions?: string[] | string;
   };
 }
 
@@ -1224,6 +1227,10 @@ export default function StudentExamPage() {
                     ["Possible negative marks", String(summary.total_possible_negative_marks)],
                     ["AI proctoring", summary.proctoring_enabled ? "Enabled" : "Disabled"],
                     ["Question order", summary.randomize_questions ? "Randomized" : "Configured order"],
+                    ["Scheduled start", summary.scheduled_start ? new Date(summary.scheduled_start).toLocaleString() : "Not specified"],
+                    ["Scheduled end", summary.scheduled_end ? new Date(summary.scheduled_end).toLocaleString() : "Not specified"],
+                    ["Maximum tab-switch warnings", summary.max_tab_switch_warnings ?? "Not specified"],
+                    ["Gaze sensitivity", summary.gaze_tracking_sensitivity ?? "Not specified"],
                   ].map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}
                 </div>
                 <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
