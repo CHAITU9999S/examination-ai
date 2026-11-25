@@ -21,6 +21,10 @@ export default function SessionEvaluationPage(){
  const router=useRouter();const search=useSearchParams();
  const examId=String(params.examId||"");const sessionId=String(params.sessionId||"");
  const readOnly=search.get("view")==="1";
+ const requestedReturnTo=search.get("return_to");
+ const previousHref=readOnly&&requestedReturnTo&&requestedReturnTo.startsWith("/admin/")&&!requestedReturnTo.startsWith("//")
+  ? requestedReturnTo
+  : previousHref;
  const [data,setData]=useState<ReviewData|null>(null);const [index,setIndex]=useState(0);
  const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");const [grade,setGrade]=useState("");
  const [photo,setPhoto]=useState("");const [answerImage,setAnswerImage]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
@@ -65,7 +69,7 @@ export default function SessionEvaluationPage(){
   catch(err){setError(err instanceof Error?err.message:"Unable to publish result.");}finally{setWorking(false);}
  }
  if(loading)return <main className="min-h-screen bg-slate-950 p-10 text-center text-slate-300">Loading student evaluation...</main>;
- if(!data)return <main className="min-h-screen bg-slate-950 p-10 text-white"><p>{error||"Evaluation unavailable."}</p><Link href={readOnly?`/admin/exams/${examId}`:`/staff/manage-exams/${examId}`} className="mt-4 inline-block text-cyan-300">← Previous Section</Link></main>;
+ if(!data)return <main className="min-h-screen bg-slate-950 p-10 text-white"><p>{error||"Evaluation unavailable."}</p><Link href={previousHref} className="mt-4 inline-block text-cyan-300">← Previous Section</Link></main>;
  const question=current;
  const allSubjectiveComplete=data.questions.filter(q=>!q.is_objective&&q.answer_id).every(q=>q.awarded_marks!==null&&q.awarded_marks!==undefined);
  const evaluationCount=question?.evaluation_count||0;
@@ -73,7 +77,7 @@ export default function SessionEvaluationPage(){
  return <main className="min-h-screen bg-slate-950 text-white">
   <header className="border-b border-white/10 bg-slate-900"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
    <div><Link href={readOnly?"/admin/dashboard":"/admin/dashboard"} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">{readOnly?"Admin / Read-only answer review":"Examination Evaluation"}</p></div>
-   <div className="flex flex-wrap gap-2"><Link href={readOnly?`/admin/exams/${examId}`:`/staff/manage-exams/${examId}`} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Previous Section</Link><Link href="/admin/dashboard" className="rounded-lg border border-blue-400/40 px-4 py-2 text-sm text-blue-300">Dashboard</Link></div>
+   <div className="flex flex-wrap gap-2"><Link href={previousHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">← Previous Section</Link><Link href="/admin/dashboard" className="rounded-lg border border-blue-400/40 px-4 py-2 text-sm text-blue-300">Dashboard</Link></div>
   </div></header>
   <div className="mx-auto max-w-6xl px-5 py-8">
    {error&&<div role="alert" className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
