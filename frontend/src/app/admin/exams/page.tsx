@@ -18,6 +18,11 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST";
 }
 function statusFor(exam: Exam) {
+  if (exam.exam_status === "schedule_not_assigned") return "Exam starting date and time not assigned";
+  if (exam.exam_status === "scheduled") return "Scheduled — " + formatDate(exam.start_time);
+  if (exam.exam_status === "ongoing") return "Exam is ongoing";
+  if (exam.exam_status === "results_published") return "Result published";
+  if (exam.exam_status === "completed_not_evaluated") return "Exam completed, not evaluated";
   const now = Date.now();
   const start = exam.start_time ? new Date(exam.start_time).getTime() : null;
   const end = exam.end_time ? new Date(exam.end_time).getTime() : null;
@@ -84,7 +89,7 @@ export default function AdminExamsPage() {
                   <p className="mt-3 text-sm text-slate-300">Created by: <span className="font-semibold text-white">{exam.created_by_name || "Unknown"}</span> <span className="capitalize text-slate-400">({exam.created_by_role || "—"})</span></p>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div><dt className="text-xs text-slate-500">Start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div><div><dt className="text-xs text-slate-500">End</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
-                    <div><dt className="text-xs text-slate-500">Questions per paper</dt><dd className="mt-1">{exam.total_questions}</dd></div><div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
+                    <div><dt className="text-xs text-slate-500">Questions in bank</dt><dd className="mt-1">{exam.assigned_question_count ?? "—"}</dd></div><div><dt className="text-xs text-slate-500">Questions per student</dt><dd className="mt-1">{exam.total_questions}</dd></div><div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
                     <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div><div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
                   </dl>
                   {exam.selection_rules?.group_counts && <p className="mt-4 text-xs text-slate-400">{Object.entries(exam.selection_rules.group_counts).filter(([,n]) => n > 0).map(([key,n]) => `${key.replace("|"," / ")}: ${n}`).join(" · ")}</p>}
