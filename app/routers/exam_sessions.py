@@ -334,6 +334,10 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "total_possible_negative_marks": round(negative_marks, 2),
         "proctoring_enabled": bool(exam.proctoring_enabled),
         "randomize_questions": bool(exam.randomize_questions),
+        "scheduled_start": exam.start_time,
+        "scheduled_end": exam.end_time,
+        "max_tab_switch_warnings": exam.max_tab_switch_warnings,
+        "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
         "instructions": instructions,
     }
 
