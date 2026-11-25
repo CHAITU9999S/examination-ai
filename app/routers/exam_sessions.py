@@ -286,14 +286,25 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         QuestionBank.id.in_(selected_ids or [-1]),
     ).all()
     breakdown = {}
+    marking_groups = {}
     maximum_marks = 0.0
     negative_marks = 0.0
     for question in questions:
         question_type = getattr(question.question_type, "value", question.question_type)
         breakdown[question_type] = breakdown.get(question_type, 0) + 1
         maximum_marks += float(question.marks or 0)
-        if exam.negative_marking:
-            negative_marks += abs(float(question.negative_marks or 0))
+        negative_per_question = abs(float(question.negative_marks or 0)) if exam.negative_marking else 0.0
+        negative_marks += negative_per_question
+        group_key = (question_type, str(question.difficulty or "unspecified"))
+        if group_key not in marking_groups:
+            marking_groups[group_key] = {
+                "question_type": question_type,
+                "difficulty": group_key[1],
+                "count": 0,
+                "positive_marks_per_question": float(question.marks or 0),
+                "negative_marks_per_question": negative_per_question,
+            }
+        marking_groups[group_key]["count"] += 1
     creator = db.query(User).filter(User.id == exam.created_by).first()
     student = db.query(User).filter(User.id == session.student_id).first()
     settings = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
@@ -313,6 +324,7 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "student_department": student.department if student else None,
         "total_questions": len(selected_ids),
         "question_type_breakdown": breakdown,
+        "marking_scheme": list(marking_groups.values()),
         "duration_minutes": exam.duration_minutes,
         "maximum_marks": round(maximum_marks, 2),
         "negative_marking_enabled": bool(exam.negative_marking),
