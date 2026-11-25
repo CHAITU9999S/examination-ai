@@ -134,6 +134,7 @@ export default function StudentExamPage() {
   const submittedRef = useRef(false);
   const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshInFlightRef = useRef(false);
+  const activePaperLoadedRef = useRef(false);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
   const examRefreshTokenKey = `examguard_exam_refresh_${sessionId}`;
@@ -222,9 +223,18 @@ export default function StudentExamPage() {
     setCameraStream(stream);
     if (!stream) setFaceVerified(false);
   }, []);
+  useEffect(() => {
+    if (captureVideoRef.current && cameraStream) {
+      captureVideoRef.current.srcObject = cameraStream;
+      void captureVideoRef.current.play().catch(() => undefined);
+    } else if (captureVideoRef.current) {
+      captureVideoRef.current.srcObject = null;
+    }
+  }, [cameraStream]);
+
 
   const uploadFaceCapture = useCallback(async (photo: Blob) => {
-    if (faceCaptureBusy || faceCaptured) return;
+    if (faceCaptured) return;
     const token = getExamToken();
     if (!token) return;
     setFaceCaptureBusy(true);
@@ -249,7 +259,7 @@ export default function StudentExamPage() {
     } finally {
       setFaceCaptureBusy(false);
     }
-  }, [faceCaptureBusy, faceCaptured, getExamToken, sessionId, setError]);
+  }, [faceCaptured, getExamToken, sessionId, setError]);
 
   const handleFaceVerified = useCallback((photo: Blob) => {
     setFaceVerified(true);
@@ -340,6 +350,8 @@ export default function StudentExamPage() {
       setPaper(normalizedPaper);
       setPrestartStage(normalizedPaper.prestart_stage || "face_capture");
       setFaceCaptured(Boolean(normalizedPaper.face_captured));
+      setFaceVerified(Boolean(normalizedPaper.face_captured));
+      if (normalizedPaper.status === "in_progress") activePaperLoadedRef.current = true;
       setRemainingSeconds(normalizedPaper.remaining_seconds === null || normalizedPaper.remaining_seconds === undefined ? null : Math.max(0, Number(normalizedPaper.remaining_seconds)));
 
       const imageQuestions = questions.filter(
@@ -482,19 +494,24 @@ export default function StudentExamPage() {
       if (!response.ok) throw new Error(data.detail || "Unable to check examination entry status.");
       setPrestartStage(data.stage || "in_progress");
       setFaceCaptured(Boolean(data.face_captured));
+      if (data.face_captured) setFaceVerified(true);
       setSummarySecondsUntilContinue(Math.max(0, Number(data.summary_seconds_until_continue ?? 0)));
       setSummarySecondsUntilAutoContinue(Math.max(0, Number(data.summary_seconds_until_auto_continue ?? 0)));
       setStartWindowSecondsRemaining(data.start_window_seconds_remaining === null || data.start_window_seconds_remaining === undefined ? null : Math.max(0, Number(data.start_window_seconds_remaining)));
       if (data.status === "in_progress") {
         setRemainingSeconds(Math.max(0, Number(data.remaining_seconds ?? 0)));
         setPaper((current) => current ? { ...current, status: "in_progress" } : current);
+        if (!activePaperLoadedRef.current) {
+          activePaperLoadedRef.current = true;
+          void loadPaper();
+        }
       }
       return data.status || null;
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : "Unable to check examination entry status.");
       return null;
     }
-  }, [getHeaders, sessionId, setError]);
+  }, [getHeaders, loadPaper, sessionId, setError]);
 
   const continueAfterSummary = useCallback(async () => {
     const headers = getHeaders();
@@ -1163,14 +1180,6 @@ export default function StudentExamPage() {
 
   const currentQuestion = paper.questions[currentIndex];
 
-  useEffect(() => {
-    if (captureVideoRef.current && cameraStream) {
-      captureVideoRef.current.srcObject = cameraStream;
-      void captureVideoRef.current.play().catch(() => undefined);
-    } else if (captureVideoRef.current) {
-      captureVideoRef.current.srcObject = null;
-    }
-  }, [cameraStream]);
 
   const answeredCount = paper.questions.filter((question) => {
     return Boolean(answers[question.id]?.trim()) ||
