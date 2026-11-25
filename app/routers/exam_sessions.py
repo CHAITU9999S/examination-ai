@@ -1048,7 +1048,9 @@ def get_prestart_status(
     credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    _, session = validate_exam_token(credentials, db)
+    _, token_session = validate_exam_token(credentials, db)
+    if token_session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     session = db.query(ExamSession).filter(
         ExamSession.id == session_id,
     ).with_for_update().populate_existing().first()
@@ -1094,7 +1096,9 @@ async def save_face_capture(
     credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    _, session = validate_exam_token(credentials, db)
+    _, token_session = validate_exam_token(credentials, db)
+    if token_session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
@@ -1146,7 +1150,9 @@ def continue_after_exam_summary(
     credentials: HTTPAuthorizationCredentials = Depends(exam_token_scheme),
     db: Session = Depends(get_db),
 ):
-    _, session = validate_exam_token(credentials, db)
+    _, token_session = validate_exam_token(credentials, db)
+    if token_session.id != session_id:
+        raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
     session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().populate_existing().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Exam session not found.")
