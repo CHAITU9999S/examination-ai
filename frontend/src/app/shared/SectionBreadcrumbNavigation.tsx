@@ -52,6 +52,12 @@ function adminBreadcrumbs(pathname: string): Breadcrumbs | null {
 }
 
 function staffBreadcrumbs(pathname: string, role: string): Breadcrumbs | null {
+  // Section C (the all-examinations list and its detail pages) is Admin-only.
+  if (role === "examiner" && (
+    pathname === "/staff/examinations" ||
+    /^\/staff\/examinations\/[^/]+$/.test(pathname)
+  )) return null;
+
   const isAdmin = role === "admin";
   const examParent = isAdmin ? ADMIN_EXAMS : EXAMINER_EXAMS;
   const bankParent = isAdmin ? ADMIN_BANKS : EXAMINER_BANKS;
