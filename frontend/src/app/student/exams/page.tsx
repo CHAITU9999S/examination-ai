@@ -20,6 +20,8 @@ interface Exam {
   proctoring_enabled?: boolean;
   created_by_name?: string | null;
   created_by_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
 }
 
 function formatDate(value?: string | null) {
@@ -354,6 +356,13 @@ export default function StudentExamsPage() {
                       <span className="text-right">
                         {exam.created_by_name || "Not available"}
                         {exam.created_by_role ? ` (${exam.created_by_role === "admin" ? "Admin" : "Examiner"})` : ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Assigned by</span>
+                      <span className="text-right">
+                        {exam.assigned_by_name || "Not available"}
+                        {exam.assigned_by_role ? ` (${exam.assigned_by_role === "admin" ? "Admin" : "Examiner"})` : ""}
                       </span>
                     </div>
 
