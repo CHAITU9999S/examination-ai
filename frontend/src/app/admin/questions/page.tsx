@@ -22,6 +22,7 @@ interface Question {
   negative_marks?: number | null;
   created_by?: number | null;
   created_by_name?: string | null;
+  created_by_role?: string | null;
   question_image_available?: boolean;
   options?: QuestionOption[];
 }
@@ -29,6 +30,7 @@ interface Question {
 export default function AdminQuestionsPage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -62,6 +64,7 @@ export default function AdminQuestionsPage() {
       }
       if (!profileResponse.ok) throw new Error("Unable to verify your account.");
       const profile = await profileResponse.json();
+      setCurrentUserId(Number(profile.id));
       if (profile.role !== "admin") {
         router.replace("/login");
         return;
@@ -226,17 +229,21 @@ export default function AdminQuestionsPage() {
                         {question.marks ?? "—"}
                         {question.negative_marks ? <span className="block text-xs text-slate-500">Negative: {question.negative_marks}</span> : null}
                       </td>
-                      <td className="px-4 py-4 text-slate-300">{question.created_by_name || (question.created_by ? `User #${question.created_by}` : "Unknown")}</td>
+                      <td className="px-4 py-4 text-slate-300">{question.created_by_name || (question.created_by ? `User #${question.created_by}` : "Unknown")}<span className="mt-1 block text-xs capitalize text-slate-500">{question.created_by_role || ""}</span></td>
                       <td className="px-4 py-4 text-slate-300">{question.question_image_available ? "Available" : "—"}</td>
                       <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => deleteQuestion(question)}
-                          disabled={deletingId !== null}
-                          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {deletingId === question.id ? "Deleting..." : "Delete"}
-                        </button>
+                        {question.created_by === currentUserId ? (
+                          <button
+                            type="button"
+                            onClick={() => deleteQuestion(question)}
+                            disabled={deletingId !== null}
+                            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingId === question.id ? "Deleting..." : "Delete"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-500">View only</span>
+                        )}
                       </td>
                     </tr>
                   ))}
