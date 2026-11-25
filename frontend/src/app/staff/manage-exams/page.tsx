@@ -195,7 +195,6 @@ export default function ManageExamsPage() {
                     <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
                     <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
                     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div><dt className="text-xs text-slate-500">Created</dt><dd className="mt-1 text-slate-200">{formatDate(exam.created_at)}</dd></div>
                       <div><dt className="text-xs text-slate-500">Published</dt><dd className="mt-1 text-slate-200">{formatDate(exam.published_at)}</dd></div>
                       <div><dt className="text-xs text-slate-500">Scheduled start</dt><dd className="mt-1 text-slate-200">{formatDate(exam.start_time)}</dd></div>
                       <div><dt className="text-xs text-slate-500">Scheduled end</dt><dd className="mt-1 text-slate-200">{formatDate(exam.end_time)}</dd></div>
