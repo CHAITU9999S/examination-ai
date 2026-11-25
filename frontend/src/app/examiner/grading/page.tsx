@@ -23,6 +23,7 @@ interface PendingAnswer {
   model_answer_text?: string | null;
   answer_text?: string | null;
   image_path?: string | null;
+  face_photo_url?: string | null;
   marks: number;
   awarded_marks?: number | null;
   result_published?: boolean;
@@ -92,6 +93,7 @@ export default function ExaminerGradingPage() {
   const [saving, setSaving] = useState(false);
   const [awardedMarks, setAwardedMarks] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [facePhotoUrl, setFacePhotoUrl] = useState("");
   const [examinerFeedback, setExaminerFeedback] = useState("");
   const [imageAnnotations, setImageAnnotations] = useState<ImageAnnotation[]>([]);
   const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
@@ -169,6 +171,29 @@ export default function ExaminerGradingPage() {
   useEffect(() => {
     loadPendingAnswers();
   }, [loadPendingAnswers]);
+
+  useEffect(() => {
+    if (!selectedAnswer?.face_photo_url) {
+      setFacePhotoUrl("");
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) return;
+    fetch(API_URL + selectedAnswer.face_photo_url, {
+      headers: { Authorization: "Bearer " + token },
+      cache: "no-store",
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Unable to load the candidate face photo.");
+      return response.blob();
+    }).then((blob) => {
+      objectUrl = URL.createObjectURL(blob);
+      if (!cancelled) setFacePhotoUrl(objectUrl);
+      else URL.revokeObjectURL(objectUrl);
+    }).catch(() => { if (!cancelled) setFacePhotoUrl(""); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [selectedAnswer?.face_photo_url]);
 
   useEffect(() => {
     if (!selectedAnswer?.image_path) {
@@ -703,7 +728,15 @@ export default function ExaminerGradingPage() {
               </button>
             </div>
 
-            <div className="mt-6 space-y-5">
+            <div className="mt-6 flex justify-end">
+              {selectedAnswer.face_photo_url && (
+                <figure className="w-28 rounded-lg border border-white/10 bg-slate-800 p-2 text-center">
+                  {facePhotoUrl ? <img src={facePhotoUrl} alt="Candidate face captured before the examination" className="h-24 w-full rounded object-cover" /> : <div className="flex h-24 items-center justify-center text-xs text-slate-400">Loading photo...</div>}
+                  <figcaption className="mt-1 text-[10px] text-slate-400">Candidate photo</figcaption>
+                </figure>
+              )}
+            </div>
+            <div className="mt-2 space-y-5">
               <div>
                 <p className="text-sm font-semibold text-slate-400">
                   Examination
