@@ -741,3 +741,33 @@ def test_other_examiner_cannot_view_candidate_face_photo(client, db_session, gra
         headers=auth_headers(other_examiner),
     )
     assert response.status_code == 403
+
+
+def test_staff_can_view_student_answers_in_the_exact_paper_order(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    admin = User(
+        full_name="Read Only Admin",
+        email="grading-review-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+
+    for staff_user in (data["examiner"], admin):
+        response = client.get(
+            f"/grading/sessions/{data['session'].id}/review",
+            headers=auth_headers(staff_user),
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["student_name"] == data["student"].full_name
+        assert payload["questions"][0]["question_order"] == 1
+        assert payload["questions"][0]["question_id"] == data["question"].id
+        assert payload["questions"][0]["answer_text"] == data["answer"].answer_text
+
