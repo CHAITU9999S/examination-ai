@@ -33,6 +33,7 @@ export default function AdminQuestionsPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const getHeaders = useCallback(() => {
@@ -89,9 +90,8 @@ export default function AdminQuestionsPage() {
 
   const visibleQuestions = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return questions;
-    return questions.filter((question) =>
-      [
+    return [...questions].filter((question) =>
+      !term || [
         question.question_text,
         question.subject,
         question.question_type,
@@ -99,8 +99,16 @@ export default function AdminQuestionsPage() {
         question.created_by_name,
         question.id,
       ].some((value) => String(value ?? "").toLowerCase().includes(term))
-    );
-  }, [questions, search]);
+    ).sort((a, b) => {
+      if (sortBy === "oldest") return a.id - b.id;
+      if (sortBy === "name") return a.question_text.localeCompare(b.question_text);
+      if (sortBy === "type") return a.question_type.localeCompare(b.question_type);
+      if (sortBy === "difficulty") return String(a.difficulty || "").localeCompare(String(b.difficulty || ""));
+      if (sortBy === "marks-low") return Number(a.marks || 0) - Number(b.marks || 0);
+      if (sortBy === "marks-high") return Number(b.marks || 0) - Number(a.marks || 0);
+      return b.id - a.id;
+    });
+  }, [questions, search, sortBy]);
 
   async function deleteQuestion(question: Question) {
     const confirmed = window.confirm(
@@ -165,6 +173,9 @@ export default function AdminQuestionsPage() {
               aria-label="Search all questions"
               className="min-w-[260px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
             />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort all questions" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+              <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Question A to Z</option><option value="type">Question type</option><option value="difficulty">Difficulty</option><option value="marks-low">Lowest marks</option><option value="marks-high">Highest marks</option>
+            </select>
             <button
               type="button"
               onClick={loadQuestions}
