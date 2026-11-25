@@ -44,6 +44,15 @@ interface ExamPaper {
   max_tab_switch_warnings?: number | null;
   is_paused?: boolean;
   current_question_index?: number;
+  status?: string;
+  prestart_stage?: string;
+  face_captured?: boolean;
+  exam_summary?: {
+    exam_title: string; subject?: string | null; creator_name: string; student_name: string;
+    student_email?: string | null; student_department?: string | null; total_questions: number;
+    question_type_breakdown: Record<string, number>; duration_minutes: number; maximum_marks: number;
+    negative_marking_enabled: boolean; total_possible_negative_marks: number; instructions?: string[] | string;
+  };
 }
 
 interface SavedAnswer {
@@ -112,6 +121,14 @@ export default function StudentExamPage() {
   const [pendingImageFiles, setPendingImageFiles] = useState<Record<number, File>>({});
   const [imageUploading, setImageUploading] = useState(false);
   const [websocketStatus, setWebsocketStatus] = useState("disconnected");
+  const [prestartStage, setPrestartStage] = useState("face_capture");
+  const [faceCaptured, setFaceCaptured] = useState(false);
+  const [faceCaptureBusy, setFaceCaptureBusy] = useState(false);
+  const [summarySecondsUntilContinue, setSummarySecondsUntilContinue] = useState(60);
+  const [summarySecondsUntilAutoContinue, setSummarySecondsUntilAutoContinue] = useState(120);
+  const [startWindowSecondsRemaining, setStartWindowSecondsRemaining] = useState<number | null>(null);
+  const [showCameraPreview, setShowCameraPreview] = useState(true);
+  const captureVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
@@ -195,7 +212,7 @@ export default function StudentExamPage() {
   }, [sessionId]);
 
   const proctoring = useProctoring({
-    enabled: Boolean(paper?.proctoring_enabled),
+    enabled: Boolean(paper?.proctoring_enabled && paper.status === "in_progress"),
     onEvent: handleProctoringEvent,
     maxTabWarnings: paper?.max_tab_switch_warnings ?? 3,
     duplicateEventCooldownMs: 4000,
@@ -206,9 +223,38 @@ export default function StudentExamPage() {
     if (!stream) setFaceVerified(false);
   }, []);
 
-  const handleFaceVerified = useCallback(() => {
+  const uploadFaceCapture = useCallback(async (photo: Blob) => {
+    if (faceCaptureBusy || faceCaptured) return;
+    const token = getExamToken();
+    if (!token) return;
+    setFaceCaptureBusy(true);
+    setError("");
+    try {
+      const response = await fetch(API_URL + "/exam-sessions/face-capture/" + sessionId, {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "image/jpeg" },
+        body: photo,
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to save the face capture.");
+      setFaceCaptured(true);
+      setPrestartStage("summary");
+      setSummarySecondsUntilContinue(60);
+      setSummarySecondsUntilAutoContinue(120);
+      setPaper((current) => current ? { ...current, status: "not_started", prestart_stage: "summary", face_captured: true } : current);
+      setMessage("Face capture saved. Your examination summary has started.");
+    } catch (captureError) {
+      setError(captureError instanceof Error ? captureError.message : "Unable to save the face capture. Please retry.");
+    } finally {
+      setFaceCaptureBusy(false);
+    }
+  }, [faceCaptureBusy, faceCaptured, getExamToken, sessionId, setError]);
+
+  const handleFaceVerified = useCallback((photo: Blob) => {
     setFaceVerified(true);
-  }, []);
+    void uploadFaceCapture(photo);
+  }, [uploadFaceCapture]);
 
   const handleCameraStatus = useCallback((status: "active" | "denied" | "unavailable" | "error") => {
     if (status !== "active") {
@@ -292,6 +338,9 @@ export default function StudentExamPage() {
 
       if (normalizedPaper.exam_id) sessionStorage.setItem(examIdKey, String(normalizedPaper.exam_id));
       setPaper(normalizedPaper);
+      setPrestartStage(normalizedPaper.prestart_stage || "face_capture");
+      setFaceCaptured(Boolean(normalizedPaper.face_captured));
+      setRemainingSeconds(normalizedPaper.remaining_seconds === null || normalizedPaper.remaining_seconds === undefined ? null : Math.max(0, Number(normalizedPaper.remaining_seconds)));
 
       const imageQuestions = questions.filter(
         (question: ExamQuestion) => String(question.question_type).toLowerCase() === "image_upload"
@@ -402,12 +451,13 @@ export default function StudentExamPage() {
         );
       }
 
-      const seconds = Number(
-        data.remaining_seconds ??
-        data.remaining_time_seconds ??
-        data.remaining_time
-      );
-
+      if (data.status === "not_started") {
+        setRemainingSeconds(null);
+        setIsPaused(false);
+        setPrestartStage(data.prestart_stage || prestartStage);
+        return;
+      }
+      const seconds = Number(data.remaining_seconds ?? data.remaining_time_seconds ?? data.remaining_time);
       if (!Number.isFinite(seconds) || seconds < 0) {
         throw new Error("Invalid remaining-time response.");
       }
@@ -421,7 +471,80 @@ export default function StudentExamPage() {
           : "Unable to retrieve remaining time."
       );
     }
-  }, [getHeaders, sessionId]);
+  }, [getHeaders, sessionId, prestartStage]);
+
+  const loadPrestartStatus = useCallback(async () => {
+    const headers = getHeaders();
+    if (!headers) return null;
+    try {
+      const response = await fetch(API_URL + "/exam-sessions/prestart/" + sessionId, { headers, cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to check examination entry status.");
+      setPrestartStage(data.stage || "in_progress");
+      setFaceCaptured(Boolean(data.face_captured));
+      setSummarySecondsUntilContinue(Math.max(0, Number(data.summary_seconds_until_continue ?? 0)));
+      setSummarySecondsUntilAutoContinue(Math.max(0, Number(data.summary_seconds_until_auto_continue ?? 0)));
+      setStartWindowSecondsRemaining(data.start_window_seconds_remaining === null || data.start_window_seconds_remaining === undefined ? null : Math.max(0, Number(data.start_window_seconds_remaining)));
+      if (data.status === "in_progress") {
+        setRemainingSeconds(Math.max(0, Number(data.remaining_seconds ?? 0)));
+        setPaper((current) => current ? { ...current, status: "in_progress" } : current);
+      }
+      return data.status || null;
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : "Unable to check examination entry status.");
+      return null;
+    }
+  }, [getHeaders, sessionId, setError]);
+
+  const continueAfterSummary = useCallback(async () => {
+    const headers = getHeaders();
+    if (!headers) return;
+    try {
+      const response = await fetch(API_URL + "/exam-sessions/summary/continue/" + sessionId, { method: "POST", headers, cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to continue from the examination summary.");
+      setPrestartStage(data.stage || "start_window");
+      setStartWindowSecondsRemaining(Math.max(0, Number(data.start_window_seconds_remaining ?? 0)));
+      await loadPrestartStatus();
+    } catch (continueError) {
+      setError(continueError instanceof Error ? continueError.message : "Unable to continue.");
+    }
+  }, [getHeaders, loadPrestartStatus, sessionId, setError]);
+
+  const confirmExamStart = useCallback(async () => {
+    const headers = getHeaders();
+    if (!headers) return;
+    try {
+      const response = await fetch(API_URL + "/exam-sessions/confirm-start/" + sessionId, { method: "POST", headers, cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to start the examination.");
+      setPrestartStage("in_progress");
+      setRemainingSeconds(Math.max(0, Number(data.remaining_seconds ?? 0)));
+      await loadPaper();
+      await loadRemainingTime();
+      setMessage("The examination has started. Your timer is now running.");
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Unable to start the examination.");
+    }
+  }, [getHeaders, loadPaper, loadRemainingTime, sessionId, setError]);
+
+  const retryFaceCapture = useCallback(async () => {
+    const video = captureVideoRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      setError("The webcam frame is not ready. Keep the camera connected and try again.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) { setError("Unable to capture a webcam photo on this device."); return; }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((photo) => {
+      if (photo) void uploadFaceCapture(photo);
+      else setError("Unable to create the webcam photo. Please retry.");
+    }, "image/jpeg", 0.82);
+  }, [setError, uploadFaceCapture]);
 
   const loadQuestionTimer = useCallback(async (questionId: number) => {
     const headers = getHeaders();
@@ -661,6 +784,10 @@ export default function StudentExamPage() {
 
       await loadPaper();
       if (cancelled) return;
+      const entryStatus = await loadPrestartStatus();
+      if (cancelled || entryStatus !== "in_progress") return;
+      await loadPaper();
+      if (cancelled) return;
       await loadRemainingTime();
       if (cancelled) return;
 
@@ -700,9 +827,8 @@ export default function StudentExamPage() {
 
     void initializeExam();
 
-    const timeInterval = setInterval(() => {
-      loadRemainingTime();
-    }, 15000);
+    const timeInterval = setInterval(() => { loadRemainingTime(); }, 15000);
+    const prestartInterval = setInterval(() => { void loadPrestartStatus(); }, 1000);
     const tokenRefreshInterval = setInterval(() => {
       void refreshExamAccessToken();
     }, 4 * 60 * 1000);
@@ -714,12 +840,13 @@ export default function StudentExamPage() {
     return () => {
       cancelled = true;
       clearInterval(timeInterval);
+      clearInterval(prestartInterval);
       clearInterval(tokenRefreshInterval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       Object.values(saveTimeoutsRef.current).forEach(clearTimeout);
       saveTimeoutsRef.current = {};
     };
-  }, [examTokenKey, loadPaper, loadRemainingTime, refreshExamAccessToken, router, sessionId]);
+  }, [examTokenKey, loadPaper, loadPrestartStatus, loadRemainingTime, refreshExamAccessToken, router, sessionId]);
 
   useEffect(() => {
     if (remainingSeconds === null || remainingSeconds <= 0) {
@@ -790,13 +917,13 @@ export default function StudentExamPage() {
   }, [questionTimerLocked, isPaused, paper, currentIndex]);
 
   const heartbeatToken = examAccessToken;
-  const heartbeatUrl = paper?.proctoring_enabled && heartbeatToken
+  const heartbeatUrl = paper?.proctoring_enabled && paper.status === "in_progress" && heartbeatToken
     ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
     : null;
 
   const heartbeat = useWebSocket({
     url: heartbeatUrl,
-    enabled: Boolean(heartbeatUrl && paper?.proctoring_enabled),
+    enabled: Boolean(heartbeatUrl && paper?.proctoring_enabled && paper.status === "in_progress"),
     heartbeatIntervalMs: 10000,
     heartbeatPayload: () => ({
       event_counts: proctoring.events.reduce<Record<string, number>>((counts, event) => {
@@ -1036,10 +1163,85 @@ export default function StudentExamPage() {
 
   const currentQuestion = paper.questions[currentIndex];
 
+  useEffect(() => {
+    if (captureVideoRef.current && cameraStream) {
+      captureVideoRef.current.srcObject = cameraStream;
+      void captureVideoRef.current.play().catch(() => undefined);
+    } else if (captureVideoRef.current) {
+      captureVideoRef.current.srcObject = null;
+    }
+  }, [cameraStream]);
+
   const answeredCount = paper.questions.filter((question) => {
     return Boolean(answers[question.id]?.trim()) ||
       uploadedImageQuestionIds.includes(question.id);
   }).length;
+
+
+  if (paper.status === "not_started") {
+    const summary = paper.exam_summary;
+    const instructions = Array.isArray(summary?.instructions) ? summary.instructions : summary?.instructions ? [summary.instructions] : [];
+    return (
+      <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_300px]">
+          <section className="rounded-2xl border border-white/10 bg-slate-900 p-6 sm:p-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-300">Examination entry</p>
+            <h1 className="mt-2 text-2xl font-bold">{paper.exam_title || "Online Examination"}</h1>
+            {prestartStage === "face_capture" && (
+              <div className="mt-8 space-y-4">
+                <h2 className="text-xl font-semibold">Face capture</h2>
+                <p className="text-sm leading-6 text-slate-300">Keep only your face visible and look toward the camera. When one face is continuously detected, the system automatically captures a still photo for this examination session.</p>
+                <p className="text-sm text-amber-300">{faceCaptureBusy ? "Saving your face photo..." : faceVerified ? "One face detected. Saving your photo..." : cameraStream ? "Waiting for one clear face..." : "Allow camera access to continue."}</p>
+                {faceVerified && !faceCaptured && !faceCaptureBusy && <button type="button" onClick={retryFaceCapture} className="rounded-lg border border-blue-400 px-4 py-2 text-sm font-semibold text-blue-200">Retry photo capture</button>}
+              </div>
+            )}
+            {prestartStage === "summary" && summary && (
+              <div className="mt-8 space-y-5">
+                <h2 className="text-xl font-semibold">Examination summary</h2>
+                <p className="text-sm leading-6 text-slate-300">Review the details below. This summary must remain on screen for at least 60 seconds. You may continue after the first minute or wait until the full two minutes finish.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Subject", summary.subject || "Not specified"], ["Created by", summary.creator_name],
+                    ["Student", summary.student_name], ["Student email", summary.student_email || "—"],
+                    ["Department", summary.student_department || "—"], ["Total questions", String(summary.total_questions)],
+                    ["Duration", summary.duration_minutes + " minutes"], ["Maximum marks", String(summary.maximum_marks)],
+                    ["Negative marking", summary.negative_marking_enabled ? "Enabled" : "Disabled"],
+                    ["Possible negative marks", String(summary.total_possible_negative_marks)],
+                  ].map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
+                  <h3 className="font-semibold">Question type breakdown</h3>
+                  <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-300">
+                    {Object.entries(summary.question_type_breakdown || {}).map(([type, count]) => <span key={type} className="rounded-full bg-slate-700 px-3 py-1">{type.replaceAll("_", " ")}: {count}</span>)}
+                  </div>
+                </div>
+                {instructions.length > 0 && <div className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-4"><h3 className="font-semibold text-amber-200">Examination instructions</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">{instructions.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
+                <p className="text-sm text-amber-300">{summarySecondsUntilContinue > 0 ? "You can continue in " + summarySecondsUntilContinue + " seconds. Automatic continuation in " + summarySecondsUntilAutoContinue + " seconds." : "You may continue now, or wait " + summarySecondsUntilAutoContinue + " more seconds for automatic continuation."}</p>
+                <button type="button" onClick={continueAfterSummary} disabled={summarySecondsUntilContinue > 0} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">Continue to start window</button>
+              </div>
+            )}
+            {prestartStage === "start_window" && (
+              <div className="mt-8 space-y-4">
+                <h2 className="text-xl font-semibold">Ready to begin?</h2>
+                <p className="text-sm text-slate-300">You have 17 seconds to start the examination. If you do not select the button, the examination will start automatically when the countdown ends.</p>
+                <p className="text-4xl font-bold tabular-nums text-amber-300">{startWindowSecondsRemaining ?? 17}s</p>
+                <button type="button" onClick={confirmExamStart} disabled={!startWindowSecondsRemaining} className="rounded-lg bg-green-600 px-6 py-3 font-semibold hover:bg-green-500 disabled:opacity-50">Start Examination</button>
+              </div>
+            )}
+            {error && <p role="alert" className="mt-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+            {message && <p role="status" className="mt-5 text-sm text-green-300">{message}</p>}
+          </section>
+          <aside className="h-fit space-y-3 rounded-2xl border border-white/10 bg-slate-900 p-4">
+            <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Camera</h2><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide preview" : "Show preview"}</button></div>
+            <WebcamPreview enabled={Boolean(paper.proctoring_enabled || !faceCaptured)} showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
+            <video ref={captureVideoRef} muted autoPlay playsInline className="hidden" />
+            <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} />
+            <p className="text-xs text-slate-400">Hiding the preview does not stop camera monitoring. Only a still photo is saved.</p>
+          </aside>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main
@@ -1272,14 +1474,11 @@ export default function StudentExamPage() {
           {paper.proctoring_enabled && (
             <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
               <h3 className="font-semibold">Automated Proctoring</h3>
-              <WebcamPreview
-                enabled
-                onStreamReady={handleCameraStream}
-                onCameraStatusChange={handleCameraStatus}
-              />
+              <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Camera preview</h3><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide" : "Show"}</button></div>
+              <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
               <FaceProctoring
                 stream={cameraStream}
-                enabled
+                enabled={paper.status === "in_progress"}
                 sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
                 onFaceMissing={proctoring.reportFaceNotDetected}
                 onFaceVerified={handleFaceVerified}
