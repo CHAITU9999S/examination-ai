@@ -27,6 +27,8 @@ export default function ExaminerManagementPage() {
   const router = useRouter();
 
   const [examiners, setExaminers] = useState<Examiner[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [actionId, setActionId] = useState<number | null>(null);
@@ -108,6 +110,15 @@ export default function ExaminerManagementPage() {
   useEffect(() => {
     loadExaminers();
   }, [loadExaminers]);
+
+  const visibleExaminers = [...examiners]
+    .filter((examiner) => !searchTerm.trim() || [examiner.full_name, examiner.email, examiner.department].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name-desc") return b.full_name.localeCompare(a.full_name);
+      if (sortBy === "department") return String(a.department || "").localeCompare(String(b.department || ""));
+      if (sortBy === "status") return Number(Boolean(b.is_active)) - Number(Boolean(a.is_active));
+      return a.full_name.localeCompare(b.full_name);
+    });
 
   async function createExaminer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -476,10 +487,12 @@ export default function ExaminerManagementPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                {examiners.length} examiner account(s)
+                {visibleExaminers.length} examiner account(s)
               </p>
             </div>
 
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search examiner name, email, department" aria-label="Search examiners" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort examiners" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option><option value="status">Status</option></select>
             <button
               type="button"
               onClick={loadExaminers}
@@ -494,7 +507,7 @@ export default function ExaminerManagementPage() {
             <p className="py-10 text-center text-slate-400">
               Loading examiner accounts...
             </p>
-          ) : examiners.length === 0 ? (
+          ) : visibleExaminers.length === 0 ? (
             <p className="py-10 text-center text-slate-400">
               No examiner accounts found.
             </p>
@@ -511,7 +524,7 @@ export default function ExaminerManagementPage() {
                 </thead>
 
                 <tbody>
-                  {examiners.map((examiner) => (
+                  {visibleExaminers.map((examiner) => (
                     <tr
                       key={examiner.id}
                       className="border-b border-white/5 last:border-0"
