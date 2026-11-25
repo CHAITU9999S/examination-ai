@@ -1,11 +1,12 @@
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum as PythonEnum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Enum as SQLAlchemyEnum,
     Float,
@@ -88,6 +89,14 @@ class User(Base):
     )
 
     department = Column(String(100), nullable=True)
+
+    date_of_birth = Column(Date(), nullable=True)
+
+    # Each profile field has its own independent three-edit allowance.
+    full_name_edit_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    email_edit_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    department_edit_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    date_of_birth_edit_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
 
     password_hash = Column(String(255), nullable=False)
 
@@ -808,3 +817,27 @@ class PlatformSetting(Base):
 # -----------------------------------------
 
 QuestionBank = Question
+
+
+
+# -----------------------------------------
+# ACCOUNT LOGIN HISTORY
+# -----------------------------------------
+
+class LoginHistory(Base):
+    __tablename__ = "login_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    logged_in_at = Column(DateTime(), nullable=False, default=utc_now_naive)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+
+    __table_args__ = (
+        Index("ix_login_history_user_logged_in_at", "user_id", "logged_in_at"),
+    )
