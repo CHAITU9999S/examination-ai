@@ -467,6 +467,7 @@ def _delete_account_preserving_history(
     )
 
 
+@router.delete("/users/{user_id}/with-records", response_model=MessageResponse)
 @router.delete("/users/{user_id}", response_model=MessageResponse)
 def delete_user(
     user_id: int,
