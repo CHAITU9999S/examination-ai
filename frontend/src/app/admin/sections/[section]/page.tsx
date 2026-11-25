@@ -17,7 +17,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
       { title: "Admins", description: "Manage administrator accounts and review Admin activity.", href: "/admin/sections/admins" },
       { title: "Examiners", description: "Manage Examiner accounts and review their examination and question-bank activity.", href: "/admin/sections/examiners" },
       { title: "Students", description: "Manage students, schedules, and performance.", href: "/admin/sections/students" },
-      { title: "User Management", description: "View and manage all platform user accounts.", href: "/admin/users" },
+      { title: "All Users", description: "View and manage all platform user accounts.", href: "/admin/users" },
     ],
   },
   admins: {
@@ -44,7 +44,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
     items: [
       { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students" },
       { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
-      { title: "Student Performance", description: "Review student performance and published results.", href: "/admin/performance" },
+      { title: "Student Performance", description: "Review students and their completed examination attempts, marks, and question papers.", href: "/admin/performance" },
     ],
   },
   "question-banks": {
