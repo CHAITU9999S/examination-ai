@@ -48,14 +48,10 @@ const navigationGroups: NavigationGroup[] = [
     description: "Manage Admins, Examiners, Students, and all user accounts.",
     slug: "users",
     items: [
+      { title: "Admins", description: "Manage administrator accounts and activity.", href: "/admin/sections/admins" },
+      { title: "Examiners", description: "Manage Examiner accounts and activity.", href: "/admin/sections/examiners" },
+      { title: "Students", description: "Manage student accounts, schedules, and performance.", href: "/admin/sections/students" },
       { title: "User Management", description: "View and manage all platform accounts.", href: "/admin/users" },
-      { title: "Admin Management", description: "Create and manage administrator accounts and review Admin Activity Logs.", href: "/admin/admins" },
-      { title: "Examiner Management", description: "Create and manage examiner accounts.", href: "/admin/examiners" },
-      { title: "Student Management", description: "Manage students, view Student Schedules, and review Student Performance.", href: "/admin/students" },
-      { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
-      { title: "Student Performance", description: "Review student examination performance and published results.", href: "/admin/performance" },
-      { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
-      { title: "Retained Data", description: "Review and delete completed records retained after account deletion.", href: "/admin/retained-data" },
     ],
   },
   {
@@ -63,7 +59,7 @@ const navigationGroups: NavigationGroup[] = [
     description: "Browse question banks and manage the question banks you own.",
     slug: "question-banks",
     items: [
-      { title: "Question Bank", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
+      { title: "All Question Banks", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
       { title: "Manage Question Banks", description: "Create and manage question banks that you own.", href: "/examiner/question-banks" },
     ],
   },
