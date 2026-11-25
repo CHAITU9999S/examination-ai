@@ -30,6 +30,7 @@ from app.models import (
 )
 from app.services.proctoring_service import (
     get_proctoring_summary as get_staff_proctoring_summary,
+    get_proctoring_history_for_staff,
     record_proctor_event,
 )
 
@@ -477,6 +478,54 @@ def get_proctoring_summary(
         session_id=session_id,
         current_user=current_user,
     )
+
+
+@router.get("/{session_id}/proctoring/history")
+def get_staff_proctoring_history(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return all proctoring events for one session to its authorized staff."""
+    history = get_proctoring_history_for_staff(
+        db=db,
+        session_id=session_id,
+        current_user=current_user,
+    )
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first() if session else None
+    student = db.query(User).filter(User.id == session.student_id).first() if session else None
+    return {
+        "session_id": session_id,
+        "exam_id": history["exam_id"],
+        "exam_title": exam.title if exam else "Unknown examination",
+        "student_id": history["student_id"],
+        "student_name": student.full_name if student else "Unknown student",
+        "session_status": history["session_status"],
+        "suspicion_score": history["suspicion_score"],
+        "last_heartbeat_at": history["last_heartbeat_at"],
+        "last_heartbeat_signals": history["last_heartbeat_signals"],
+        "tab_switch_count": history["tab_switch_count"],
+        "tab_switch_threshold": history["auto_flag_threshold"],
+        "auto_flagged": history["auto_flagged"],
+        "event_counts": {
+            event_type: sum(1 for event in history["events"] if event.event_type == event_type)
+            for event_type in {event.event_type for event in history["events"]}
+        },
+        "total_events": history["total_events"],
+        "events": [
+            {
+                "event_id": event.id,
+                "event_type": event.event_type,
+                "description": event.description,
+                "suspicion_points": event.suspicion_points,
+                "cumulative_suspicion_score": event.cumulative_suspicion_score,
+                "created_at": event.created_at,
+            }
+            for event in history["events"]
+        ],
+        "webcam_snapshots_available": False,
+    }
 
 
 # ==========================================
