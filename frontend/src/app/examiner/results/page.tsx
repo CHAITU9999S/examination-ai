@@ -26,6 +26,7 @@ interface ReviewSession {
   student_id: number;
   student_name: string;
   session_status: string;
+  can_manage: boolean;
   submitted_at?: string | null;
   face_photo_url?: string | null;
   result_ready: boolean;
@@ -234,6 +235,8 @@ export default function ExaminerResultsPage() {
                       <td className="px-4 py-4">
                         {session.is_published ? (
                           <span className="text-green-300">Student can view</span>
+                        ) : !session.can_manage ? (
+                          <span className="text-slate-400">View only</span>
                         ) : session.session_status === "submitted" || session.session_status === "auto_submitted" ? (
                           <button
                             type="button"
