@@ -292,6 +292,25 @@ def _advance_prestart_stage(session: ExamSession, exam: Exam, now: datetime) -> 
     return changed
 
 
+def _get_exam_attribution(session: ExamSession, exam: Exam, db: Session) -> dict:
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == session.student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    assigner = (
+        db.query(User).filter(User.id == assignment.assigned_by).first()
+        if assignment is not None else None
+    )
+    return {
+        "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
+        "assigned_by_name": assigner.full_name if assigner else "Unknown",
+        "assigned_by_role": assigner.role if assigner else None,
+    }
+
+
 def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
     selected_ids = session.selected_question_ids or []
     questions = db.query(QuestionBank).filter(
@@ -319,6 +338,15 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         marking_groups[group_key]["count"] += 1
     creator = db.query(User).filter(User.id == exam.created_by).first()
     student = db.query(User).filter(User.id == session.student_id).first()
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == session.student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    assigner = (
+        db.query(User).filter(User.id == assignment.assigned_by).first()
+        if assignment is not None else None
+    )
     settings = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
     raw_instructions = settings.get("instructions") or settings.get("exam_instructions") or []
     if isinstance(raw_instructions, str):
@@ -331,6 +359,9 @@ def _build_exam_summary(session: ExamSession, exam: Exam, db: Session) -> dict:
         "exam_title": exam.title,
         "subject": exam.subject,
         "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
+        "assigned_by_name": assigner.full_name if assigner else "Unknown",
+        "assigned_by_role": assigner.role if assigner else None,
         "student_name": student.full_name if student else "Unknown",
         "student_email": student.email if student else None,
         "student_department": student.department if student else None,
@@ -949,6 +980,7 @@ def get_exam_paper(
                 max(0, ceil((normalize_to_naive_utc(session.start_window_expires_at) - now).total_seconds()))
                 if session.start_window_expires_at else None
             ),
+            **_get_exam_attribution(session, exam, db),
             "exam_summary": _build_exam_summary(session, exam, db),
             "total_questions": len(selected_ids),
             "proctoring_enabled": bool(exam.proctoring_enabled),
@@ -1048,6 +1080,7 @@ def get_exam_paper(
         "exam_id": exam_id,
         "exam_title": exam.title,
         "subject": exam.subject,
+        **_get_exam_attribution(session, exam, db),
         "duration_minutes": exam.duration_minutes,
         "session_id": session.id,
         "status": session.status,
