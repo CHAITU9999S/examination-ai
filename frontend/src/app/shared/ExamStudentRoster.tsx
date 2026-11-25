@@ -20,6 +20,8 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
  const [reviews,setReviews]=useState<Record<number,Review>>({});
  const [eligible,setEligible]=useState<Array<{id:number;full_name:string;email:string;department?:string|null}>>([]);
  const [selectedIds,setSelectedIds]=useState<number[]>([]);
+ const [eligibleSearch,setEligibleSearch]=useState("");
+ const [eligibleSort,setEligibleSort]=useState("name-asc");
  const [showAssign,setShowAssign]=useState(false);
  const [assignmentClosed,setAssignmentClosed]=useState(false);
  const [assignmentMessage,setAssignmentMessage]=useState("");
@@ -69,6 +71,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
   return a.full_name.localeCompare(b.full_name);
  }),[students,search,sort]);
  const resultBySession=Object.fromEntries(results.map(r=>[r.session_id,r]));
+ const visibleEligible=useMemo(()=>[...eligible].filter(s=>!eligibleSearch.trim()||[s.full_name,s.email,s.department].some(v=>String(v||"").toLowerCase().includes(eligibleSearch.trim().toLowerCase()))).sort((a,b)=>eligibleSort==="name-desc"?b.full_name.localeCompare(a.full_name):eligibleSort==="department"?String(a.department||"").localeCompare(String(b.department||"")):a.full_name.localeCompare(b.full_name)),[eligible,eligibleSearch,eligibleSort]);
  async function assignSelected(){
   if(assignmentClosed){setAssignmentMessage("Exam has ended. New students cannot be assigned.");return;}
   if(selectedIds.length===0){setAssignmentMessage("Select at least one student.");return;}
@@ -100,7 +103,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
    {assignmentMessage&&<div role="status" className="mt-5 rounded-xl border border-blue-400/30 bg-blue-500/10 p-4 text-sm text-blue-200">{assignmentMessage}</div>}
    {showAssign&&!readOnly&&<section className="mt-6 rounded-2xl border border-blue-400/30 bg-slate-900 p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Assign New Students</h2><p className="text-sm text-slate-400">{eligible.length} unassigned student(s)</p></div><button type="button" onClick={()=>setShowAssign(false)} className="rounded-lg border border-white/20 px-3 py-2 text-sm">Close</button></div>
-    {assignmentClosed?<p className="mt-4 text-amber-300">Exam has ended. New students cannot be assigned.</p>:eligible.length===0?<p className="mt-4 text-slate-400">No unassigned active students are available.</p>:<div className="mt-4 max-h-64 space-y-2 overflow-y-auto">{eligible.map(s=><label key={s.id} className="flex items-center gap-3 rounded-lg bg-slate-800 p-3 text-sm"><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={e=>setSelectedIds(current=>e.target.checked?[...current,s.id]:current.filter(id=>id!==s.id))}/><span className="flex-1">{s.full_name}<span className="ml-2 text-xs text-slate-400">{s.department||"Department not set"} · {s.email}</span></span></label>)}</div>}
+    {assignmentClosed?<p className="mt-4 text-amber-300">Exam has ended. New students cannot be assigned.</p>:eligible.length===0?<p className="mt-4 text-slate-400">No unassigned active students are available.</p>:<><div className="mt-4 flex flex-wrap gap-3"><input type="search" value={eligibleSearch} onChange={e=>setEligibleSearch(e.target.value)} placeholder="Search unassigned students" aria-label="Search unassigned students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm"/><select value={eligibleSort} onChange={e=>setEligibleSort(e.target.value)} aria-label="Sort unassigned students" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm"><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="department">Department</option></select></div><div className="mt-4 max-h-64 space-y-2 overflow-y-auto">{visibleEligible.length===0?<p className="p-4 text-sm text-slate-400">No students match your search.</p>:visibleEligible.map(s=><label key={s.id} className="flex items-center gap-3 rounded-lg bg-slate-800 p-3 text-sm"><input type="checkbox" checked={selectedIds.includes(s.id)} onChange={e=>setSelectedIds(current=>e.target.checked?[...current,s.id]:current.filter(id=>id!==s.id))}/><span className="flex-1">{s.full_name}<span className="ml-2 text-xs text-slate-400">{s.department||"Department not set"} · {s.email}</span></span></label>)}</div></>}
     <button type="button" onClick={assignSelected} disabled={saving||assignmentClosed||eligible.length===0} className="mt-4 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">{saving?"Assigning...":`Assign ${selectedIds.length} selected student(s)`}</button>
    </section>}
    <section className="mt-7 rounded-2xl border border-white/10 bg-slate-900 p-5">
