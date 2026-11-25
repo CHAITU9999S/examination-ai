@@ -696,6 +696,15 @@ def test_admin_performance_lists_students_and_their_completed_attempt_details(
 def test_student_performance_includes_assignments_from_all_staff_but_tracking_is_scoped(
     client, db_session, admin, examiner, student
 ):
+    unassigned_student = User(
+        full_name="Unassigned Student",
+        email="unassigned.student@example.com",
+        password_hash=hash_password("StudentPass123!"),
+        role="student",
+        is_active=True,
+    )
+    db_session.add(unassigned_student)
+    db_session.flush()
     admin_exam = Exam(
         title="Admin-created examination",
         subject="Science",
@@ -735,14 +744,16 @@ def test_student_performance_includes_assignments_from_all_staff_but_tracking_is
     assert tracking_response.status_code == 200
     assert platform_response.status_code == 200
 
-    tracking_student = next(
-        item for item in tracking_response.json()["students"]
-        if item["student_id"] == student.id
-    )
-    platform_student = next(
-        item for item in platform_response.json()["students"]
-        if item["student_id"] == student.id
-    )
+    tracking_students = {
+        item["student_id"]: item for item in tracking_response.json()["students"]
+    }
+    platform_students = {
+        item["student_id"]: item for item in platform_response.json()["students"]
+    }
+    tracking_student = tracking_students[student.id]
+    platform_student = platform_students[student.id]
+    assert unassigned_student.id not in tracking_students
+    assert platform_students[unassigned_student.id]["total_assigned_examinations"] == 0
 
     assert tracking_student["total_assigned_examinations"] == 1
     assert [item["exam_title"] for item in tracking_student["attempts"]] == [
