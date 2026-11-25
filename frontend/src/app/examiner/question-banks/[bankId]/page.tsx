@@ -40,6 +40,7 @@ export default function QuestionBankDetailPage() {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [imagePreviews, setImagePreviews] = useState<Record<number, { prompt?: string; expected?: string }>>({});
   const [bankName, setBankName] = useState("Question Bank");
+  const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
   const [text, setText] = useState("");
   const [type, setType] = useState("MCQ");
   const [difficulty, setDifficulty] = useState("easy");
@@ -65,13 +66,17 @@ export default function QuestionBankDetailPage() {
   const load = useCallback(async () => {
     const auth = headers();
     if (!auth) return;
-    const [banksRes, questionsRes] = await Promise.all([
-      fetch(`${API_URL}/question-banks`, { headers: auth }),
-      fetch(`${API_URL}/question-banks/${bankId}/questions`, { headers: auth }),
+    const [profileRes, banksRes, questionsRes] = await Promise.all([
+      fetch(`${API_URL}/users/me`, { headers: auth, cache: "no-store" }),
+      fetch(`${API_URL}/question-banks`, { headers: auth, cache: "no-store" }),
+      fetch(`${API_URL}/question-banks/${bankId}/questions`, { headers: auth, cache: "no-store" }),
     ]);
-    if (!banksRes.ok || !questionsRes.ok) {
+    if (!profileRes.ok || !banksRes.ok || !questionsRes.ok) {
       throw new Error("Unable to load this question bank.");
     }
+    const profile = await profileRes.json();
+    if (profile.role !== "admin" && profile.role !== "examiner") throw new Error("Only Admins and Examiners can manage question banks.");
+    setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
     const banks = await banksRes.json();
     const bank = banks.find((item: { id: number; name: string }) => item.id === Number(bankId));
     if (!bank) throw new Error("You can manage only question banks you created.");
@@ -318,7 +323,7 @@ export default function QuestionBankDetailPage() {
       <header className="border-b border-white/10 bg-slate-900 px-6 py-5">
         <div className="mx-auto flex max-w-6xl justify-between">
           <div>
-            <Link href="/examiner/question-banks" className="text-2xl font-bold">
+            <Link href={dashboardHref} className="text-2xl font-bold">
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
             <p className="text-sm text-slate-400">Manage Questions</p>
