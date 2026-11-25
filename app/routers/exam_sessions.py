@@ -1161,6 +1161,11 @@ def confirm_exam_start(
     _, session = validate_exam_token(credentials, db)
     if session.id != session_id:
         raise HTTPException(status_code=403, detail="Token does not belong to this examination session.")
+    session = db.query(ExamSession).filter(
+        ExamSession.id == session_id,
+    ).with_for_update().populate_existing().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found.")
     exam = db.query(Exam).filter(Exam.id == session.exam_id).with_for_update().first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Exam not found.")
