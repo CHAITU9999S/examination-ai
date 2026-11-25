@@ -1499,30 +1499,29 @@ export default function StudentExamPage() {
             </p>
           </div>
 
-          {paper.proctoring_enabled && (
-            <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
-              <h3 className="font-semibold">Automated Proctoring</h3>
-              <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Camera preview</h3><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide" : "Show"}</button></div>
-              <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
-              <FaceProctoring
-                stream={cameraStream}
-                enabled={paper.status === "in_progress"}
-                sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
-                onFaceMissing={proctoring.reportFaceNotDetected}
-                onFaceVerified={handleFaceVerified}
-                onMultipleFaces={proctoring.reportMultipleFaces}
-                onGazeAway={proctoring.reportGazeAway}
-                onDetectorError={proctoring.reportWebcamError}
-              />
-              <p className="text-xs text-slate-400">
-                Face presence: {faceVerified ? "Confirmed" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} ·
-                Heartbeat: {websocketStatus}
-              </p>
-              <p className="text-xs text-amber-300">
-                Proctoring checks are automated indicators for examiner review, not proof of misconduct.
-              </p>
-            </div>
-          )}
+          <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
+            {paper.proctoring_enabled && <h3 className="font-semibold">Automated Proctoring</h3>}
+            <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Camera preview</h3><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide" : "Show"}</button></div>
+            <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
+            {paper.proctoring_enabled && (
+              <>
+                <FaceProctoring
+                  stream={cameraStream}
+                  enabled={paper.status === "in_progress"}
+                  sensitivity={paper.gaze_tracking_sensitivity ?? 0.5}
+                  onFaceMissing={proctoring.reportFaceNotDetected}
+                  onFaceVerified={handleFaceVerified}
+                  onMultipleFaces={proctoring.reportMultipleFaces}
+                  onGazeAway={proctoring.reportGazeAway}
+                  onDetectorError={proctoring.reportWebcamError}
+                />
+                <p className="text-xs text-slate-400">
+                  Face presence: {faceVerified ? "Confirmed" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} · Heartbeat: {websocketStatus}
+                </p>
+                <p className="text-xs text-amber-300">Proctoring checks are automated indicators for examiner review, not proof of misconduct.</p>
+              </>
+            )}
+          </div>
 
           <div className="mt-6 border-t border-white/10 pt-5">
             <p className="text-sm text-slate-400">
