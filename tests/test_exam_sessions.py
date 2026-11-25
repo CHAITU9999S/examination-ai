@@ -1,5 +1,9 @@
 
+import io
 from datetime import datetime, timedelta, timezone
+
+from PIL import Image
+import app.routers.exam_sessions as exam_sessions_router
 
 from app.auth import (
     create_access_token,
@@ -478,6 +482,142 @@ def test_student_starts_exam_using_exam_id_path(
     assert data["access_token"]
     assert data["token_type"] == "bearer"
     assert data["total_questions"] == 1
+    assert data["prestart_stage"] == "face_capture"
+    assert data["started_at"] is None
+    assert data["expires_at"] is None
+    session = db_session.query(ExamSession).filter_by(id=data["session_id"]).one()
+    assert session.status == "not_started"
+    assert session.expires_at is None
+
+def test_face_capture_requires_summary_minute_and_starts_timer_only_on_start(
+    client, db_session, monkeypatch
+):
+    student = create_student(db_session, email="face-capture-flow@test.com")
+    exam = create_exam(db_session, title="Face Capture Flow")
+    question = QuestionBank(
+        question_text="Entry flow question", question_type="MCQ",
+        subject="General Knowledge", difficulty="easy", marks=2, negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add_all([
+        ExamAssignment(exam_id=exam.id, student_id=student.id, assigned_by=student.id, is_active=True),
+        ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1),
+    ])
+    db_session.commit()
+
+    login_token = create_access_token({"sub": str(student.id)})
+    start = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {login_token}"},
+    )
+    assert start.status_code == 200
+    started = start.json()
+    exam_headers = {"Authorization": f"Bearer {started['access_token']}"}
+
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (80, 80), color="white").save(image_buffer, format="JPEG")
+    capture = client.post(
+        f"/exam-sessions/face-capture/{started['session_id']}",
+        headers={**exam_headers, "Content-Type": "image/jpeg"},
+        content=image_buffer.getvalue(),
+    )
+    assert capture.status_code == 200
+    assert capture.json()["stage"] == "summary"
+
+    session = db_session.query(ExamSession).filter_by(id=started["session_id"]).one()
+    assert session.face_capture_data
+    assert session.started_at is None
+    assert session.expires_at is None
+
+    paper = client.get(
+        f"/exam-sessions/paper/session/{session.id}", headers=exam_headers,
+    )
+    assert paper.status_code == 200
+    assert paper.json()["questions"] == []
+    assert paper.json()["exam_summary"]["total_questions"] == 1
+
+    summary_start = session.summary_started_at
+    monkeypatch.setattr(
+        exam_sessions_router, "get_current_utc_time",
+        lambda: summary_start + timedelta(seconds=59),
+    )
+    too_early = client.post(
+        f"/exam-sessions/summary/continue/{session.id}", headers=exam_headers,
+    )
+    assert too_early.status_code == 409
+
+    monkeypatch.setattr(
+        exam_sessions_router, "get_current_utc_time",
+        lambda: summary_start + timedelta(seconds=60),
+    )
+    continue_response = client.post(
+        f"/exam-sessions/summary/continue/{session.id}", headers=exam_headers,
+    )
+    assert continue_response.status_code == 200
+    assert continue_response.json()["start_window_seconds_remaining"] == 17
+
+    start_time = summary_start + timedelta(seconds=75)
+    monkeypatch.setattr(exam_sessions_router, "get_current_utc_time", lambda: start_time)
+    confirm = client.post(
+        f"/exam-sessions/confirm-start/{session.id}", headers=exam_headers,
+    )
+    assert confirm.status_code == 200
+    db_session.refresh(session)
+    assert session.status == "in_progress"
+    assert session.started_at == start_time
+    assert session.expires_at == start_time + timedelta(minutes=exam.duration_minutes)
+
+
+def test_prestart_auto_starts_after_seventeen_second_window(
+    client, db_session, monkeypatch
+):
+    student = create_student(db_session, email="auto-prestart-flow@test.com")
+    exam = create_exam(db_session, title="Automatic Start Flow")
+    question = QuestionBank(
+        question_text="Automatic entry question", question_type="MCQ",
+        subject="General Knowledge", difficulty="easy", marks=1, negative_marks=0,
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    db_session.add_all([
+        ExamAssignment(exam_id=exam.id, student_id=student.id, assigned_by=student.id, is_active=True),
+        ExamQuestion(exam_id=exam.id, question_id=question.id, question_order=1),
+    ])
+    db_session.commit()
+    start = client.post(
+        f"/exam-sessions/start/{exam.id}",
+        headers={"Authorization": f"Bearer {create_access_token({'sub': str(student.id)})}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+    token = start.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (80, 80), color="white").save(image_buffer, format="JPEG")
+    capture = client.post(
+        f"/exam-sessions/face-capture/{session_id}",
+        headers={**headers, "Content-Type": "image/jpeg"}, content=image_buffer.getvalue(),
+    )
+    assert capture.status_code == 200
+    session = db_session.query(ExamSession).filter_by(id=session_id).one()
+    summary_start = session.summary_started_at
+
+    monkeypatch.setattr(exam_sessions_router, "get_current_utc_time", lambda: summary_start + timedelta(seconds=120))
+    waiting = client.get(f"/exam-sessions/prestart/{session_id}", headers=headers)
+    assert waiting.status_code == 200
+    assert waiting.json()["stage"] == "start_window"
+    assert waiting.json()["start_window_seconds_remaining"] == 17
+
+    monkeypatch.setattr(exam_sessions_router, "get_current_utc_time", lambda: summary_start + timedelta(seconds=137))
+    automatic_start = client.get(f"/exam-sessions/prestart/{session_id}", headers=headers)
+    assert automatic_start.status_code == 200
+    assert automatic_start.json()["status"] == "in_progress"
+    db_session.refresh(session)
+    assert session.started_at == summary_start + timedelta(seconds=137)
+    assert session.expires_at == session.started_at + timedelta(minutes=exam.duration_minutes)
 
 def test_exam_access_tokens_are_short_lived_and_refresh_tokens_rotate(
     client,
