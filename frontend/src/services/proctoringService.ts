@@ -9,6 +9,7 @@ export type ProctoringEventType =
   | "multiple_faces"
   | "gaze_away"
   | "webcam_error"
+  | "fullscreen_exit"
   | "heartbeat";
 
 export interface ProctoringEventSubmission {
