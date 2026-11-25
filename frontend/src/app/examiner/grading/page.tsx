@@ -20,6 +20,7 @@ interface PendingAnswer {
   creator_role?: string | null;
   assigned_by_name?: string | null;
   assigned_by_role?: string | null;
+  submitted_at?: string | null;
   question_text: string;
   question_type: string;
   difficulty?: string | null;
@@ -69,6 +70,8 @@ export default function ExaminerGradingPage() {
 
   const [answers, setAnswers] = useState<PendingAnswer[]>([]);
   const [gradedAnswers, setGradedAnswers] = useState<PendingAnswer[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("exam");
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -494,7 +497,23 @@ export default function ExaminerGradingPage() {
     }
   }
 
-  const questionGroups = answers.reduce<Record<string, PendingAnswer[]>>(
+  const sortAnswers = (items: PendingAnswer[]) => [...items]
+    .filter((answer) => !searchTerm.trim() || [
+      answer.exam_title, answer.student_name, answer.question_text,
+      answer.creator_name, answer.assigned_by_name, answer.question_type,
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "student") return String(a.student_name || "").localeCompare(String(b.student_name || ""));
+      if (sortBy === "question") return a.question_text.localeCompare(b.question_text);
+      if (sortBy === "marks-low") return a.marks - b.marks;
+      if (sortBy === "marks-high") return b.marks - a.marks;
+      if (sortBy === "oldest") return String(a.submitted_at || "").localeCompare(String(b.submitted_at || ""));
+      if (sortBy === "newest") return String(b.submitted_at || "").localeCompare(String(a.submitted_at || ""));
+      return String(a.exam_title || "").localeCompare(String(b.exam_title || ""));
+    });
+  const visibleAnswers = sortAnswers(answers);
+  const visibleGradedAnswers = sortAnswers(gradedAnswers);
+  const questionGroups = visibleAnswers.reduce<Record<string, PendingAnswer[]>>(
     (groups, answer) => {
       const key = `${answer.exam_id}-${answer.question_id}`;
       if (!groups[key]) groups[key] = [];
@@ -566,7 +585,7 @@ export default function ExaminerGradingPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                {answers.length} answer(s) pending
+                {visibleAnswers.length} of {answers.length} answer(s) pending
               </p>
             </div>
 
@@ -580,7 +599,12 @@ export default function ExaminerGradingPage() {
                 {saving ? "Saving..." : `Submit ${selectedForBulk.length} selected grades`}
               </button>
             )}
-            <button
+            <div className="flex flex-wrap gap-3">
+              <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search exam, student, question, creator, or assigner" aria-label="Search grading answers" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort grading answers" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                <option value="exam">Examination name</option><option value="student">Student name</option><option value="question">Question text</option><option value="oldest">Oldest submitted</option><option value="newest">Newest submitted</option><option value="marks-low">Lowest maximum marks</option><option value="marks-high">Highest maximum marks</option>
+              </select>
+                          <button
               type="button"
               onClick={loadPendingAnswers}
               disabled={loading}
@@ -588,15 +612,16 @@ export default function ExaminerGradingPage() {
             >
               Refresh
             </button>
+            </div>
           </div>
 
           {loading ? (
             <p className="py-10 text-center text-slate-400">
               Loading answers...
             </p>
-          ) : answers.length === 0 ? (
+          ) : visibleAnswers.length === 0 ? (
             <p className="py-10 text-center text-slate-400">
-              No answers are currently awaiting grading.
+              {answers.length === 0 ? "No answers are currently awaiting grading." : "No answers match your search."}
             </p>
           ) : (
             <div className="mt-6 space-y-4">
@@ -694,13 +719,13 @@ export default function ExaminerGradingPage() {
               <h2 className="text-xl font-bold">Previously Graded Answers</h2>
               <p className="mt-1 text-sm text-slate-400">Review existing marks, inspect revision history, and use the remaining permitted revisions before results are published.</p>
             </div>
-            <span className="text-sm text-slate-400">{gradedAnswers.length} graded answer(s)</span>
+            <span className="text-sm text-slate-400">{visibleGradedAnswers.length} of {gradedAnswers.length} graded answer(s)</span>
           </div>
-          {gradedAnswers.length === 0 ? (
+          {visibleGradedAnswers.length === 0 ? (
             <p className="py-8 text-center text-slate-400">No subjective answers have been graded yet.</p>
           ) : (
             <div className="mt-4 space-y-3">
-              {gradedAnswers.map((answer) => (
+              {visibleGradedAnswers.map((answer) => (
                 <article key={answer.answer_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-800/50 p-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-cyan-300">{answer.exam_title} · {answer.student_name || `Student #${answer.student_id}`}</p>
