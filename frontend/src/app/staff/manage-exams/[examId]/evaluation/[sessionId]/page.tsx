@@ -24,7 +24,7 @@ export default function SessionEvaluationPage(){
  const requestedReturnTo=search.get("return_to");
  const previousHref=readOnly&&requestedReturnTo&&requestedReturnTo.startsWith("/admin/")&&!requestedReturnTo.startsWith("//")
   ? requestedReturnTo
-  : previousHref;
+  : readOnly? `/admin/exams/${examId}` : `/staff/manage-exams/${examId}`;
  const [data,setData]=useState<ReviewData|null>(null);const [index,setIndex]=useState(0);
  const [marks,setMarks]=useState("");const [feedback,setFeedback]=useState("");const [grade,setGrade]=useState("");
  const [photo,setPhoto]=useState("");const [answerImage,setAnswerImage]=useState("");const [suggestion,setSuggestion]=useState<{suggested_marks:number;justification:string;matched_points?:string[];missed_points?:string[]}|null>(null);
