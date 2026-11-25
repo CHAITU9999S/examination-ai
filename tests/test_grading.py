@@ -545,6 +545,7 @@ def test_examiner_can_publish_complete_result_and_student_can_view_it(
     publish_response = client.post(
         f"/grading/sessions/{data['session'].id}/publish",
         headers=auth_headers(data["examiner"]),
+        json={"grade": "Distinction"},
     )
     assert publish_response.status_code == 200
     assert publish_response.json()["published"] is True
@@ -555,6 +556,7 @@ def test_examiner_can_publish_complete_result_and_student_can_view_it(
     ).one()
     assert result.is_published is True
     assert result.published_at is not None
+    assert result.grade == "Distinction"
 
     student_results = client.get(
         "/results/me",
