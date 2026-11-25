@@ -14,6 +14,8 @@ interface Exam {
   duration_minutes: number;
   total_questions: number;
   max_marks?: number | null;
+  assigned_question_count?: number;
+  exam_status?: string;
   created_by?: number | null;
   start_time?: string | null;
   end_time?: string | null;
@@ -27,6 +29,11 @@ function formatDate(value?: string | null) {
 }
 
 function statusFor(exam: Exam) {
+  if (exam.exam_status === "schedule_not_assigned") return "Exam starting date and time not assigned";
+  if (exam.exam_status === "scheduled") return "Scheduled — " + formatDate(exam.start_time);
+  if (exam.exam_status === "ongoing") return "Exam is ongoing";
+  if (exam.exam_status === "results_published") return "Result published";
+  if (exam.exam_status === "completed_not_evaluated") return "Exam completed, not evaluated";
   const now = Date.now();
   const start = exam.start_time ? new Date(exam.start_time).getTime() : null;
   const end = exam.end_time ? new Date(exam.end_time).getTime() : null;
@@ -167,7 +174,7 @@ export default function ManageExamsPage() {
                     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <div><dt className="text-xs text-slate-500">Start time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.start_time)}</dd></div>
                       <div><dt className="text-xs text-slate-500">End time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.end_time)}</dd></div>
-                      <div><dt className="text-xs text-slate-500">Questions in paper</dt><dd className="mt-1">{exam.total_questions}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Questions in bank</dt><dd className="mt-1">{exam.assigned_question_count ?? "—"}</dd></div><div><dt className="text-xs text-slate-500">Questions per student</dt><dd className="mt-1">{exam.total_questions}</dd></div>
                       <div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
                       <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div>
                       <div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
