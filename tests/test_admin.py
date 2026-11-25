@@ -692,6 +692,70 @@ def test_admin_performance_lists_students_and_their_completed_attempt_details(
     assert attempt["marks_status"] == "Evaluation in progress"
 
 
+
+def test_student_performance_includes_assignments_from_all_staff_but_tracking_is_scoped(
+    client, db_session, admin, examiner, student
+):
+    admin_exam = Exam(
+        title="Admin-created examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=admin.id,
+    )
+    examiner_exam = Exam(
+        title="Examiner-created examination",
+        subject="Mathematics",
+        duration_minutes=45,
+        total_questions=1,
+        created_by=examiner.id,
+    )
+    db_session.add_all([admin_exam, examiner_exam])
+    db_session.flush()
+    db_session.add_all([
+        ExamAssignment(
+            exam_id=admin_exam.id,
+            student_id=student.id,
+            assigned_by=admin.id,
+            is_active=True,
+        ),
+        ExamAssignment(
+            exam_id=examiner_exam.id,
+            student_id=student.id,
+            assigned_by=examiner.id,
+            is_active=True,
+        ),
+    ])
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    tracking_response = client.get("/admin/performance", headers=headers)
+    platform_response = client.get("/admin/student-performance", headers=headers)
+
+    assert tracking_response.status_code == 200
+    assert platform_response.status_code == 200
+
+    tracking_student = next(
+        item for item in tracking_response.json()["students"]
+        if item["student_id"] == student.id
+    )
+    platform_student = next(
+        item for item in platform_response.json()["students"]
+        if item["student_id"] == student.id
+    )
+
+    assert tracking_student["total_assigned_examinations"] == 1
+    assert [item["exam_title"] for item in tracking_student["attempts"]] == [
+        admin_exam.title
+    ]
+    assert platform_student["total_assigned_examinations"] == 2
+    assert {item["exam_title"] for item in platform_student["attempts"]} == {
+        admin_exam.title,
+        examiner_exam.title,
+    }
+
+
+
 def test_admin_schedules_lists_only_future_examination_assignments(
     client, db_session, admin, student
 ):
