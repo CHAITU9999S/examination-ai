@@ -155,7 +155,7 @@ export default function StudentPerformancePage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5">
           <div>
             <Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
-            <p className="mt-1 text-sm text-slate-400">{role === "examiner" ? "Examiner" : "Administrator"} / Student Tracking</p>
+            <p className="mt-1 text-sm text-slate-400">{role === "examiner" ? "Examiner" : "Administrator"} / Student Performance</p>
           </div>
           <AdminSectionNavigation
             previousHref="/admin/sections/students"
@@ -168,7 +168,7 @@ export default function StudentPerformancePage() {
       <div className="mx-auto max-w-7xl px-5 py-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Student Tracking</h1>
+            <h1 className="text-3xl font-bold">Student Performance</h1>
             <p className="mt-2 text-sm text-slate-400">
               Select a student to view assigned examinations, then select an examination to see its performance summary.
             </p>
@@ -332,7 +332,7 @@ export default function StudentPerformancePage() {
                                       </div>
                                       {attempt.session_id && (
                                         <Link
-                                          href={\`/staff/manage-exams/\${attempt.exam_id}/evaluation/\${attempt.session_id}?view=1&return_to=%2Fadmin%2Fperformance\`}
+                                          href={\`/staff/manage-exams/\${attempt.exam_id}/evaluation/\${attempt.session_id}?view=1&return_to=%2Fadmin%2Fstudent-performance\`}
                                           className="mt-4 inline-flex rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"
                                         >
                                           View question-by-question answers
