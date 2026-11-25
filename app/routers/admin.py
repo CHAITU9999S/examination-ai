@@ -459,14 +459,16 @@ def delete_examiner_with_records(
         )
 
     try:
+        session_conditions = [
+            ExamSession.student_id == examiner.id,
+        ]
+        if exam_ids:
+            session_conditions.append(ExamSession.exam_id.in_(exam_ids))
         session_ids = [
             row[0] for row in db.query(ExamSession.id).filter(
-                or_(
-                    ExamSession.exam_id.in_(exam_ids),
-                    ExamSession.student_id == examiner.id,
-                )
+                or_(*session_conditions)
             ).all()
-        ] if exam_ids else []
+        ]
 
         answer_ids = [
             row[0] for row in db.query(Answer.id).filter(
