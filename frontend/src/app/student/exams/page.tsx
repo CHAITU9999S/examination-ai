@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -81,6 +81,8 @@ export default function StudentExamsPage() {
   const router = useRouter();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("start-asc");
   const [loading, setLoading] = useState(true);
   const [startingExamId, setStartingExamId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -233,6 +235,18 @@ export default function StudentExamsPage() {
     }
   }
 
+  const visibleExams = useMemo(() => [...exams]
+    .filter((exam) => !searchTerm.trim() || [
+      exam.title, exam.subject, exam.created_by_name, exam.assigned_by_name,
+    ].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name") return a.title.localeCompare(b.title);
+      if (sortBy === "duration") return a.duration_minutes - b.duration_minutes;
+      if (sortBy === "questions") return a.total_questions - b.total_questions;
+      if (sortBy === "start-desc") return (b.start_time || "").localeCompare(a.start_time || "");
+      return (a.start_time || "").localeCompare(b.start_time || "");
+    }), [exams, searchTerm, sortBy]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
@@ -271,7 +285,12 @@ export default function StudentExamsPage() {
             </p>
           </div>
 
-          <button
+          <div className="flex flex-wrap gap-3">
+            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search examination, subject, creator, or assigner" aria-label="Search examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+              <option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option><option value="name">Name A to Z</option><option value="duration">Shortest duration</option><option value="questions">Fewest questions</option>
+            </select>
+                      <button
             type="button"
             onClick={loadExams}
             disabled={loading}
@@ -279,6 +298,7 @@ export default function StudentExamsPage() {
           >
             Refresh
           </button>
+          </div>
         </div>
 
         {error && (
@@ -303,19 +323,19 @@ export default function StudentExamsPage() {
           <p className="py-16 text-center text-slate-400">
             Loading examinations...
           </p>
-        ) : exams.length === 0 ? (
+        ) : visibleExams.length === 0 ? (
           <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-10 text-center">
             <h2 className="text-xl font-semibold">
               No examinations found
             </h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              There are currently no examinations available to display.
+              {exams.length === 0 ? "There are currently no examinations available to display." : "No examinations match your search."}
             </p>
           </section>
         ) : (
           <section className="mt-8 grid gap-6 md:grid-cols-2">
-            {exams.map((exam) => {
+            {visibleExams.map((exam) => {
               const status = getExamStatus(exam);
               const isStarting = startingExamId === exam.id;
 
