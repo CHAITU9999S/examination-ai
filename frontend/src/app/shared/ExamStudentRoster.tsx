@@ -112,7 +112,7 @@ export default function ExamStudentRoster({examId,readOnly=false}:{examId:string
      return <article key={student.student_id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{student.full_name}</h3><p className="mt-1 text-xs text-slate-400">{student.department||"Department not set"} · {student.email}</p><p className="mt-2 text-xs text-cyan-300">{statusText(student.student_exam_status)}</p></div><div className="flex flex-wrap gap-2">
        {student.session_id&&<Link href={`/staff/manage-exams/${examId}/evaluation/${student.session_id}${readOnly?"?view=1":""}`} className="rounded-lg border border-cyan-500/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">{readOnly?"View Answers & Marks":"Evaluate Answers"}</Link>}
-       {student.session_id&&<Link href="/staff/proctoring" className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Proctoring Review</Link>}
+       {student.session_id&&<Link href={`/staff/proctoring?session_id=${student.session_id}`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Proctoring Review</Link>}
       </div></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
        <div className="rounded-lg bg-slate-900/70 p-3"><p className="text-xs text-slate-500">Evaluation</p><p className="mt-1 font-medium">{evaluationLabel}</p>{graded.map((q,i)=><p key={q.question_order} className="mt-1 text-xs text-slate-400">Q{q.question_order}: {q.evaluation_history.map(h=>h.marks).join(" → ")||q.awarded_marks} / {q.maximum_marks} · Latest: {q.awarded_marks}</p>)}</div>
