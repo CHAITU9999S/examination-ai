@@ -49,6 +49,7 @@ interface ExamPaper {
   max_tab_switch_warnings?: number | null;
   is_paused?: boolean;
   current_question_index?: number;
+  visited_question_ids?: number[];
   status?: string;
   prestart_stage?: string;
   face_captured?: boolean;
@@ -80,6 +81,11 @@ export default function StudentExamPage() {
   const [paper, setPaper] = useState<ExamPaper | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [savedAnswerQuestionIds, setSavedAnswerQuestionIds] = useState<number[]>([]);
+  const [visitedQuestionIds, setVisitedQuestionIds] = useState<number[]>([]);
+  const [showQuestionDrawer, setShowQuestionDrawer] = useState(false);
+  const [fullscreenReentryRequired, setFullscreenReentryRequired] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(true);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [questionRemainingSeconds, setQuestionRemainingSeconds] = useState<number | null>(null);
   const [questionTimerLocked, setQuestionTimerLocked] = useState(false);
@@ -147,6 +153,7 @@ export default function StudentExamPage() {
   const saveTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshInFlightRef = useRef(false);
   const activePaperLoadedRef = useRef(false);
+  const fullscreenExitLoggedRef = useRef(false);
 
   const examTokenKey = `examguard_exam_token_${sessionId}`;
   const examRefreshTokenKey = `examguard_exam_refresh_${sessionId}`;
@@ -214,7 +221,7 @@ export default function StudentExamPage() {
   }, [examRefreshTokenKey, examTokenKey, sessionId, setError]);
 
   const handleProctoringEvent = useCallback((event: {
-    event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error";
+    event_type: "tab_switch" | "window_blur" | "window_focus" | "face_not_detected" | "multiple_faces" | "gaze_away" | "webcam_error" | "fullscreen_exit";
     description: string;
     gaze_data?: Record<string, unknown> | null;
   }) => {
@@ -225,7 +232,7 @@ export default function StudentExamPage() {
   }, [sessionId]);
 
   const proctoring = useProctoring({
-    enabled: Boolean(paper?.proctoring_enabled && paper.status === "in_progress"),
+    enabled: Boolean(paper?.status === "in_progress"),
     onEvent: handleProctoringEvent,
     maxTabWarnings: paper?.max_tab_switch_warnings ?? 3,
     duplicateEventCooldownMs: 4000,
@@ -354,12 +361,15 @@ export default function StudentExamPage() {
 
       const normalizedPaper: ExamPaper = {
         ...data,
+        proctoring_enabled: true,
+        exam_summary: data.exam_summary ? { ...data.exam_summary, proctoring_enabled: true } : data.exam_summary,
         session_id: Number(data.session_id || sessionId),
         questions,
       };
 
       if (normalizedPaper.exam_id) sessionStorage.setItem(examIdKey, String(normalizedPaper.exam_id));
       setPaper(normalizedPaper);
+      setVisitedQuestionIds(Array.isArray(normalizedPaper.visited_question_ids) ? normalizedPaper.visited_question_ids : []);
       setPrestartStage(normalizedPaper.prestart_stage || "face_capture");
       setFaceCaptured(Boolean(normalizedPaper.face_captured));
       setFaceVerified(Boolean(normalizedPaper.face_captured));
