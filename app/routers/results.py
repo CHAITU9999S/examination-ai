@@ -5,13 +5,31 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Answer, Exam, ExamSession, QuestionBank, Result, User
+from app.models import Answer, Exam, ExamAssignment, ExamSession, QuestionBank, Result, User
 
 
 router = APIRouter(
     prefix="/results",
     tags=["Student Results"],
 )
+
+
+def _exam_attribution(session: ExamSession, exam: Exam | None, db: Session) -> dict:
+    creator = db.query(User).filter(User.id == exam.created_by).first() if exam else None
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == session.exam_id,
+        ExamAssignment.student_id == session.student_id,
+    ).first()
+    assigner = (
+        db.query(User).filter(User.id == assignment.assigned_by).first()
+        if assignment is not None else None
+    )
+    return {
+        "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
+        "assigned_by_name": assigner.full_name if assigner else "Unknown",
+        "assigned_by_role": assigner.role if assigner else None,
+    }
 
 
 def _require_student_result_access(
@@ -201,6 +219,7 @@ def get_my_result_session_status(
         "exam_id": session.exam_id,
         "exam_title": exam.title if exam else "Examination",
         "subject": exam.subject if exam else None,
+        **_exam_attribution(session, exam, db),
         "session_status": session.status,
         "submitted_at": session.submitted_at,
         "result_published": bool(result),
@@ -294,6 +313,7 @@ def get_my_result_details(
         "session_id": session.id,
         "exam_id": session.exam_id,
         "exam_title": exam.title if exam else None,
+        **_exam_attribution(session, exam, db),
         "submitted_at": session.submitted_at,
         "published_at": result.published_at,
         "face_photo_url": f"/results/sessions/{session.id}/face-photo" if session.face_capture_data else None,
@@ -357,12 +377,14 @@ def get_exam_results_for_staff(
     return {
         "exam_id": exam.id,
         "exam_title": exam.title,
+        "creator_name": db.query(User).filter(User.id == exam.created_by).first().full_name if db.query(User).filter(User.id == exam.created_by).first() else "Unknown",
         "total_students": len(rows),
         "results": [
             {
                 "session_id": session.id,
                 "student_id": student.id,
                 "student_name": student.full_name,
+                **_exam_attribution(session, exam, db),
                 "session_status": session.status,
                 "submitted_at": session.submitted_at,
                 "face_photo_available": bool(session.face_capture_data),
@@ -411,6 +433,7 @@ def get_staff_result_history(
                 "session_id": session.id,
                 "exam_id": exam.id,
                 "exam_title": exam.title,
+                **_exam_attribution(session, exam, db),
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "submitted_at": session.submitted_at,
