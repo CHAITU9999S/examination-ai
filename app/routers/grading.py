@@ -850,6 +850,8 @@ def get_session_answer_review(
             "question_id": question.id,
             "question_order": order,
             "question_text": question.question_text,
+            "question_image_url": f"/questions/{question.id}/image" if question.question_image_data or question.question_image_path else None,
+            "expected_answer_image_url": f"/questions/{question.id}/expected-answer-image" if question.expected_answer_image_data else None,
             "question_type": question_type_value,
             "difficulty": question.difficulty,
             "maximum_marks": question.marks,
