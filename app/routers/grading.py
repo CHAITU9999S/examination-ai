@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamQuestion, ExamSession, QuestionBank, Result, User
+from app.models import AdminActivityLog, Answer, AnswerMarkRevision, Exam, ExamAssignment, ExamQuestion, ExamSession, QuestionBank, Result, User
 from app.services.evaluation_service import (
     calculate_session_result,
     evaluate_objective_answers,
@@ -85,6 +85,24 @@ def require_examiner_or_admin(user: User):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only active examiners and administrators can access grading.",
         )
+
+
+def _exam_attribution(exam: Exam, student_id: int, db: Session) -> dict:
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam.id,
+        ExamAssignment.student_id == student_id,
+    ).first()
+    assigner = (
+        db.query(User).filter(User.id == assignment.assigned_by).first()
+        if assignment is not None else None
+    )
+    return {
+        "creator_name": creator.full_name if creator else "Unknown",
+        "creator_role": creator.role if creator else None,
+        "assigned_by_name": assigner.full_name if assigner else "Unknown",
+        "assigned_by_role": assigner.role if assigner else None,
+    }
 
 
 def get_visible_exam(
@@ -339,6 +357,7 @@ def get_all_pending_subjective_answers(
                 "student_id": session.student_id,
                 "exam_id": exam.id,
                 "exam_title": exam.title,
+                **_exam_attribution(exam, session.student_id, db),
                 "question_id": question.id,
                 "question_text": question.question_text,
                 "question_type": getattr(
@@ -425,6 +444,7 @@ def get_pending_subjective_answers(
     return {
         "exam_id": exam.id,
         "exam_title": exam.title,
+        "creator_name": db.query(User).filter(User.id == exam.created_by).first().full_name if db.query(User).filter(User.id == exam.created_by).first() else "Unknown",
         "total_pending": len(rows),
         "answers": [
             {
@@ -894,6 +914,7 @@ def get_session_answer_review(
         "session_id": session.id,
         "exam_id": exam.id,
         "exam_title": exam.title,
+        **_exam_attribution(exam, session.student_id, db),
         "student_id": student.id if student else session.student_id,
         "student_name": student.full_name if student else "Unknown student",
         "department": student.department if student else None,
@@ -950,6 +971,7 @@ def list_submitted_sessions_for_review(
                 "session_id": session.id,
                 "exam_id": exam.id,
                 "exam_title": exam.title,
+                **_exam_attribution(exam, session.student_id, db),
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "session_status": session.status,
@@ -1380,6 +1402,7 @@ def get_previously_graded_subjective_answers(
                 "student_name": student.full_name,
                 "exam_id": exam.id,
                 "exam_title": exam.title,
+                **_exam_attribution(exam, session.student_id, db),
                 "question_id": question.id,
                 "question_text": question.question_text,
                 "question_type": getattr(question.question_type, "value", question.question_type),
