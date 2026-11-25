@@ -1055,7 +1055,7 @@ def get_historical_student_performance(
                 "obtained_marks": result.obtained_marks,
                 "total_marks": result.total_marks,
                 "percentage": result.percentage,
-                "grade": _performance_grade(result.percentage),
+                "grade": result.grade or _performance_grade(result.percentage),
                 "published_at": result.published_at,
             }
             for result, session, exam, student in rows
