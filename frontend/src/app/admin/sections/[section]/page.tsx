@@ -9,24 +9,45 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type SectionItem = { title: string; description: string; href: string; related?: SectionItem[] };
 
 const sections: Record<string, { title: string; description: string; items: SectionItem[] }> = {
-  "user-management": {
-    title: "User Management",
-    description: "All account-management areas are grouped here.",
+  users: {
+    title: "Users",
+    description: "Choose the category of accounts or user records you want to manage.",
     items: [
-      { title: "User Management", description: "View, activate, deactivate, and manage all platform accounts.", href: "/admin/users" },
-      { title: "Admin Management", description: "Create and manage Admin accounts, review activity logs, and manage retained records.", href: "/admin/admins", related: [
-        { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
-        { title: "Retained Data", description: "Review and delete completed examinations, submissions, and grading history retained after account deletion.", href: "/admin/retained-data" },
+      { title: "Admins", description: "Manage administrator accounts and review Admin activity.", href: "/admin/sections/admins" },
+      { title: "Examiners", description: "Manage Examiner accounts and review their examination and question-bank activity.", href: "/admin/sections/examiners" },
+      { title: "Students", description: "Manage students, schedules, and performance.", href: "/admin/sections/students" },
+      { title: "User Management", description: "View and manage all platform user accounts.", href: "/admin/users" },
+    ],
+  },
+  admins: {
+    title: "Admins",
+    description: "Administrator account management and administrator activity records.",
+    items: [
+      { title: "Admin Management", description: "Create, activate, deactivate, and manage administrator accounts.", href: "/admin/admins", related: [
+        { title: "Retained Data", description: "Review and delete completed records preserved after account deletion.", href: "/admin/retained-data" },
       ] },
-      { title: "Examiner Management", description: "Create and manage Examiner accounts.", href: "/admin/examiners" },
-      { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students", related: [
-        { title: "Student Schedule", description: "View student assignments and examination schedules.", href: "/admin/schedules" },
-        { title: "Student Performance", description: "Review student performance and published results.", href: "/admin/performance" },
-      ] },
+      { title: "Admin Activity Logs", description: "Review actions performed by Admin accounts.", href: "/admin/activity-logs" },
+    ],
+  },
+  examiners: {
+    title: "Examiners",
+    description: "Examiner account management and activity records.",
+    items: [
+      { title: "Examiner Management", description: "Create, activate, deactivate, and manage Examiner accounts.", href: "/admin/examiners" },
+      { title: "Examiner Activity Logs", description: "Review examinations and question banks added, updated, or deleted by Examiners.", href: "/admin/examiner-activity-logs" },
+    ],
+  },
+  students: {
+    title: "Students",
+    description: "Student accounts, examination schedules, and performance.",
+    items: [
+      { title: "Student Management", description: "View and manage registered Student accounts.", href: "/admin/students" },
+      { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
+      { title: "Student Performance", description: "Review student performance and published results.", href: "/admin/performance" },
     ],
   },
   "question-banks": {
-    title: "Question Banks",
+    title: "Question Bank",
     description: "Browse available banks or manage banks you own.",
     items: [
       { title: "Question Bank", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
@@ -38,8 +59,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
     description: "All examination operations are grouped here.",
     items: [
       { title: "Examinations", description: "View examinations created by Admins and Examiners.", href: "/admin/exams" },
-      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams", related: [
-        ] },
+      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams" },
       { title: "Answer Grading", description: "Review answers and manage marks for examinations you own.", href: "/examiner/grading" },
       { title: "Result Publication", description: "Approve and publish results for examinations you own.", href: "/examiner/results" },
       { title: "Proctoring Review", description: "Review flagged sessions and proctoring events.", href: "/staff/proctoring" },
