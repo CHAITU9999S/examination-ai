@@ -38,129 +38,53 @@ interface NavigationItem {
 interface NavigationGroup {
   title: string;
   description: string;
+  slug: string;
+  href?: string;
   items: NavigationItem[];
 }
 
 const navigationGroups: NavigationGroup[] = [
   {
     title: "User Management",
-    description: "Manage all platform accounts and review user-related activity.",
+    description: "Manage users, administrators, examiners, students, schedules, performance, and administrator activity.",
+    slug: "user-management",
     items: [
-      {
-        title: "User Management",
-        description: "View, activate, deactivate, and manage platform users.",
-        href: "/admin/users",
-      },
-      {
-        title: "Admin Management",
-        description: "Manage administrator accounts.",
-        href: "/admin/admins",
-        related: [
-          {
-            title: "Admin Activity Logs",
-            description: "Review administrator actions and account changes.",
-            href: "/admin/activity-logs",
-          },
-        ],
-      },
-      {
-        title: "Examiner Management",
-        description: "Manage examiner accounts and access.",
-        href: "/admin/examiners",
-      },
-      {
-        title: "Student Management",
-        description: "View registered students and their account status.",
-        href: "/admin/students",
-        related: [
-          {
-            title: "Student Schedules",
-            description: "View active student assignments and examination opening and closing times.",
-            href: "/admin/schedules",
-          },
-          {
-            title: "Student Performance",
-            description: "Review published results and long-term student performance.",
-            href: "/admin/performance",
-          },
-        ],
-      },
+      { title: "User Management", description: "View and manage all platform accounts.", href: "/admin/users" },
+      { title: "Admin Management", description: "Create and manage administrator accounts and review Admin Activity Logs.", href: "/admin/admins" },
+      { title: "Examiner Management", description: "Create and manage examiner accounts.", href: "/admin/examiners" },
+      { title: "Student Management", description: "Manage students, view Student Schedules, and review Student Performance.", href: "/admin/students" },
+      { title: "Student Schedule", description: "View student examination assignments and schedules.", href: "/admin/schedules" },
+      { title: "Student Performance", description: "Review student examination performance and published results.", href: "/admin/performance" },
+      { title: "Admin Activity Logs", description: "Review administrator actions and account changes.", href: "/admin/activity-logs" },
     ],
   },
   {
     title: "Question Banks",
-    description: "Browse and manage question banks and the platform question library.",
+    description: "Browse existing question banks and manage your own question banks.",
+    slug: "question-banks",
     items: [
-      {
-        title: "Question Banks",
-        description: "Browse question banks created by all Admins and Examiners.",
-        href: "/staff/question-banks",
-      },
-      {
-        title: "Manage Question Banks",
-        description: "Create and manage your own question banks and questions.",
-        href: "/examiner/question-banks",
-      },
-      {
-        title: "All Questions",
-        description: "View every existing question across the platform and safely delete individual questions.",
-        href: "/admin/questions",
-      },
-      {
-        title: "Question Library",
-        description: "Create and manage standalone questions for examination preparation.",
-        href: "/examiner/questions",
-      },
+      { title: "Question Bank", description: "Browse question banks created across the platform.", href: "/staff/question-banks" },
+      { title: "Manage Question Banks", description: "Create and manage question banks that you own.", href: "/examiner/question-banks" },
     ],
   },
   {
     title: "Examinations",
-    description: "Create, manage, grade, publish, and review examinations.",
+    description: "View and manage examinations, grade answers, publish results, and review proctoring.",
+    slug: "examinations",
     items: [
-      {
-        title: "Examinations",
-        description: "View all examinations created by Admins and Examiners, with Admin deletion controls.",
-        href: "/admin/exams",
-      },
-      {
-        title: "Manage Examinations",
-        description: "View and manage examinations you created.",
-        href: "/staff/manage-exams",
-        related: [
-          {
-            title: "Proctoring Review",
-            description: "Review flagged sessions and recorded proctoring events.",
-            href: "/staff/proctoring",
-          },
-        ],
-      },
-      {
-        title: "Create Examination",
-        description: "Create a new examination.",
-        href: "/examiner/exams",
-      },
-      {
-        title: "Answer Grading",
-        description: "Review answers and approve or change marks only for examinations you created.",
-        href: "/examiner/grading",
-      },
-      {
-        title: "Result Publication",
-        description: "Review and publish results only for examinations you created.",
-        href: "/examiner/results",
-      },
+      { title: "Examinations", description: "View examinations created by Admins and Examiners.", href: "/admin/exams" },
+      { title: "Manage Examinations", description: "Manage examinations that you created.", href: "/staff/manage-exams" },
+      { title: "Answer Grading", description: "Review answers and manage marks for examinations you own.", href: "/examiner/grading" },
+      { title: "Result Publication", description: "Approve and publish results for examinations you own.", href: "/examiner/results" },
+      { title: "Proctoring Review", description: "Review flagged sessions and proctoring events.", href: "/staff/proctoring" },
     ],
   },
   {
     title: "Account Security",
     description: "Change your account password and maintain account security.",
-    items: [
-      {
-        title: "Account Security",
-        description: "Change your account password.",
-        href: "/account/security",
-      },
-    ],
+    slug: "account-security",
+    href: "/account/security",
+    items: [],
   },
 ];
 
@@ -171,9 +95,6 @@ export default function AdminDashboardPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [questionResetAvailable, setQuestionResetAvailable] = useState<boolean | null>(null);
-  const [questionResetBusy, setQuestionResetBusy] = useState(false);
-  const [questionResetMessage, setQuestionResetMessage] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -207,18 +128,6 @@ export default function AdminDashboardPage() {
 
         setUser(currentUser);
 
-        const resetStatusResponse = await fetch(
-          `${API_URL}/admin/questions/reset-status`,
-          { headers, cache: "no-store" }
-        );
-        if (resetStatusResponse.ok) {
-          const resetStatus = await resetStatusResponse.json();
-          setQuestionResetAvailable(Boolean(resetStatus.available));
-          if (!resetStatus.available) setQuestionResetMessage(resetStatus.message || "The one-time question deletion is unavailable.");
-        } else {
-          setQuestionResetAvailable(false);
-        }
-
         const statsResponse = await fetch(
           `${API_URL}/admin/dashboard`,
           { headers }
@@ -249,43 +158,6 @@ export default function AdminDashboardPage() {
     loadDashboard();
   }, [router]);
 
-
-  async function deleteAllQuestionsOnce() {
-    if (questionResetBusy || !questionResetAvailable) return;
-    const confirmed = window.confirm(
-      "DANGER: This permanently deletes every question, its options, exam-paper links, and dependent student answer records. Existing examinations may become unusable. Examination sessions and existing result snapshots will be retained. This action can be used only once. Continue?"
-    );
-    if (!confirmed) return;
-    const finalConfirmation = window.confirm(
-      "Final confirmation: permanently delete ALL questions from ExamGuard AI now?"
-    );
-    if (!finalConfirmation) return;
-
-    const token = localStorage.getItem("examguard_access_token");
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-    setQuestionResetBusy(true);
-    setQuestionResetMessage("");
-    try {
-      const response = await fetch(`${API_URL}/admin/questions/all`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Unable to delete all questions.");
-      setQuestionResetAvailable(false);
-      setQuestionResetMessage(data.message || "All questions were deleted. This action is now disabled.");
-      setStatistics((current) => current ? { ...current, total_questions: 0 } : current);
-    } catch (resetError) {
-      setQuestionResetMessage(
-        resetError instanceof Error ? resetError.message : "Unable to delete all questions."
-      );
-    } finally {
-      setQuestionResetBusy(false);
-    }
-  }
 
   function handleLogout() {
     localStorage.removeItem("examguard_access_token");
@@ -387,29 +259,6 @@ export default function AdminDashboardPage() {
         )}
 
 
-        {questionResetAvailable && (
-          <section className="mb-10 rounded-xl border border-red-500/40 bg-red-950/30 p-6">
-            <h2 className="text-lg font-bold text-red-300">One-time question reset</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              Permanently delete all questions and dependent answer records from the database. Existing examinations may become unusable. Examination sessions and saved result snapshots are retained where possible. This option disappears permanently after successful use.
-            </p>
-            <button
-              type="button"
-              onClick={deleteAllQuestionsOnce}
-              disabled={questionResetBusy}
-              className="mt-4 rounded-lg bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
-            >
-              {questionResetBusy ? "Deleting questions..." : "Delete all questions (one time only)"}
-            </button>
-            {questionResetMessage && (
-              <p role="status" className="mt-3 text-sm text-red-200">{questionResetMessage}</p>
-            )}
-          </section>
-        )}
-        {!questionResetAvailable && questionResetMessage && (
-          <p role="status" className="mb-8 text-sm text-slate-300">{questionResetMessage}</p>
-        )}
-
         <section className="mb-12">
           <h2 className="mb-5 text-xl font-bold">
             Platform Overview
@@ -440,62 +289,23 @@ export default function AdminDashboardPage() {
             Management
           </h2>
 
-          <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
             {navigationGroups.map((group) => (
-              <section
-                key={group.title}
-                className="rounded-2xl border border-white/10 bg-slate-900 p-6"
+              <Link
+                key={group.slug}
+                href={group.href || `/admin/sections/${group.slug}`}
+                className="rounded-2xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
               >
-                <div className="mb-5">
-                  <h3 className="text-xl font-bold">{group.title}</h3>
-                  <p className="mt-1 text-sm text-slate-400">{group.description}</p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {group.items.map((item) => (
-                    <article
-                      key={item.href}
-                      className="rounded-xl border border-white/10 bg-slate-800/70 p-4"
-                    >
-                      <Link
-                        href={item.href}
-                        className="group inline-flex font-semibold text-white transition hover:text-blue-400"
-                      >
-                        {item.title} <span className="ml-2 text-blue-400">→</span>
-                      </Link>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        {item.description}
-                      </p>
-
-                      {item.related && item.related.length > 0 && (
-                        <div className="mt-4 border-t border-white/10 pt-3">
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Related sections
-                          </p>
-                          <div className="space-y-3">
-                            {item.related.map((relatedItem) => (
-                              <div key={relatedItem.href}>
-                                <Link
-                                  href={relatedItem.href}
-                                  className="text-sm font-semibold text-cyan-300 hover:text-cyan-200"
-                                >
-                                  {relatedItem.title} →
-                                </Link>
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                  {relatedItem.description}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </section>
+                <h3 className="text-xl font-bold">{group.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{group.description}</p>
+                {group.items.length > 0 && (
+                  <p className="mt-4 text-xs font-semibold text-blue-300">
+                    {group.items.length} sections inside <span aria-hidden="true">→</span>
+                  </p>
+                )}
+              </Link>
             ))}
-          </div>
-        </section>
+          </div>ion>
       </div>
     </main>
   );
