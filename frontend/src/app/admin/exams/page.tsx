@@ -1,446 +1,97 @@
-
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AdminSectionNavigation from "../components/AdminSectionNavigation";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 interface Exam {
-  id: number;
-  title: string;
-  subject?: string | null;
-  duration_minutes: number;
-  total_questions: number;
-  start_time?: string | null;
-  end_time?: string | null;
-  negative_marking?: boolean;
-  proctoring_enabled?: boolean;
-  created_by?: number | null;
-  created_by_name?: string | null;
-  created_by_role?: string | null;
-  max_marks?: number | null;
+  id: number; title: string; subject?: string | null; duration_minutes: number;
+  total_questions: number; start_time?: string | null; end_time?: string | null;
+  created_by_name?: string | null; created_by_role?: string | null; max_marks?: number | null;
+  selection_rules?: { group_counts?: Record<string, number> } | null;
 }
-
-function formatDate(value?: string | null): string {
-  if (!value) return "Not scheduled";
-
+function formatDate(value?: string | null) {
+  if (!value) return "Not assigned";
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Invalid date";
-  }
-
-  return date.toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Kolkata",
-  }) + " IST";
+  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST";
 }
-
-function getExamStatus(exam: Exam): string {
+function statusFor(exam: Exam) {
   const now = Date.now();
-
-  const start = exam.start_time
-    ? new Date(exam.start_time).getTime()
-    : null;
-
-  const end = exam.end_time
-    ? new Date(exam.end_time).getTime()
-    : null;
-
-  if (start !== null && now < start) {
-    return "Upcoming";
-  }
-
-  if (end !== null && now > end) {
-    return "Completed";
-  }
-
-  if (start !== null && end !== null) {
-    return "Scheduled / Available";
-  }
-
-  return "Schedule unavailable";
+  const start = exam.start_time ? new Date(exam.start_time).getTime() : null;
+  const end = exam.end_time ? new Date(exam.end_time).getTime() : null;
+  if (start === null || end === null) return "Exam starting date and time not assigned";
+  if (now < start) return "Scheduled — " + formatDate(exam.start_time);
+  if (now <= end) return "Exam is ongoing";
+  return "Exam schedule ended";
 }
-
 export default function AdminExamsPage() {
   const router = useRouter();
-
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("newest");
-  const [deletingExamId, setDeletingExamId] = useState<number | null>(null);
-  const [actionMessage, setActionMessage] = useState("");
-
-  const getHeaders = useCallback(() => {
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
     const token = localStorage.getItem("examguard_access_token");
-
-    if (!token) {
-      router.replace("/login");
-      return null;
-    }
-
-    return {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-  }, [router]);
-
-  const loadExams = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
+    if (!token) { router.replace("/login"); return; }
     try {
-      const headers = getHeaders();
-
-      if (!headers) return;
-
-      const profileResponse = await fetch(`${API_URL}/users/me`, {
-        method: "GET",
-        headers,
-        cache: "no-store",
-      });
-      if (profileResponse.status === 401) {
-        router.replace("/login");
-        return;
-      }
+      const headers = { Authorization: `Bearer ${token}` };
+      const [profileResponse, examResponse] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams`, { headers, cache: "no-store" }),
+      ]);
       const profile = await profileResponse.json().catch(() => ({}));
-      if (!profileResponse.ok) {
-        throw new Error("Unable to check your account.");
-      }
-      if (profile.role !== "admin") {
-        router.replace("/examiner/dashboard");
-        return;
-      }
-
-      const response = await fetch(`${API_URL}/exams`, {
-        method: "GET",
-        headers,
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        router.replace("/login");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error("Unable to load examination records.");
-      }
-
-      const data = await response.json();
-
-      const examList = Array.isArray(data)
-        ? data
-        : Array.isArray(data.exams)
-          ? data.exams
-          : null;
-
-      if (!examList) {
-        throw new Error("Unexpected examination data returned by the server.");
-      }
-
-      setExams(examList);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load examination records."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [getHeaders, router]);
-
-  useEffect(() => {
-    loadExams();
-  }, [loadExams]);
-
-  async function deleteExam(exam: Exam) {
-    const confirmed = window.confirm(
-      `Permanently delete "${exam.title}"? This removes its assignments, attempts, answers, marks, results, and proctoring records. Questions still used by other examinations or question banks will be preserved. This cannot be undone.`
-    );
-    if (!confirmed || deletingExamId !== null) return;
-
-    const headers = getHeaders();
-    if (!headers) return;
-
-    setDeletingExamId(exam.id);
-    setActionMessage("");
-    try {
-      const response = await fetch(`${API_URL}/exams/${exam.id}`, {
-        method: "DELETE",
-        headers,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Unable to delete this examination.");
-      }
-      setExams((current) => current.filter((item) => item.id !== exam.id));
-      setActionMessage(data.message || "Examination and its dependent records were deleted.");
-    } catch (err) {
-      setActionMessage(err instanceof Error ? err.message : "Unable to delete this examination.");
-    } finally {
-      setDeletingExamId(null);
-    }
-  }
-
-  const visibleExams = [...exams]
-    .filter((exam) => {
-      const search = searchTerm.trim().toLowerCase();
-      if (!search) return true;
-      return [exam.title, exam.subject, exam.created_by_name, exam.created_by_role]
-        .some((value) => String(value || "").toLowerCase().includes(search));
-    })
-    .sort((first, second) => {
-      if (sortBy === "title-asc") return first.title.localeCompare(second.title);
-      if (sortBy === "title-desc") return second.title.localeCompare(first.title);
-      if (sortBy === "duration-short") return first.duration_minutes - second.duration_minutes;
-      if (sortBy === "duration-long") return second.duration_minutes - first.duration_minutes;
-      if (sortBy === "questions-low") return first.total_questions - second.total_questions;
-      if (sortBy === "questions-high") return second.total_questions - first.total_questions;
-      if (sortBy === "marks-low") return (first.max_marks ?? -1) - (second.max_marks ?? -1);
-      if (sortBy === "marks-high") return (second.max_marks ?? -1) - (first.max_marks ?? -1);
-      if (sortBy === "oldest") return first.id - second.id;
-      return second.id - first.id;
-    });
-
+      const data = await examResponse.json().catch(() => []);
+      if (!profileResponse.ok || !examResponse.ok) throw new Error(data.detail || "Unable to load examinations.");
+      if (profile.role !== "admin") { router.replace("/login"); return; }
+      const list = Array.isArray(data) ? data : Array.isArray(data.exams) ? data.exams : [];
+      setExams(list);
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load examinations."); }
+    finally { setLoading(false); }
+  }, [router]);
+  useEffect(() => { void load(); }, [load]);
+  const visible = useMemo(() => [...exams].filter((exam) => !search.trim() || [exam.title, exam.subject, exam.created_by_name, exam.created_by_role].some((value) => String(value || "").toLowerCase().includes(search.trim().toLowerCase()))).sort((a,b) => {
+    if (sort === "name-asc") return a.title.localeCompare(b.title);
+    if (sort === "name-desc") return b.title.localeCompare(a.title);
+    if (sort === "start-asc") return (a.start_time || "").localeCompare(b.start_time || "");
+    if (sort === "start-desc") return (b.start_time || "").localeCompare(a.start_time || "");
+    if (sort === "duration-asc") return a.duration_minutes - b.duration_minutes;
+    if (sort === "duration-desc") return b.duration_minutes - a.duration_minutes;
+    return b.id - a.id;
+  }), [exams, search, sort]);
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <header className="border-b border-white/10 bg-slate-900">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link
-              href="/admin/dashboard"
-              className="text-2xl font-bold"
-            >
-              ExamGuard <span className="text-blue-400">AI</span>
-            </Link>
-
-            <p className="mt-1 text-sm text-slate-400">
-              Administrator / Examinations
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/staff/manage-exams"
-              className="rounded-lg border border-cyan-500/40 px-4 py-2.5 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
-            >
-              Manage My Examinations
-            </Link>
-            <Link
-              href="/examiner/exams"
-              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
-            >
-              Create Examination
-            </Link>
-          </div>
-
-          <Link
-            href="/admin/dashboard"
-            className="rounded-lg border border-white/20 px-4 py-2 text-sm transition hover:bg-white/10"
-          >
-            ← Dashboard
-          </Link>
-        </div>
-      </header>
-
+      <header className="border-b border-white/10 bg-slate-900"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+        <div><Link href="/admin/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Administrator / Examinations — read only</p></div>
+        <AdminSectionNavigation previousHref="/admin/sections/examinations" previousLabel="Previous Section" />
+      </div></header>
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">
-              Examinations
-            </h1>
-
-            <p className="mt-2 text-slate-400">
-              View all examinations and see who created each one. Manage your own examinations in the separate management section.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={loadExams}
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold transition hover:bg-blue-500 disabled:opacity-60"
-          >
-            {loading ? "Refreshing..." : "Refresh Examinations"}
-          </button>
-        </div>
-
-        {error && (
-          <div
-            role="alert"
-            className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300"
-          >
-            {error}
-          </div>
-        )}
-        {actionMessage && (
-          <div role="status" className="mt-6 rounded-xl border border-white/10 bg-slate-900 px-5 py-4 text-sm text-slate-200">
-            {actionMessage}
-          </div>
-        )}
-
-        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold">
-                All Examinations
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {visibleExams.length} examination(s) found
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by name, subject, or creator"
-                aria-label="Search examinations"
-                className="min-w-[240px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-              />
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
-                aria-label="Sort examinations"
-                className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="title-asc">Name A to Z</option>
-                <option value="title-desc">Name Z to A</option>
-                <option value="duration-short">Shortest time</option>
-                <option value="duration-long">Longest time</option>
-                <option value="questions-low">Fewest questions</option>
-                <option value="questions-high">Most questions</option>
-                <option value="marks-low">Lowest maximum marks</option>
-                <option value="marks-high">Highest maximum marks</option>
-              </select>
-            </div>
-          </div>
-
-          {loading ? (
-            <p className="py-12 text-center text-slate-400">
-              Loading examinations...
-            </p>
-          ) : visibleExams.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="font-semibold text-slate-300">
-                {exams.length === 0 ? "No examinations found." : "No examinations match your search."}
-              </p>
-            </div>
-          ) : (
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-slate-400">
-                    <th className="px-4 py-3">Examination</th>
-                    <th className="px-4 py-3">Subject</th>
-                    <th className="px-4 py-3">Created By</th>
-                    <th className="px-4 py-3">Duration</th>
-                    <th className="px-4 py-3">Questions</th>
-                    <th className="px-4 py-3">Maximum Marks</th>
-                    <th className="px-4 py-3">Start Time</th>
-                    <th className="px-4 py-3">End Time</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Settings</th>
-                    <th className="px-4 py-3">Questions</th>
-                    <th className="px-4 py-3">Admin Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {visibleExams.map((exam) => (
-                    <tr
-                      key={exam.id}
-                      className="border-b border-white/5 last:border-0"
-                    >
-                      <td className="px-4 py-4">
-                        <p className="font-semibold">{exam.title}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Exam ID: {exam.id}
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.subject || "—"}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        <span className="font-medium text-white">{exam.created_by_name || "Unknown"}</span>
-                        <span className="mt-1 block text-xs capitalize text-slate-400">{exam.created_by_role || "—"}</span>
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.duration_minutes} minutes
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.total_questions ?? "—"}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {exam.max_marks === null || exam.max_marks === undefined ? "Not available yet" : exam.max_marks}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {formatDate(exam.start_time)}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-300">
-                        {formatDate(exam.end_time)}
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
-                          {getExamStatus(exam)}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="space-y-1 text-xs text-slate-400">
-                          <p>
-                            Proctoring:{" "}
-                            {exam.proctoring_enabled ? "Enabled" : "Disabled"}
-                          </p>
-
-                          <p>
-                            Negative marking:{" "}
-                            {exam.negative_marking ? "Enabled" : "Disabled"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/staff/examinations/${exam.id}`}
-                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-cyan-300 hover:bg-white/10"
-                          >
-                            View Questions
-                          </Link>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => deleteExam(exam)}
-                          disabled={deletingExamId !== null}
-                          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {deletingExamId === exam.id ? "Deleting..." : "Delete Examination"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-3xl font-bold">Examinations</h1><p className="mt-2 text-slate-400">All examinations created by Admins and Examiners. This area is for viewing only.</p></div><button type="button" onClick={load} disabled={loading} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50">Refresh</button></div>
+        {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-400">{visible.length} examination(s)</p><div className="flex flex-wrap gap-3">
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search exam, subject, or creator" aria-label="Search examinations" className="min-w-[240px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"/>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option><option value="duration-asc">Shortest duration</option><option value="duration-desc">Longest duration</option></select>
+          </div></div>
+          {loading ? <p className="py-12 text-center text-slate-400">Loading examinations...</p> : visible.length === 0 ? <p className="py-12 text-center text-slate-400">{exams.length ? "No examinations match your search." : "No examinations found."}</p> : (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visible.map((exam) => (
+              <article key={exam.id} className="flex flex-col rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <div className="flex-1"><h2 className="text-lg font-bold">{exam.title}</h2><p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
+                  <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
+                  <p className="mt-3 text-sm text-slate-300">Created by: <span className="font-semibold text-white">{exam.created_by_name || "Unknown"}</span> <span className="capitalize text-slate-400">({exam.created_by_role || "—"})</span></p>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div><dt className="text-xs text-slate-500">Start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div><div><dt className="text-xs text-slate-500">End</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Questions per paper</dt><dd className="mt-1">{exam.total_questions}</dd></div><div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
+                    <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div><div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
+                  </dl>
+                  {exam.selection_rules?.group_counts && <p className="mt-4 text-xs text-slate-400">{Object.entries(exam.selection_rules.group_counts).filter(([,n]) => n > 0).map(([key,n]) => `${key.replace("|"," / ")}: ${n}`).join(" · ")}</p>}
+                </div>
+                <div className="mt-5 border-t border-white/10 pt-4"><Link href={`/admin/exams/${exam.id}`} className="inline-flex rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold hover:bg-cyan-500">View Examination & Students</Link></div>
+              </article>
+            ))}</div>
           )}
         </section>
       </div>
