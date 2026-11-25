@@ -269,7 +269,11 @@ def list_exams(
         ).count()
         completed_sessions = db.query(ExamSession.id).filter(
             ExamSession.exam_id == exam.id,
-            ExamSession.status.in_(("submitted", "auto_submitted", "expired")),
+            ExamSession.status.in_(("submitted", "auto_submitted")),
+        ).count()
+        expired_sessions = db.query(ExamSession.id).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.status == "expired",
         ).count()
         published_results = db.query(Result.id).join(
             ExamSession, Result.session_id == ExamSession.id
@@ -293,6 +297,7 @@ def list_exams(
             "assigned_question_count": len(assigned_questions),
             "active_assignment_count": active_assignments,
             "completed_session_count": completed_sessions,
+            "expired_session_count": expired_sessions,
             "published_result_count": published_results,
             "exam_status": exam_status,
         }
@@ -1388,7 +1393,9 @@ def list_exam_assignments(
             return "not_taken"
         if session.status == "in_progress":
             return "partially_attempted"
-        if session.status in {"submitted", "auto_submitted", "expired"}:
+        if session.status == "expired":
+            return "expired"
+        if session.status in {"submitted", "auto_submitted"}:
             return "completed"
         if session.status == "not_started":
             if exam.start_time is None or now < exam.start_time:
