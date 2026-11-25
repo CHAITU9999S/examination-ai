@@ -17,6 +17,7 @@ from app.schemas import ExamCreate, ExamScheduleUpdate, QuestionCreate, UserRole
 from app.services.question_validation import validate_question
 from app.dependencies import require_role
 from app.services.session_service import generate_session_question_ids
+from app.services.evaluation_service import evaluate_exam_session
 from app.services.exam_config import (
     validate_exam_config,
     normalize_to_naive_utc,
@@ -426,6 +427,29 @@ def get_student_examination_overview(
             ExamSession.exam_id == exam.id,
             ExamSession.student_id == current_user.id,
         ).order_by(ExamSession.id.desc()).first()
+
+        start_at = normalize_to_naive_utc(exam.start_time)
+        end_at = normalize_to_naive_utc(exam.end_time)
+        if session is not None and session.status == "in_progress":
+            if session.is_paused:
+                if end_at is not None and now >= end_at:
+                    session.status = "expired"
+                    session.exam_token_refresh_hash = None
+                    db.commit()
+                    db.refresh(session)
+            else:
+                session_deadline = normalize_to_naive_utc(session.expires_at)
+                deadlines = [value for value in (session_deadline, end_at) if value is not None]
+                deadline = min(deadlines) if deadlines else None
+                if deadline is not None and now >= deadline:
+                    session.status = "submitted"
+                    session.submitted_at = deadline
+                    db.commit()
+                    db.refresh(session)
+                    try:
+                        evaluate_exam_session(db, session.id)
+                    except Exception as error:
+                        print("Automatic evaluation could not be completed:", str(error))
 
         result = None
         if session is not None:
