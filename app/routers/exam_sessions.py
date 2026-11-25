@@ -408,9 +408,11 @@ def start_exam(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Your previous exam session has expired or been submitted.",
             )
-        if session.status == "not_started" and not session.prestart_stage:
-            session.prestart_stage = "face_capture"
-            session.prestart_expires_at = exam_end
+        if session.status == "not_started":
+            if not session.prestart_stage:
+                session.prestart_stage = "face_capture"
+            if session.prestart_expires_at is None:
+                session.prestart_expires_at = exam_end
         try:
             get_or_create_session_question_ids(session, exam, db)
         except ValueError as error:
