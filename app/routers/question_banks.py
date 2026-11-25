@@ -229,7 +229,7 @@ def list_bank_questions(
             "marks": question.marks,
             "negative_marks": question.negative_marks,
             "tags": question.tags or [],
-            "question_image_available": bool(question.question_image_path),
+            "question_image_available": bool(question.question_image_data or question.question_image_path),
             "expected_answer_image_available": bool(question.expected_answer_image_data),
             "options": [
                 {"id": option.id, "option_text": option.option_text, "is_correct": option.is_correct}
