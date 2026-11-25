@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from app.auth import hash_password, verify_password
 from app.models import (
-    AdminActivityLog, Answer, Exam, ExamQuestion, ExamSession,
+    AdminActivityLog, Answer, Exam, ExamAssignment, ExamQuestion, ExamSession,
     Option, PlatformSetting, QuestionBank, Result, User,
 )
 
