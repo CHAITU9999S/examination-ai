@@ -17,7 +17,7 @@ const sections: Record<string, { title: string; description: string; items: Sect
       { title: "Admins", description: "Manage administrator accounts and review Admin activity.", href: "/admin/sections/admins" },
       { title: "Examiners", description: "Manage Examiner accounts and review their examination and question-bank activity.", href: "/admin/sections/examiners" },
       { title: "Students", description: "Manage students, schedules, and performance.", href: "/admin/sections/students" },
-      { title: "All Users", description: "View and manage all platform user accounts.", href: "/admin/users" },
+      { title: "User Management", description: "View and manage all platform user accounts.", href: "/admin/users" },
     ],
   },
   admins: {
