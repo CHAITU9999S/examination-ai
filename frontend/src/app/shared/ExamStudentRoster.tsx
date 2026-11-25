@@ -11,7 +11,7 @@ type Student = { student_id:number; full_name:string; email:string; department?:
 type Review = { questions:Array<{question_order:number;answer_id:number|null;evaluation_count:number; awarded_marks:number|null; maximum_marks:number; evaluation_history:Array<{evaluation_number:number;marks:number}>;is_objective:boolean}> };
 type ResultRow = {session_id:number; student_id:number; result_published:boolean; obtained_marks:number|null; total_marks:number|null; grade:string|null; session_status:string};
 function dateText(value?:string|null){if(!value)return "Not assigned";const d=new Date(value);return Number.isNaN(d.getTime())?"Not available":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
-function statusText(value:string){return ({schedule_not_started:"Schedule not started yet",not_taken:"Exam not taken by the student",partially_attempted:"Partially attempted",completed:"Exam completed"} as Record<string,string>)[value]||value;}
+function statusText(value:string){return ({schedule_not_started:"Schedule not started yet",not_taken:"Exam not taken by the student",partially_attempted:"Partially attempted",completed:"Exam completed",expired:"Exam expired"} as Record<string,string>)[value]||value;}
 export default function ExamStudentRoster({examId,readOnly=false}:{examId:string;readOnly?:boolean}){
  const router=useRouter();
  const [exam,setExam]=useState<Exam|null>(null);
