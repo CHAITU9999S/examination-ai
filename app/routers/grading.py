@@ -809,7 +809,9 @@ def list_submitted_sessions_for_review(
         ExamSession.status.in_(("submitted", "auto_submitted")),
     )
 
-    query = query.filter(Exam.created_by == current_user.id)
+    role = getattr(current_user.role, "value", current_user.role)
+    if role == "examiner":
+        query = query.filter(Exam.created_by == current_user.id)
 
     rows = query.order_by(
         ExamSession.submitted_at.desc(),
@@ -825,6 +827,7 @@ def list_submitted_sessions_for_review(
                 "student_id": student.id,
                 "student_name": student.full_name,
                 "submitted_at": session.submitted_at,
+                "face_photo_url": f"/grading/sessions/{session.id}/face-photo" if session.face_capture_data else None,
                 "result_ready": result is not None,
                 "is_published": bool(result.is_published) if result else False,
                 "obtained_marks": result.obtained_marks if result else None,
