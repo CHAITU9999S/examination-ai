@@ -723,3 +723,54 @@ def test_admin_schedules_lists_only_future_examination_assignments(
     assert schedules[0]["exam_id"] == future_exam.id
     assert schedules[0]["exam_title"] == future_exam.title
 
+def test_examiner_activity_logs_include_examination_and_question_bank_changes(
+    client, db_session, admin, examiner
+):
+    db_session.add_all([
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="exam_question_added",
+            details={"exam_id": 12, "question_id": 34},
+        ),
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="exam_question_bank_deleted",
+            details={"exam_id": 12},
+        ),
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="question_added_to_bank",
+            details={"bank_id": 56, "question_id": 78},
+        ),
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="question_updated_in_bank",
+            details={"bank_id": 56, "question_id": 78},
+        ),
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="question_deleted_from_bank",
+            details={"bank_id": 56, "question_id": 78},
+        ),
+        AdminActivityLog(
+            actor_user_id=examiner.id,
+            action="student_login",
+            details={},
+        ),
+    ])
+    db_session.commit()
+
+    headers = get_auth_headers(client, admin.email, "AdminPass123!")
+    response = client.get("/admin/examiner-activity-logs", headers=headers)
+
+    assert response.status_code == 200
+    actions = {item["action"] for item in response.json()}
+    assert {
+        "exam_question_added",
+        "exam_question_bank_deleted",
+        "question_added_to_bank",
+        "question_updated_in_bank",
+        "question_deleted_from_bank",
+    }.issubset(actions)
+    assert "student_login" not in actions
+
