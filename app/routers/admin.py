@@ -245,6 +245,12 @@ def delete_user(
         "role": target_user.role,
     }
 
+    if target_user.role == UserRole.EXAMINER.value:
+        return delete_examiner_with_records(user_id, current_admin, db)
+
+    if target_user.role == UserRole.ADMIN.value:
+        return delete_admin_with_records(user_id, current_admin, db)
+
     if target_user.role == UserRole.STUDENT.value:
         try:
             session_ids = [
