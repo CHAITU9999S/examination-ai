@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../admin/components/AdminSectionNavigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -14,13 +15,42 @@ interface Exam {
   total_questions: number;
   max_marks?: number | null;
   created_by?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  selection_rules?: { group_counts?: Record<string, number> } | null;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Not assigned";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST";
+}
+
+function statusFor(exam: Exam) {
+  const now = Date.now();
+  const start = exam.start_time ? new Date(exam.start_time).getTime() : null;
+  const end = exam.end_time ? new Date(exam.end_time).getTime() : null;
+  if (start === null || end === null) return "Exam starting date and time not assigned";
+  if (now < start) return "Scheduled — " + formatDate(exam.start_time);
+  if (now <= end) return "Exam is ongoing";
+  return "Exam schedule ended — evaluation status is shown for each student";
+}
+
+function groupSummary(exam: Exam) {
+  const groups = exam.selection_rules?.group_counts;
+  if (!groups) return "Question type and difficulty counts configured in the examination";
+  return Object.entries(groups).filter(([, count]) => Number(count) > 0).map(([key, count]) => {
+    const [difficulty, type] = key.split("|");
+    return `${type.replaceAll("_", " ")} / ${difficulty}: ${count}`;
+  }).join(" · ") || "No type/difficulty breakdown configured";
 }
 
 export default function ManageExamsPage() {
   const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
-  const [userName, setUserName] = useState("");
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
+  const [previousHref, setPreviousHref] = useState("/examiner/dashboard");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -30,10 +60,7 @@ export default function ManageExamsPage() {
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem("examguard_access_token");
-    if (!token) {
-      router.replace("/login");
-      return null;
-    }
+    if (!token) { router.replace("/login"); return null; }
     return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   }, [router]);
 
@@ -47,23 +74,17 @@ export default function ManageExamsPage() {
         fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/exams?mine=true`, { headers, cache: "no-store" }),
       ]);
-      if (profileResponse.status === 401 || examsResponse.status === 401) {
-        router.replace("/login");
-        return;
-      }
+      if (profileResponse.status === 401 || examsResponse.status === 401) { router.replace("/login"); return; }
       const profile = await profileResponse.json().catch(() => ({}));
       const data = await examsResponse.json().catch(() => []);
-      if (!profileResponse.ok || !examsResponse.ok) {
-        throw new Error(data.detail || "Unable to load your examinations.");
-      }
-      if (profile.role !== "admin" && profile.role !== "examiner") {
-        router.replace("/login");
-        return;
-      }
-      setUserName(profile.full_name || "");
-      setDashboardHref(profile.role === "admin" ? "/admin/dashboard" : "/examiner/dashboard");
-      const allExams = Array.isArray(data) ? data : Array.isArray(data.exams) ? data.exams : [];
-      setExams(allExams.filter((exam: Exam) => Number(exam.created_by) === Number(profile.id)));
+      if (!profileResponse.ok || !examsResponse.ok) throw new Error(data.detail || "Unable to load your examinations.");
+      if (profile.role !== "admin" && profile.role !== "examiner") { router.replace("/login"); return; }
+      const admin = profile.role === "admin";
+      setIsAdmin(admin);
+      setDashboardHref(admin ? "/admin/dashboard" : "/examiner/dashboard");
+      setPreviousHref(admin ? "/admin/sections/examinations" : "/examiner/dashboard");
+      const all = Array.isArray(data) ? data : Array.isArray(data.exams) ? data.exams : [];
+      setExams(all.filter((exam: Exam) => Number(exam.created_by) === Number(profile.id)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load your examinations.");
     } finally {
@@ -71,35 +92,24 @@ export default function ManageExamsPage() {
     }
   }, [getHeaders, router]);
 
-  useEffect(() => {
-    void loadExams();
-  }, [loadExams]);
+  useEffect(() => { void loadExams(); }, [loadExams]);
 
-  const visibleExams = useMemo(() => {
-    return [...exams]
-      .filter((exam) => {
-        const search = searchTerm.trim().toLowerCase();
-        return !search || [exam.title, exam.subject].some((value) => String(value || "").toLowerCase().includes(search));
-      })
-      .sort((first, second) => {
-        if (sortBy === "title-asc") return first.title.localeCompare(second.title);
-        if (sortBy === "title-desc") return second.title.localeCompare(first.title);
-        if (sortBy === "duration-short") return first.duration_minutes - second.duration_minutes;
-        if (sortBy === "duration-long") return second.duration_minutes - first.duration_minutes;
-        if (sortBy === "questions-low") return first.total_questions - second.total_questions;
-        if (sortBy === "questions-high") return second.total_questions - first.total_questions;
-        if (sortBy === "marks-low") return (first.max_marks ?? -1) - (second.max_marks ?? -1);
-        if (sortBy === "marks-high") return (second.max_marks ?? -1) - (first.max_marks ?? -1);
-        if (sortBy === "oldest") return first.id - second.id;
-        return second.id - first.id;
-      });
-  }, [exams, searchTerm, sortBy]);
+  const visibleExams = useMemo(() => [...exams]
+    .filter((exam) => !searchTerm.trim() || [exam.title, exam.subject].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
+    .sort((a, b) => {
+      if (sortBy === "name-asc") return a.title.localeCompare(b.title);
+      if (sortBy === "name-desc") return b.title.localeCompare(a.title);
+      if (sortBy === "duration-asc") return a.duration_minutes - b.duration_minutes;
+      if (sortBy === "duration-desc") return b.duration_minutes - a.duration_minutes;
+      if (sortBy === "questions-asc") return a.total_questions - b.total_questions;
+      if (sortBy === "questions-desc") return b.total_questions - a.total_questions;
+      if (sortBy === "start-asc") return (a.start_time || "").localeCompare(b.start_time || "");
+      if (sortBy === "start-desc") return (b.start_time || "").localeCompare(a.start_time || "");
+      return b.id - a.id;
+    }), [exams, searchTerm, sortBy]);
 
   async function deleteExam(exam: Exam) {
-    const confirmed = window.confirm(
-      `Delete "${exam.title}" and its related examination records? This cannot be undone.`
-    );
-    if (!confirmed) return;
+    if (!window.confirm(`Delete "${exam.title}" and its related examination records? This cannot be undone.`)) return;
     setWorkingId(exam.id);
     setError("");
     setMessage("");
@@ -109,7 +119,7 @@ export default function ManageExamsPage() {
       const response = await fetch(`${API_URL}/exams/${exam.id}`, { method: "DELETE", headers });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "Unable to delete this examination.");
-      setMessage(`"${exam.title}" and its related records were deleted.`);
+      setMessage(data.message || `"${exam.title}" was deleted.`);
       await loadExams();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete this examination.");
@@ -122,64 +132,55 @@ export default function ManageExamsPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link href="/" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link>
-            <p className="mt-1 text-sm text-slate-400">Manage Examination</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+          <div><Link href={dashboardHref} className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Manage Examinations</p></div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin ? <AdminSectionNavigation previousHref={previousHref} previousLabel="Previous Section" dashboardHref={dashboardHref} /> : <Link href={dashboardHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link>}
             <Link href="/examiner/exams" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">+ Create Examination</Link>
-            <Link href="/staff/examinations" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">View Examinations</Link>
-            <Link href={dashboardHref} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Dashboard</Link>
           </div>
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <h1 className="text-3xl font-bold">Manage My Examinations</h1>
-        <p className="mt-2 text-slate-400">Only examinations created by your account are shown here{userName ? `, ${userName}` : ""}.</p>
-        {message && <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300">{message}</div>}
-        {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
-        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div><h1 className="text-3xl font-bold">Manage My Examinations</h1><p className="mt-2 text-slate-400">Only examinations created by the currently logged-in account appear here.</p></div>
+          <button type="button" onClick={loadExams} disabled={loading} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50">Refresh</button>
+        </div>
+        {message && <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">{message}</div>}
+        {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-400">{visibleExams.length} examination(s)</p>
             <div className="flex flex-wrap gap-3">
-              <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search my examinations" aria-label="Search my examinations" className="min-w-[220px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort my examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="title-asc">Name A to Z</option>
-                <option value="title-desc">Name Z to A</option>
-                <option value="duration-short">Shortest time</option>
-                <option value="duration-long">Longest time</option>
-                <option value="questions-low">Fewest questions</option>
-                <option value="questions-high">Most questions</option>
-                <option value="marks-low">Lowest maximum marks</option>
-                <option value="marks-high">Highest maximum marks</option>
+              <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search examination name or subject" aria-label="Search examinations" className="min-w-[240px] rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="Sort examinations" className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white">
+                <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name-asc">Name A to Z</option><option value="name-desc">Name Z to A</option><option value="duration-asc">Shortest duration</option><option value="duration-desc">Longest duration</option><option value="questions-asc">Fewest questions</option><option value="questions-desc">Most questions</option><option value="start-asc">Earliest start</option><option value="start-desc">Latest start</option>
               </select>
-              <button type="button" onClick={loadExams} disabled={loading} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50">Refresh</button>
             </div>
           </div>
-          {loading ? <p className="py-12 text-center text-slate-400">Loading your examinations...</p> : visibleExams.length === 0 ? (
-            <p className="py-12 text-center text-slate-400">{exams.length ? "No examinations match your search." : "You have not created any examinations yet."}</p>
-          ) : (
-            <div className="mt-5 overflow-x-auto">
-              <table className="w-full min-w-[850px] text-left text-sm">
-                <thead><tr className="border-b border-white/10 text-slate-400">
-                  <th className="px-4 py-3">Examination</th><th className="px-4 py-3">Subject</th><th className="px-4 py-3">Maximum Time</th><th className="px-4 py-3">Questions</th><th className="px-4 py-3">Maximum Marks</th><th className="px-4 py-3">Actions</th>
-                </tr></thead>
-                <tbody>{visibleExams.map((exam) => (
-                  <tr key={exam.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-4 py-4 font-semibold">{exam.title}</td>
-                    <td className="px-4 py-4 text-slate-300">{exam.subject || "—"}</td>
-                    <td className="px-4 py-4 text-slate-300">{exam.duration_minutes} minutes</td>
-                    <td className="px-4 py-4 text-slate-300">{exam.total_questions}</td>
-                    <td className="px-4 py-4 text-slate-300">{exam.max_marks === null || exam.max_marks === undefined ? "Not available yet" : exam.max_marks}</td>
-                    <td className="px-4 py-4"><div className="flex flex-wrap gap-2">
-                      <Link href={`/examiner/exams/${exam.id}/question-bank`} className="rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30">Manage Examination</Link>
-                      <button type="button" onClick={() => deleteExam(exam)} disabled={workingId === exam.id} className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-50">{workingId === exam.id ? "Deleting..." : "Delete"}</button>
-                    </div></td>
-                  </tr>
-                ))}</tbody>
-              </table>
+          {loading ? <p className="py-12 text-center text-slate-400">Loading examinations...</p> : visibleExams.length === 0 ? <p className="py-12 text-center text-slate-400">{exams.length ? "No examinations match your search." : "You have not created any examinations yet."}</p> : (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visibleExams.map((exam) => (
+                <article key={exam.id} className="flex flex-col rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-bold">{exam.title}</h2>
+                    <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
+                    <p className="mt-4 text-xs font-semibold text-cyan-300">{statusFor(exam)}</p>
+                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div><dt className="text-xs text-slate-500">Start time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.start_time)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">End time</dt><dd className="mt-1 text-slate-200">{formatDate(exam.end_time)}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Questions in paper</dt><dd className="mt-1">{exam.total_questions}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
+                      <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
+                    </dl>
+                    <p className="mt-4 text-xs leading-5 text-slate-400">{groupSummary(exam)}</p>
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                    <Link href={`/staff/manage-exams/${exam.id}`} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold hover:bg-cyan-500">Students & Evaluation</Link>
+                    <Link href={`/examiner/exams/${exam.id}/question-bank`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Question Bank</Link>
+                    <button type="button" onClick={() => deleteExam(exam)} disabled={workingId !== null} className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">{workingId === exam.id ? "Deleting..." : "Delete"}</button>
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>
