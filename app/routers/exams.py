@@ -38,6 +38,17 @@ def _audit_exam_action(db: Session, actor_id: int, action: str, details: dict):
     ))
 
 
+def _ensure_exam_bank_not_started(exam: Exam) -> None:
+    """Prevent question-bank changes once the scheduled start instant is reached."""
+    scheduled_start = normalize_to_naive_utc(exam.start_time)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if scheduled_start is not None and now_utc >= scheduled_start:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The examination has started. Its question bank can no longer be changed.",
+        )
+
+
 # ==========================================
 # CREATE EXAM
 # ==========================================
@@ -321,6 +332,7 @@ def add_exam_question(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the examination creator can add questions.",
         )
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(
         ExamSession.exam_id == exam_id
     ).first() is not None:
@@ -456,6 +468,7 @@ def remove_exam_question(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the examination creator can remove questions.",
         )
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(
         ExamSession.exam_id == exam_id
     ).first() is not None:
@@ -517,6 +530,7 @@ def assign_exam_questions(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the examination creator can change its question assignments.",
         )
+    _ensure_exam_bank_not_started(exam)
 
     if any(
         isinstance(question_id, bool)
@@ -753,14 +767,7 @@ def list_reusable_question_banks(
         QuestionBank, QuestionBank.id == ExamQuestion.question_id
     ).filter(
         Exam.id < target.id,
-        Exam.created_by == current_user.id,
     )
-    if current_user.role == UserRole.ADMIN.value:
-        query = db.query(Exam, ExamQuestion, QuestionBank).join(
-            ExamQuestion, ExamQuestion.exam_id == Exam.id
-        ).join(
-            QuestionBank, QuestionBank.id == ExamQuestion.question_id
-        ).filter(Exam.id < target.id)
 
     rows = query.order_by(Exam.id.desc(), ExamQuestion.question_order.asc()).all()
     banks = {}
@@ -802,6 +809,7 @@ def reuse_questions_from_previous_banks(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can add questions.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
         raise HTTPException(status_code=409, detail="The question bank is locked after an exam session is created.")
     if len(data.question_ids) != len(set(data.question_ids)):
@@ -835,7 +843,9 @@ def reuse_questions_from_previous_banks(
     for assignment, source_exam in source_assignments:
         if source_exam.id >= exam_id:
             continue
-        if current_user.role == UserRole.ADMIN.value or source_exam.created_by == current_user.id:
+        # Admins and Examiners can browse all creators' question banks.
+        # Only the destination examination itself remains owner-editable.
+        if source_exam.created_by is not None:
             allowed_source_ids.add(assignment.question_id)
     if allowed_source_ids != source_ids:
         raise HTTPException(
@@ -958,6 +968,7 @@ def delete_exam_question_bank(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the examination creator can delete this question bank.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
         raise HTTPException(
             status_code=409,
@@ -1222,6 +1233,7 @@ def configure_question_timer(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can configure question timers.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
         raise HTTPException(status_code=409, detail="Question timers cannot change after an exam session is created.")
     assignment = db.query(ExamQuestion).filter(
@@ -1257,6 +1269,7 @@ def configure_question_negative_marks(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the exam creator can configure question penalties.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
         raise HTTPException(status_code=409, detail="Question penalties cannot change after an exam session is created.")
     question = db.query(QuestionBank).join(
@@ -1613,6 +1626,7 @@ def update_exam_question_marks(
         raise HTTPException(status_code=404, detail="Exam not found.")
     if exam.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Only the examination creator can change question marks.")
+    _ensure_exam_bank_not_started(exam)
     if db.query(ExamSession.id).filter(ExamSession.exam_id == exam_id).first():
         raise HTTPException(status_code=409, detail="Question marks cannot change after a student session has been created.")
 
