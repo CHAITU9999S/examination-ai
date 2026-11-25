@@ -1122,6 +1122,8 @@ def list_exam_assignments(
         if session.status in {"submitted", "auto_submitted", "expired"}:
             return "completed"
         if session.status == "not_started":
+            if exam.start_time is None or now < exam.start_time:
+                return "schedule_not_started"
             return "not_taken"
         return "not_taken"
 
