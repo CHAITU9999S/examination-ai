@@ -294,6 +294,7 @@ def list_exams(
             "selection_rules": exam.selection_rules,
             "start_time": utc_timestamp(exam.start_time),
             "end_time": utc_timestamp(exam.end_time),
+            "published_at": utc_timestamp(exam.published_at),
             "negative_marking": exam.negative_marking,
             "proctoring_enabled": exam.proctoring_enabled,
             "gaze_tracking_sensitivity": exam.gaze_tracking_sensitivity,
@@ -1702,6 +1703,63 @@ def update_exam_question_marks(
         "marks_by_group": cleaned_marks,
         "revisions_used": revision_count + 1,
         "revisions_remaining": max(0, 2 - revision_count),
+    }
+
+
+@router.post("/{exam_id}/publish")
+def publish_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner", "admin")),
+):
+    """Record the one-time publication instant for an examination."""
+    exam = db.query(Exam).filter(Exam.id == exam_id).with_for_update().first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Exam not found.")
+    if exam.created_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the examination creator can publish this exam.",
+        )
+
+    if exam.published_at is not None:
+        published_at = exam.published_at
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
+        return {
+            "message": "Examination was already published.",
+            "exam_id": exam.id,
+            "published_at": published_at.isoformat(),
+        }
+
+    if exam.start_time is None or exam.end_time is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Set the examination start and end times before publishing.",
+        )
+
+    question_count = db.query(ExamQuestion.id).filter(
+        ExamQuestion.exam_id == exam_id,
+    ).count()
+    if question_count < int(exam.total_questions or 0):
+        raise HTTPException(
+            status_code=409,
+            detail="Add enough questions to the Examination Bank before publishing.",
+        )
+
+    exam.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    _audit_exam_action(db, current_user.id, "examination_published", {
+        "exam_id": exam.id,
+        "title": exam.title,
+        "published_at": exam.published_at.isoformat(),
+    })
+    db.commit()
+    db.refresh(exam)
+
+    return {
+        "message": "Examination published successfully.",
+        "exam_id": exam.id,
+        "published_at": exam.published_at.replace(tzinfo=timezone.utc).isoformat(),
     }
 
 
