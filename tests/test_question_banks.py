@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from app.auth import create_access_token
-from app.models import Exam, QuestionBank, User
+from app.models import AdminActivityLog, Exam, QuestionBank, User
 from app.question_bank_models import QuestionCollection, QuestionCollectionItem
 
 
@@ -163,3 +163,22 @@ def test_question_bank_questions_cannot_be_copied_after_exam_start(client, db_se
     assert response.json()["detail"] == (
         "The examination has started. Its question bank can no longer be changed."
     )
+
+def test_question_bank_creation_log_contains_saved_bank_id(client, db_session):
+    admin = create_user(db_session, "admin", "bank_creation_log_admin@test.com")
+
+    response = client.post(
+        "/question-banks/",
+        json={"name": "Logged Bank", "subject": "Mathematics", "description": "Audit test"},
+        headers=auth_headers(admin),
+    )
+
+    assert response.status_code == 201
+    bank_id = response.json()["bank_id"]
+    log = db_session.query(AdminActivityLog).filter(
+        AdminActivityLog.actor_user_id == admin.id,
+        AdminActivityLog.action == "question_bank_created",
+    ).one()
+    assert log.details["bank_id"] == bank_id
+    assert log.details["bank_name"] == "Logged Bank"
+
