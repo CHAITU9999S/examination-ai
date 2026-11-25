@@ -16,6 +16,10 @@ interface PendingAnswer {
   student_name?: string;
   exam_id: number;
   exam_title?: string;
+  creator_name?: string | null;
+  creator_role?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   question_text: string;
   question_type: string;
   difficulty?: string | null;
@@ -645,6 +649,10 @@ export default function ExaminerGradingPage() {
                           `Student #${answer.student_id}`}
                       </p>
 
+                      <p className="mt-1 text-xs text-slate-400">
+                        Created by: {answer.creator_name || "Unknown"} · Assigned by: {answer.assigned_by_name || "Unknown"}
+                      </p>
+
                       <p className="mt-1 text-sm text-slate-400">
                         Question #{answer.question_id} ·{" "}
                         {answer.question_type} ·{" "}
@@ -696,6 +704,7 @@ export default function ExaminerGradingPage() {
                 <article key={answer.answer_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-800/50 p-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-cyan-300">{answer.exam_title} · {answer.student_name || `Student #${answer.student_id}`}</p>
+                    <p className="mt-1 text-xs text-slate-400">Created by: {answer.creator_name || "Unknown"} · Assigned by: {answer.assigned_by_name || "Unknown"}</p>
                     <p className="mt-1 line-clamp-2 text-sm">{answer.question_text}</p>
                     <p className="mt-2 text-xs text-slate-400">Final marks: {answer.awarded_marks} / {answer.marks}</p>
                   </div>
@@ -745,6 +754,9 @@ export default function ExaminerGradingPage() {
                 <p className="mt-1">
                   {selectedAnswer.exam_title ||
                     `Examination #${selectedAnswer.exam_id}`}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Created by: {selectedAnswer.creator_name || "Unknown"} · Assigned by: {selectedAnswer.assigned_by_name || "Unknown"}
                 </p>
               </div>
 
