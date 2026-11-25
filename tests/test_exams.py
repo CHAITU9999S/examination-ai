@@ -406,6 +406,19 @@ def test_admin_and_other_examiner_cannot_edit_an_exam_they_do_not_own(
             "Only the examination creator can change its question assignments."
         )
 
+    admin_assignments = client.get(
+        f"/exams/{exam.id}/assignments",
+        headers=get_auth_headers(admin),
+    )
+    assert admin_assignments.status_code == 200
+    assert admin_assignments.json()["exam_id"] == exam.id
+
+    examiner_assignments = client.get(
+        f"/exams/{exam.id}/assignments",
+        headers=get_auth_headers(other_examiner),
+    )
+    assert examiner_assignments.status_code == 403
+
 def test_exam_creator_can_add_question_to_own_exam_bank(
     client,
     db_session,
