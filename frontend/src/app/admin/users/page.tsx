@@ -225,7 +225,7 @@ export default function AdminUsersPage() {
               ExamGuard <span className="text-blue-400">AI</span>
             </Link>
             <p className="mt-1 text-sm text-slate-400">
-              Administrator / User Management
+              Administrator / All Users
             </p>
           </div>
 
@@ -236,9 +236,9 @@ export default function AdminUsersPage() {
       <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">User Management</h1>
+            <h1 className="text-3xl font-bold">All Users</h1>
             <p className="mt-2 text-slate-400">
-              Manage student, examiner, and administrator accounts.
+              View and manage all Student, Examiner, and Admin accounts.
             </p>
           </div>
 
