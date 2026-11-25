@@ -1450,3 +1450,108 @@ def test_exam_creator_cannot_assign_students_after_schedule_end(client, db_sessi
     ).first()
     assert assignment is None
 
+
+
+
+def test_examiner_can_reuse_questions_from_another_exam_creator(client, db_session):
+    source_owner = create_user(db_session, "admin", "cross_creator_source@test.com")
+    exam_creator = create_user(db_session, "examiner", "cross_creator_target@test.com")
+    source_exam = Exam(
+        title="Admin Source Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=source_owner.id,
+    )
+    db_session.add(source_exam)
+    db_session.flush()
+    source_question = QuestionBank(
+        question_text="Question from another creator",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=2,
+        created_by=source_owner.id,
+    )
+    target_exam = Exam(
+        title="Examiner Destination Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        created_by=exam_creator.id,
+    )
+    db_session.add_all([source_question, target_exam])
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=source_exam.id,
+        question_id=source_question.id,
+        question_order=1,
+    ))
+    db_session.commit()
+
+    sources = client.get(
+        f"/exams/{target_exam.id}/question-bank/sources",
+        headers=get_auth_headers(exam_creator),
+    )
+    assert sources.status_code == 200
+    assert any(
+        bank["source_exam_id"] == source_exam.id
+        for bank in sources.json()["banks"]
+    )
+
+    copied = client.post(
+        f"/exams/{target_exam.id}/question-bank/reuse",
+        json={"question_ids": [source_question.id]},
+        headers=get_auth_headers(exam_creator),
+    )
+    assert copied.status_code == 201
+    copied_question_id = copied.json()["copied_question_ids"][0]
+    copied_question = db_session.query(QuestionBank).filter(
+        QuestionBank.id == copied_question_id
+    ).first()
+    assert copied_question is not None
+    assert copied_question.source_question_id == source_question.id
+    assert copied_question.created_by == exam_creator.id
+
+
+def test_exam_question_bank_cannot_be_changed_after_scheduled_start(client, db_session):
+    creator = create_user(db_session, "examiner", "started_bank_creator@test.com")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam = Exam(
+        title="Started Examination",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=now - timedelta(minutes=1),
+        end_time=now + timedelta(hours=1),
+        created_by=creator.id,
+    )
+    question = QuestionBank(
+        question_text="Existing question",
+        question_type="MCQ",
+        subject="Science",
+        difficulty="easy",
+        marks=1,
+        created_by=creator.id,
+    )
+    db_session.add_all([exam, question])
+    db_session.flush()
+    db_session.add(ExamQuestion(
+        exam_id=exam.id,
+        question_id=question.id,
+        question_order=1,
+    ))
+    db_session.commit()
+
+    removed = client.delete(
+        f"/exams/{exam.id}/questions/{question.id}",
+        headers=get_auth_headers(creator),
+    )
+    assert removed.status_code == 409
+    assert removed.json()["detail"] == (
+        "The examination has started. Its question bank can no longer be changed."
+    )
+    assert db_session.query(ExamQuestion).filter(
+        ExamQuestion.exam_id == exam.id,
+        ExamQuestion.question_id == question.id,
+    ).first() is not None
