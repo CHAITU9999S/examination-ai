@@ -16,6 +16,8 @@ interface Attempt {
   exam_start_time?: string | null;
   exam_end_time?: string | null;
   creator_name?: string | null;
+  assigned_by_name?: string | null;
+  assigned_by_role?: string | null;
   assigned_at?: string | null;
   started_at?: string | null;
   submitted_at?: string | null;
@@ -274,7 +276,7 @@ export default function StudentPerformancePage() {
                                     <span>
                                       <span className="block font-semibold">{attempt.exam_title}</span>
                                       <span className="mt-1 block text-xs text-slate-400">
-                                        {attempt.exam_subject || "Subject not specified"} · Created by {attempt.creator_name || "Not available"} · Assigned {dateText(attempt.assigned_at)}
+                                        {attempt.exam_subject || "Subject not specified"} · Created by {attempt.creator_name || "Not available"} · Assigned by {attempt.assigned_by_name || "Not available"} · Assigned {dateText(attempt.assigned_at)}
                                       </span>
                                     </span>
                                     <span className="flex flex-wrap items-center gap-2">
