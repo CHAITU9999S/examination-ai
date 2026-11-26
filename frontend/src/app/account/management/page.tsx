@@ -84,7 +84,7 @@ export default function AccountManagementPage() {
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [activeSection, setActiveSection] = useState<"home" | "personal" | "edit" | "password" | "login-activity">("home");
+  const [activeSection, setActiveSection] = useState<"home" | "edit" | "password" | "login-activity">("home");
   const [profileError, setProfileError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [historyError, setHistoryError] = useState("");
@@ -190,7 +190,7 @@ export default function AccountManagementPage() {
       setDepartment(data.department || "");
       setDateOfBirth(data.date_of_birth || "");
       setEditing(false);
-      setActiveSection("personal");
+      setActiveSection("home");
       setProfileMessage("Personal details updated successfully.");
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Unable to update your details.");
@@ -292,35 +292,74 @@ export default function AccountManagementPage() {
         </header>
 
         {activeSection === "home" ? (
-          <section aria-label="Account management sections" className="grid gap-5 sm:grid-cols-3">
-            {[
-              { title: "Personal Details", description: "View your saved profile information and edit permitted details.", key: "personal" as const },
-              { title: "Password", description: "Change your password after verifying your current password.", key: "password" as const },
-              { title: "Login Activity", description: "Review your latest successful logins, devices, and IP addresses.", key: "login-activity" as const },
-            ].map((item) => (
-              <article key={item.key} className="flex min-h-52 flex-col rounded-2xl border border-white/10 bg-slate-900 p-6">
-                <h1 className="text-xl font-bold">{item.title}</h1>
-                <p className="mt-3 flex-1 text-sm leading-6 text-slate-400">{item.description}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveSection(item.key);
-                    if (item.key === "personal") {
-                      setEditing(false);
-                      setProfileError("");
-                    }
-                    if (item.key === "password") {
-                      setPasswordError("");
-                      setPasswordMessage("");
-                    }
-                  }}
-                  className="mt-5 inline-flex min-h-11 w-fit items-center justify-center rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300"
-                >
-                  View <span aria-hidden="true" className="ml-2">→</span>
-                </button>
-              </article>
-            ))}
-          </section>
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold">Personal Details</h1>
+                  <p className="mt-2 text-sm text-slate-400">Your saved account information.</p>
+                </div>
+                {editFields.some((field) => remainingEdits(field.count) > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditing(true); setActiveSection("edit"); setProfileError(""); setProfileMessage(""); }}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500"
+                  >
+                    Edit Details
+                  </button>
+                )}
+              </div>
+              {profileError && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{profileError}</div>}
+              {profileMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{profileMessage}</div>}
+              <dl className="mt-6 divide-y divide-white/10">
+                {[
+                  ["Account ID", profile?.id ?? "Not available"],
+                  ["Name", profile?.full_name || "Not provided"],
+                  ["Email ID", profile?.email || "Not provided"],
+                  ["Department", profile?.department || "Not provided"],
+                  ["Date of Birth", profile?.date_of_birth || "Not provided"],
+                  ["Account Type", profile?.role || "Not available"],
+                  ["Account Status", profile?.is_active === undefined || profile?.is_active === null ? "Not available" : profile.is_active ? "Active" : "Inactive"],
+                ].map(([label, value]) => (
+                  <div key={label} className="grid gap-1 py-4 sm:grid-cols-[minmax(10rem,0.8fr)_2fr] sm:gap-5">
+                    <dt className="text-sm text-slate-400">{label}</dt>
+                    <dd className="break-words text-sm font-semibold capitalize text-white">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 text-xs text-slate-500">
+                Remaining profile edits — Name: {remainingEdits(profile?.full_name_edit_count || 0)}, Email: {remainingEdits(profile?.email_edit_count || 0)}, Department: {remainingEdits(profile?.department_edit_count || 0)}, Date of Birth: {remainingEdits(profile?.date_of_birth_edit_count || 0)} (each limited to 3 successful edits).
+              </p>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
+              <button
+                type="button"
+                onClick={() => { setActiveSection("password"); setPasswordError(""); setPasswordMessage(""); }}
+                className="flex min-h-16 w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cyan-400"
+              >
+                <span>
+                  <span className="block font-semibold">Change Password</span>
+                  <span className="mt-1 block text-sm text-slate-400">Verify your current password and set a new password.</span>
+                </span>
+                <span aria-hidden="true" className="text-xl text-cyan-300">→</span>
+              </button>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
+              <button
+                type="button"
+                onClick={() => setActiveSection("login-activity")}
+                className="flex min-h-16 w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cyan-400"
+              >
+                <span>
+                  <span className="block font-semibold">Login Activity</span>
+                  <span className="mt-1 block text-sm text-slate-400">Review your latest successful sign-ins and device details.</span>
+                </span>
+                <span aria-hidden="true" className="text-xl text-cyan-300">→</span>
+              </button>
+            </section>
+          </div>
         ) : (
           <div className="space-y-5">
             <button
@@ -330,61 +369,6 @@ export default function AccountManagementPage() {
             >
               ← Account Management
             </button>
-
-            {activeSection === "personal" && (
-              <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold">Personal Details</h1>
-                    <p className="mt-2 text-sm text-slate-400">Your saved account information.</p>
-                  </div>
-                  {!editing && editFields.some((field) => remainingEdits(field.count) > 0) && (
-                    <button
-                      type="button"
-                      onClick={() => { setEditing(true); setActiveSection("edit"); setProfileError(""); setProfileMessage(""); }}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500"
-                    >
-                      Edit Details
-                    </button>
-                  )}
-                </div>
-                {profileMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{profileMessage}</div>}
-                <div className="mt-6 grid gap-4">
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Account ID</p>
-                    <p className="mt-1 font-semibold tabular-nums">{profile?.id ?? "Not available"}</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Name</p>
-                    <p className="mt-1 font-semibold">{profile?.full_name || "Not provided"}</p>
-                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} of 3 edits remaining</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Email ID</p>
-                    <p className="mt-1 break-all font-semibold">{profile?.email || "Not provided"}</p>
-                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.email_edit_count || 0)} of 3 edits remaining</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Department</p>
-                    <p className="mt-1 font-semibold">{profile?.department || "Not provided"}</p>
-                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.department_edit_count || 0)} of 3 edits remaining</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Date of Birth</p>
-                    <p className="mt-1 font-semibold">{profile?.date_of_birth || "Not provided"}</p>
-                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.date_of_birth_edit_count || 0)} of 3 edits remaining</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Account Type</p>
-                    <p className="mt-1 font-semibold capitalize">{profile?.role || "Not available"}</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                    <p className="text-xs text-slate-400">Account Status</p>
-                    <p className="mt-1 font-semibold">{profile?.is_active === undefined || profile?.is_active === null ? "Not available" : profile.is_active ? "Active" : "Inactive"}</p>
-                  </div>
-                </div>
-              </section>
-            )}
 
             {activeSection === "edit" && (
               <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
