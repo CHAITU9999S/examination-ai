@@ -41,14 +41,12 @@ const navigation = [
 interface DashboardOverview {
   allQuestionBanks: number;
   myQuestionBanks: number;
-  myExaminations: number;
   evaluationCompleted: number;
 }
 
 const emptyOverview: DashboardOverview = {
   allQuestionBanks: 0,
   myQuestionBanks: 0,
-  myExaminations: 0,
   evaluationCompleted: 0,
 };
 
@@ -93,62 +91,23 @@ export default function ExaminerDashboardPage() {
       // Load overview figures independently so one unavailable statistic does not
       // prevent the Examiner from opening the rest of the dashboard.
       const headers = { Authorization: `Bearer ${token}` };
-      const [allBanksResponse, myBanksResponse, examsResponse, sessionsResponse] = await Promise.all([
+      const [allBanksResponse, myBanksResponse, overviewResponse] = await Promise.all([
         fetch(`${API_URL}/question-banks/browse`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/question-banks/`, { headers, cache: "no-store" }),
-        fetch(`${API_URL}/exams?mine=true`, { headers, cache: "no-store" }),
-        fetch(`${API_URL}/grading/sessions`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams/dashboard/overview`, { headers, cache: "no-store" }),
       ]);
 
-      const [allBanksData, myBanksData, examsData, sessionsData] = await Promise.all([
+      const [allBanksData, myBanksData, overviewData] = await Promise.all([
         allBanksResponse.ok ? allBanksResponse.json() : Promise.resolve([]),
         myBanksResponse.ok ? myBanksResponse.json() : Promise.resolve([]),
-        examsResponse.ok ? examsResponse.json() : Promise.resolve([]),
-        sessionsResponse.ok ? sessionsResponse.json() : Promise.resolve({ sessions: [] }),
+        overviewResponse.ok ? overviewResponse.json() : Promise.resolve({ evaluation_completed: 0 }),
       ]);
-
-      const sessions = Array.isArray(sessionsData?.sessions) ? sessionsData.sessions : [];
-      const publishedSessionIds = new Set(
-        sessions.filter((session: { is_published?: boolean }) => Boolean(session.is_published))
-          .map((session: { session_id: number }) => Number(session.session_id))
-      );
-      const ownExams = Array.isArray(examsData)
-        ? examsData
-        : Array.isArray(examsData?.exams)
-          ? examsData.exams
-          : [];
-
-      // Count an examination only when every currently assigned student has a
-      // session and that student's result has been published.
-      const assignmentResults = await Promise.all(
-        ownExams.map(async (exam: { id: number }) => {
-          try {
-            const assignmentResponse = await fetch(`${API_URL}/exams/${exam.id}/assignments`, {
-              headers,
-              cache: "no-store",
-            });
-            if (!assignmentResponse.ok) return false;
-            const assignmentData = await assignmentResponse.json();
-            const activeStudents = Array.isArray(assignmentData?.students)
-              ? assignmentData.students.filter((student: { is_active?: boolean }) => student.is_active)
-              : [];
-            return activeStudents.length > 0 && activeStudents.every(
-              (student: { session_id?: number | null }) =>
-                student.session_id !== null &&
-                student.session_id !== undefined &&
-                publishedSessionIds.has(Number(student.session_id))
-            );
-          } catch {
-            return false;
-          }
-        })
-      );
 
       setOverview({
         allQuestionBanks: Array.isArray(allBanksData) ? allBanksData.length : 0,
         myQuestionBanks: Array.isArray(myBanksData) ? myBanksData.length : 0,
-        myExaminations: ownExams.length,
-        evaluationCompleted: assignmentResults.filter(Boolean).length,
+        myExaminations: 0,
+        evaluationCompleted: Number(overviewData?.evaluation_completed || 0),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load examiner dashboard.");
@@ -198,11 +157,10 @@ export default function ExaminerDashboardPage() {
       <div className="mx-auto max-w-7xl px-6 py-10">
         <section aria-label="Examination Overview" className="mb-10">
           <h2 className="mb-5 text-xl font-bold">Examination Overview</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { label: "All Question Banks", value: overview.allQuestionBanks },
               { label: "My Question Banks", value: overview.myQuestionBanks },
-              { label: "Examinations Created", value: overview.myExaminations },
               { label: "Evaluations Completed", value: overview.evaluationCompleted },
             ].map((item) => (
               <article key={item.label} className="rounded-xl border border-white/10 bg-slate-900 p-6">
@@ -211,7 +169,7 @@ export default function ExaminerDashboardPage() {
               </article>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-500">An evaluation is counted as completed only when results have been published for every student session in that examination.</p>
+          <p className="mt-3 text-xs text-slate-500">An evaluation is counted as completed only when results have been published for every currently assigned student in that examination.</p>
         </section>
 
         <section className="mb-10">

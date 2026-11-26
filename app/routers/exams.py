@@ -4,6 +4,7 @@ import math
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -217,24 +218,72 @@ def list_exams(
 
         return value.astimezone(timezone.utc)
 
-    # Calculate the maximum marks using the selected question groups.
-    # If the selected paper cannot be calculated safely, return no value
-    # rather than showing an incorrect total.
-    max_marks_by_exam = {}
-    exam_summary_by_id = {}
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-    for exam in exams:
-        assigned_questions = db.query(
+    # Fetch question and progress totals in batches instead of issuing
+    # several database queries for every examination.
+    exam_ids = [exam.id for exam in exams]
+    questions_by_exam = {exam_id: [] for exam_id in exam_ids}
+    if exam_ids:
+        question_rows = db.query(
+            ExamQuestion.exam_id,
             QuestionBank.question_type,
             QuestionBank.difficulty,
             QuestionBank.marks,
         ).join(
-            ExamQuestion,
+            QuestionBank,
             ExamQuestion.question_id == QuestionBank.id,
         ).filter(
-            ExamQuestion.exam_id == exam.id,
+            ExamQuestion.exam_id.in_(exam_ids),
         ).all()
+        for exam_id, question_type, difficulty, marks in question_rows:
+            questions_by_exam[exam_id].append((question_type, difficulty, marks))
 
+        active_assignment_counts = dict(db.query(
+            ExamAssignment.exam_id,
+            func.count(ExamAssignment.id),
+        ).filter(
+            ExamAssignment.exam_id.in_(exam_ids),
+            ExamAssignment.is_active.is_(True),
+        ).group_by(ExamAssignment.exam_id).all())
+
+        completed_session_counts = dict(db.query(
+            ExamSession.exam_id,
+            func.count(ExamSession.id),
+        ).filter(
+            ExamSession.exam_id.in_(exam_ids),
+            ExamSession.status.in_(("submitted", "auto_submitted")),
+        ).group_by(ExamSession.exam_id).all())
+
+        expired_session_counts = dict(db.query(
+            ExamSession.exam_id,
+            func.count(ExamSession.id),
+        ).filter(
+            ExamSession.exam_id.in_(exam_ids),
+            ExamSession.status == "expired",
+        ).group_by(ExamSession.exam_id).all())
+
+        published_result_counts = dict(db.query(
+            ExamSession.exam_id,
+            func.count(Result.id),
+        ).join(
+            Result,
+            Result.session_id == ExamSession.id,
+        ).filter(
+            ExamSession.exam_id.in_(exam_ids),
+            Result.is_published.is_(True),
+        ).group_by(ExamSession.exam_id).all())
+    else:
+        active_assignment_counts = {}
+        completed_session_counts = {}
+        expired_session_counts = {}
+        published_result_counts = {}
+
+    # Calculate maximum marks using the same configured question groups.
+    # If the selected paper cannot be calculated safely, return no value.
+    max_marks_by_exam = {}
+    exam_summary_by_id = {}
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    for exam in exams:
+        assigned_questions = questions_by_exam[exam.id]
         marks_by_group = {}
         for question_type, difficulty, marks in assigned_questions:
             question_type = getattr(question_type, "value", question_type)
@@ -263,24 +312,10 @@ def list_exams(
                 maximum = next(iter(available_marks)) * int(exam.total_questions or 0)
 
         max_marks_by_exam[exam.id] = round(maximum, 2) if maximum is not None else None
-        active_assignments = db.query(ExamAssignment.id).filter(
-            ExamAssignment.exam_id == exam.id,
-            ExamAssignment.is_active.is_(True),
-        ).count()
-        completed_sessions = db.query(ExamSession.id).filter(
-            ExamSession.exam_id == exam.id,
-            ExamSession.status.in_(("submitted", "auto_submitted")),
-        ).count()
-        expired_sessions = db.query(ExamSession.id).filter(
-            ExamSession.exam_id == exam.id,
-            ExamSession.status == "expired",
-        ).count()
-        published_results = db.query(Result.id).join(
-            ExamSession, Result.session_id == ExamSession.id
-        ).filter(
-            ExamSession.exam_id == exam.id,
-            Result.is_published.is_(True),
-        ).count()
+        active_assignments = active_assignment_counts.get(exam.id, 0)
+        completed_sessions = completed_session_counts.get(exam.id, 0)
+        expired_sessions = expired_session_counts.get(exam.id, 0)
+        published_results = published_result_counts.get(exam.id, 0)
         start_at = normalize_to_naive_utc(exam.start_time)
         end_at = normalize_to_naive_utc(exam.end_time)
         if start_at is None or end_at is None:
@@ -333,6 +368,51 @@ def list_exams(
     
 
 
+
+
+# ==========================================
+# EXAMINER DASHBOARD OVERVIEW
+# ==========================================
+
+@router.get("/dashboard/overview")
+def get_examiner_dashboard_overview(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role("examiner")),
+):
+    """Return the current Examiner's published-evaluation completion count."""
+    rows = db.query(
+        Exam.id,
+        ExamAssignment.id,
+        Result.is_published,
+    ).join(
+        ExamAssignment,
+        ExamAssignment.exam_id == Exam.id,
+    ).outerjoin(
+        ExamSession,
+        (ExamSession.exam_id == Exam.id)
+        & (ExamSession.student_id == ExamAssignment.student_id)
+        & (ExamSession.status.in_(("not_started", "in_progress", "submitted", "auto_submitted"))),
+    ).outerjoin(
+        Result,
+        Result.session_id == ExamSession.id,
+    ).filter(
+        Exam.created_by == current_user.id,
+        ExamAssignment.is_active.is_(True),
+    ).all()
+
+    assignment_counts = {}
+    published_counts = {}
+    for exam_id, assignment_id, is_published in rows:
+        assignment_counts[exam_id] = assignment_counts.get(exam_id, 0) + 1
+        if is_published:
+            published_counts[exam_id] = published_counts.get(exam_id, 0) + 1
+
+    evaluation_completed = sum(
+        1
+        for exam_id, assigned_count in assignment_counts.items()
+        if assigned_count > 0 and published_counts.get(exam_id, 0) == assigned_count
+    )
+    return {"evaluation_completed": evaluation_completed}
 
 
 # ==========================================
