@@ -255,7 +255,7 @@ export default function ExaminerResultsPage() {
 
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
         <section className="mt-8 space-y-6">
-          {(["completed_not_evaluated", "pending"] as string[]).length > 0 && (() => {
+          {(() => {
             const examSessions = new Map<number, ReviewSession[]>();
             sessions.forEach((session) => {
               const current = examSessions.get(session.exam_id) || [];
