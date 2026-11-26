@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const submissionInProgress = useRef(false);
   const [sessionReplaced, setSessionReplaced] = useState(false);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function LoginPage() {
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (submissionInProgress.current) return;
     setError("");
 
     if (!email.trim() || !password) {
@@ -47,6 +49,7 @@ export default function LoginPage() {
       return;
     }
 
+    submissionInProgress.current = true;
     setLoading(true);
 
     try {
@@ -118,6 +121,7 @@ export default function LoginPage() {
           : "Unable to connect to the server. Please try again."
       );
     } finally {
+      submissionInProgress.current = false;
       setLoading(false);
     }
   }
