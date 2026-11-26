@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -27,10 +27,12 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const submissionInProgress = useRef(false);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (submissionInProgress.current) return;
     setError("");
     setSuccess("");
 
@@ -49,6 +51,7 @@ export default function RegisterPage() {
       return;
     }
 
+    submissionInProgress.current = true;
     setLoading(true);
 
     try {
@@ -96,6 +99,7 @@ export default function RegisterPage() {
           : "Unable to connect to the server. Please try again."
       );
     } finally {
+      submissionInProgress.current = false;
       setLoading(false);
     }
   }
