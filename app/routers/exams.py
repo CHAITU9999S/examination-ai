@@ -412,7 +412,13 @@ def get_examiner_dashboard_overview(
         for exam_id, assigned_count in assignment_counts.items()
         if assigned_count > 0 and published_counts.get(exam_id, 0) == assigned_count
     )
-    return {"evaluation_completed": evaluation_completed}
+    my_examinations = db.query(func.count(Exam.id)).filter(
+        Exam.created_by == current_user.id,
+    ).scalar() or 0
+    return {
+        "evaluation_completed": evaluation_completed,
+        "my_examinations": my_examinations,
+    }
 
 
 # ==========================================

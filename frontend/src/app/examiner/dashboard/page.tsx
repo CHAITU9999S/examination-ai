@@ -42,12 +42,14 @@ interface DashboardOverview {
   allQuestionBanks: number;
   myQuestionBanks: number;
   evaluationCompleted: number;
+  myExaminations: number;
 }
 
 const emptyOverview: DashboardOverview = {
   allQuestionBanks: 0,
   myQuestionBanks: 0,
   evaluationCompleted: 0,
+  myExaminations: 0,
 };
 
 export default function ExaminerDashboardPage() {
@@ -157,10 +159,11 @@ export default function ExaminerDashboardPage() {
       <div className="mx-auto max-w-7xl px-6 py-10">
         <section aria-label="Examination Overview" className="mb-10">
           <h2 className="mb-5 text-xl font-bold">Examination Overview</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "All Question Banks", value: overview.allQuestionBanks },
               { label: "My Question Banks", value: overview.myQuestionBanks },
+              { label: "Examinations Created", value: overview.myExaminations },
               { label: "Evaluations Completed", value: overview.evaluationCompleted },
             ].map((item) => (
               <article key={item.label} className="rounded-xl border border-white/10 bg-slate-900 p-6">
