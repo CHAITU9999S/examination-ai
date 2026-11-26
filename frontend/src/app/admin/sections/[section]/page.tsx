@@ -155,14 +155,14 @@ export default function AdminSectionPage() {
             <article key={item.href} className="rounded-xl border border-white/10 bg-slate-900 p-5">
               <h2 className="font-semibold">{item.title}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
-              <Link href={item.href} className="mt-4 inline-flex items-center gap-1 rounded-lg border border-blue-400/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10">View <span aria-hidden="true">→</span></Link>
+              <Link href={item.href} className="mt-5 inline-flex min-h-12 w-fit items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900">View <span aria-hidden="true">→</span></Link>
               {item.related && item.related.length > 0 && (
                 <div className="mt-4 space-y-3 border-t border-white/10 pt-3">
                   {item.related.map((related) => (
                     <div key={related.href}>
                       <p className="text-sm font-semibold text-slate-200">{related.title}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-500">{related.description}</p>
-                      <Link href={related.href} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-cyan-400/40 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">View <span aria-hidden="true">→</span></Link>
+                      <Link href={related.href} className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900">View <span aria-hidden="true">→</span></Link>
                     </div>
                   ))}
                 </div>
