@@ -191,7 +191,7 @@ export default function StudentDashboardPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-900"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
         <div><Link href="/student/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Student Dashboard</p></div>
-        <div className="flex flex-wrap items-center gap-3"><Link href="/student/results" className="rounded-lg border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10">Results</Link>
+        <div className="flex flex-wrap items-center gap-3"><Link href="/student/results" className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300/60 hover:bg-cyan-500/20 focus:outline-none focus:ring-2 focus:ring-cyan-300">Results</Link>
           <Link href="/account/management" className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Account Management</Link>
           <button type="button" onClick={logout} className="rounded-lg border border-red-400/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10">Logout</button></div>
       </div></header>
