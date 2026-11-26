@@ -83,7 +83,7 @@ export default function AccountManagementPage() {
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordSectionOpen, setPasswordSectionOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<"home" | "personal" | "edit" | "password" | "login-activity">("home");
   const [profileError, setProfileError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [historyError, setHistoryError] = useState("");
@@ -189,6 +189,7 @@ export default function AccountManagementPage() {
       setDepartment(data.department || "");
       setDateOfBirth(data.date_of_birth || "");
       setEditing(false);
+      setActiveSection("personal");
       setProfileMessage("Personal details updated successfully.");
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Unable to update your details.");
@@ -255,6 +256,7 @@ export default function AccountManagementPage() {
     setDepartment(profile.department || "");
     setDateOfBirth(profile.date_of_birth || "");
     setEditing(false);
+    setActiveSection("personal");
     setProfileError("");
   }
 
@@ -288,139 +290,184 @@ export default function AccountManagementPage() {
           </Link>
         </header>
 
-        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">Personal Details</h1>
-              <p className="mt-2 text-sm text-slate-400">
-                Each detail has its own maximum of 3 successful edits.
-              </p>
-            </div>
-            {!editing && editFields.some((field) => remainingEdits(field.count) > 0) && (
-              <button
-                type="button"
-                onClick={() => { setEditing(true); setProfileError(""); setProfileMessage(""); }}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500"
-              >
-                Edit Details
-              </button>
+        {activeSection === "home" ? (
+          <section aria-label="Account management sections" className="grid gap-5 sm:grid-cols-3">
+            {[
+              { title: "Personal Details", description: "View your saved profile information and edit permitted details.", key: "personal" as const },
+              { title: "Password", description: "Change your password after verifying your current password.", key: "password" as const },
+              { title: "Login Activity", description: "Review your latest successful logins, devices, and IP addresses.", key: "login-activity" as const },
+            ].map((item) => (
+              <article key={item.key} className="flex min-h-52 flex-col rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <h1 className="text-xl font-bold">{item.title}</h1>
+                <p className="mt-3 flex-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSection(item.key);
+                    if (item.key === "personal") {
+                      setEditing(false);
+                      setProfileError("");
+                    }
+                    if (item.key === "password") {
+                      setPasswordError("");
+                      setPasswordMessage("");
+                    }
+                  }}
+                  className="mt-5 inline-flex min-h-11 w-fit items-center justify-center rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                >
+                  View <span aria-hidden="true" className="ml-2">→</span>
+                </button>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <div className="space-y-5">
+            <button
+              type="button"
+              onClick={() => { setActiveSection("home"); setEditing(false); }}
+              className="rounded-lg border border-white/20 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              ← Account Management
+            </button>
+
+            {activeSection === "personal" && (
+              <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold">Personal Details</h1>
+                    <p className="mt-2 text-sm text-slate-400">Your saved account information.</p>
+                  </div>
+                  {!editing && editFields.some((field) => remainingEdits(field.count) > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditing(true); setActiveSection("edit"); setProfileError(""); setProfileMessage(""); }}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500"
+                    >
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+                {profileMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{profileMessage}</div>}
+                <div className="mt-6 grid gap-4">
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Name</p>
+                    <p className="mt-1 font-semibold">{profile?.full_name || "Not provided"}</p>
+                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} of 3 edits remaining</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Email ID</p>
+                    <p className="mt-1 break-all font-semibold">{profile?.email || "Not provided"}</p>
+                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.email_edit_count || 0)} of 3 edits remaining</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Department</p>
+                    <p className="mt-1 font-semibold">{profile?.department || "Not provided"}</p>
+                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.department_edit_count || 0)} of 3 edits remaining</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Date of Birth</p>
+                    <p className="mt-1 font-semibold">{profile?.date_of_birth || "Not provided"}</p>
+                    <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.date_of_birth_edit_count || 0)} of 3 edits remaining</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Account Type</p>
+                    <p className="mt-1 font-semibold capitalize">{profile?.role || "Not available"}</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {activeSection === "edit" && (
+              <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <h1 className="text-2xl font-bold">Edit Personal Details</h1>
+                <p className="mt-2 text-sm text-slate-400">Each detail has its own maximum of 3 successful edits.</p>
+                {profileError && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{profileError}</div>}
+                <form onSubmit={saveProfile} className="mt-6 space-y-4">
+                  <label className="block text-sm text-slate-300">
+                    Name
+                    <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} edits remaining</span>
+                    <input required minLength={2} maxLength={150} disabled={remainingEdits(profile?.full_name_edit_count || 0) === 0} value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    Email ID
+                    <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.email_edit_count || 0)} edits remaining</span>
+                    <input required type="email" maxLength={255} disabled={remainingEdits(profile?.email_edit_count || 0) === 0} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    Department <span className="text-xs text-slate-500">(Optional)</span>
+                    <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.department_edit_count || 0)} edits remaining</span>
+                    <input maxLength={100} disabled={remainingEdits(profile?.department_edit_count || 0) === 0} value={department} onChange={(event) => setDepartment(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    Date of Birth <span className="text-xs text-slate-500">(Optional)</span>
+                    <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.date_of_birth_edit_count || 0)} edits remaining</span>
+                    <input type="date" disabled={remainingEdits(profile?.date_of_birth_edit_count || 0) === 0} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
+                  </label>
+                  <div className="flex flex-wrap justify-end gap-3 pt-2">
+                    <button type="button" onClick={cancelProfileEdit} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Cancel</button>
+                    <button type="submit" disabled={savingProfile} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingProfile ? "Saving..." : "Save Details"}</button>
+                  </div>
+                </form>
+              </section>
+            )}
+
+            {activeSection === "password" && (
+              <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <h1 className="text-2xl font-bold">Password</h1>
+                <p className="mt-2 text-sm text-slate-400">Enter your current password to authorize each change. You can change your password any number of times.</p>
+                {passwordError && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{passwordError}</div>}
+                {passwordMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{passwordMessage}</div>}
+                <form onSubmit={changePassword} className="mt-6 space-y-4">
+                  <label className="block text-sm text-slate-300">Current password
+                    <div className="relative mt-2">
+                      <input required type={showCurrentPassword ? "text" : "password"} autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
+                      <PasswordVisibilityButton visible={showCurrentPassword} onClick={() => setShowCurrentPassword((visible) => !visible)} label="current password" />
+                    </div>
+                  </label>
+                  <label className="block text-sm text-slate-300">New password
+                    <div className="relative mt-2">
+                      <input required type={showNewPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
+                      <PasswordVisibilityButton visible={showNewPassword} onClick={() => setShowNewPassword((visible) => !visible)} label="new password" />
+                    </div>
+                  </label>
+                  <label className="block text-sm text-slate-300">Confirm new password
+                    <div className="relative mt-2">
+                      <input required type={showConfirmPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
+                      <PasswordVisibilityButton visible={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)} label="confirm password" />
+                    </div>
+                  </label>
+                  <button type="submit" disabled={changingPassword} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50">{changingPassword ? "Changing Password..." : "Change Password"}</button>
+                </form>
+              </section>
+            )}
+
+            {activeSection === "login-activity" && (
+              <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <h1 className="text-2xl font-bold">Login Activity</h1>
+                <p className="mt-2 text-sm text-slate-400">Your latest 10 successful logins, with the newest record first.</p>
+                {historyError && <div role="alert" className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">{historyError}</div>}
+                {loginHistory.length === 0 && !historyError ? (
+                  <p className="mt-6 rounded-xl border border-white/10 bg-slate-800/60 p-5 text-sm text-slate-400">No login history is available yet. New successful logins will appear here.</p>
+                ) : (
+                  <div className="mt-5 space-y-3">
+                    {loginHistory.map((record, index) => (
+                      <article key={record.id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-semibold">Login {index + 1}</p>
+                          <p className="text-sm text-slate-300">{formatDate(record.logged_in_at)}</p>
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                          <p className="text-slate-400">IP address: <span className="text-slate-200">{record.ip_address || "Unavailable"}</span></p>
+                          <p className="break-all text-slate-400 sm:col-span-2">Device / Browser: <span className="text-slate-200">{record.user_agent || "Unavailable"}</span></p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
           </div>
-
-          {profileError && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{profileError}</div>}
-          {profileMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{profileMessage}</div>}
-
-          {editing ? (
-            <form onSubmit={saveProfile} className="mt-6 space-y-4">
-              <label className="block text-sm text-slate-300">
-                Name
-                <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} edits remaining</span>
-                <input required minLength={2} maxLength={150} disabled={remainingEdits(profile?.full_name_edit_count || 0) === 0} value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
-              </label>
-              <label className="block text-sm text-slate-300">
-                Email ID
-                <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.email_edit_count || 0)} edits remaining</span>
-                <input required type="email" maxLength={255} disabled={remainingEdits(profile?.email_edit_count || 0) === 0} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
-              </label>
-              <label className="block text-sm text-slate-300">
-                Department <span className="text-xs text-slate-500">(Optional)</span>
-                <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.department_edit_count || 0)} edits remaining</span>
-                <input maxLength={100} disabled={remainingEdits(profile?.department_edit_count || 0) === 0} value={department} onChange={(event) => setDepartment(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
-              </label>
-              <label className="block text-sm text-slate-300">
-                Date of Birth <span className="text-xs text-slate-500">(Optional)</span>
-                <span className="ml-2 text-xs text-slate-500">{remainingEdits(profile?.date_of_birth_edit_count || 0)} edits remaining</span>
-                <input type="date" disabled={remainingEdits(profile?.date_of_birth_edit_count || 0) === 0} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white disabled:opacity-50" />
-              </label>
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
-                <button type="button" onClick={cancelProfileEdit} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Cancel</button>
-                <button type="submit" disabled={savingProfile} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">{savingProfile ? "Saving..." : "Save Details"}</button>
-              </div>
-            </form>
-          ) : (
-            <div className="mt-6 grid gap-4">
-              <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                <p className="text-xs text-slate-400">Name</p>
-                <p className="mt-1 font-semibold">{profile?.full_name || "—"}</p>
-                <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} of 3 edits remaining</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                <p className="text-xs text-slate-400">Email ID</p>
-                <p className="mt-1 break-all font-semibold">{profile?.email || "—"}</p>
-                <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.email_edit_count || 0)} of 3 edits remaining</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                <p className="text-xs text-slate-400">Department</p>
-                <p className="mt-1 font-semibold">{profile?.department || "Not provided"}</p>
-                <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.department_edit_count || 0)} of 3 edits remaining</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
-                <p className="text-xs text-slate-400">Date of Birth</p>
-                <p className="mt-1 font-semibold">{profile?.date_of_birth || "Not provided"}</p>
-                <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.date_of_birth_edit_count || 0)} of 3 edits remaining</p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <div className="flex justify-start">
-          <button type="button" onClick={() => { setPasswordSectionOpen((open) => !open); setPasswordError(""); setPasswordMessage(""); }} aria-expanded={passwordSectionOpen} aria-controls="account-change-password" className="inline-flex items-center gap-2 rounded-lg border border-blue-400/40 px-4 py-2.5 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/10">
-            {passwordSectionOpen ? "Hide Change Password" : "Change Password"} <span aria-hidden="true">{passwordSectionOpen ? "↑" : "↓"}</span>
-          </button>
-        </div>
-        {passwordSectionOpen && <section id="account-change-password" className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <h2 className="text-2xl font-bold">Change Password</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            You can change your password any number of times. Enter your current password to authorize each change.
-          </p>
-          {passwordError && <div role="alert" className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{passwordError}</div>}
-          {passwordMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{passwordMessage}</div>}
-          <form onSubmit={changePassword} className="mt-6 space-y-4">
-            <label className="block text-sm text-slate-300">Current password
-              <div className="relative mt-2">
-                <input required type={showCurrentPassword ? "text" : "password"} autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
-                <PasswordVisibilityButton visible={showCurrentPassword} onClick={() => setShowCurrentPassword((visible) => !visible)} label="current password" />
-              </div>
-            </label>
-            <label className="block text-sm text-slate-300">New password
-              <div className="relative mt-2">
-                <input required type={showNewPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
-                <PasswordVisibilityButton visible={showNewPassword} onClick={() => setShowNewPassword((visible) => !visible)} label="new password" />
-              </div>
-            </label>
-            <label className="block text-sm text-slate-300">Confirm new password
-              <div className="relative mt-2">
-                <input required type={showConfirmPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 pr-12 text-white" />
-                <PasswordVisibilityButton visible={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)} label="confirm password" />
-              </div>
-            </label>
-            <button type="submit" disabled={changingPassword} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50">{changingPassword ? "Changing Password..." : "Change Password"}</button>
-          </form>
-        </section>}
-
-        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
-          <h2 className="text-2xl font-bold">Recent Login History</h2>
-          <p className="mt-2 text-sm text-slate-400">Your latest 10 successful logins, with the newest record first.</p>
-          {historyError && <div role="alert" className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">{historyError}</div>}
-          {loginHistory.length === 0 && !historyError ? (
-            <p className="mt-6 rounded-xl border border-white/10 bg-slate-800/60 p-5 text-sm text-slate-400">No login history is available yet. New successful logins will appear here.</p>
-          ) : (
-            <div className="mt-5 space-y-3">
-              {loginHistory.map((record, index) => (
-                <article key={record.id} className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold">Login {index + 1}</p>
-                    <p className="text-sm text-slate-300">{formatDate(record.logged_in_at)}</p>
-                  </div>
-                  <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                    <p className="text-slate-400">IP address: <span className="text-slate-200">{record.ip_address || "Unavailable"}</span></p>
-                    <p className="break-all text-slate-400 sm:col-span-2">Device / Browser: <span className="text-slate-200">{record.user_agent || "Unavailable"}</span></p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+        )}
       </div>
     </main>
   );
