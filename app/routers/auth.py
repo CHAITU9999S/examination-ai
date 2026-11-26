@@ -206,6 +206,10 @@ def login(
             detail="Your account is inactive. Contact an Admin."
         )
 
+    # Keep the hash that was verified so a concurrent password change can be
+    # detected after acquiring the row lock without hashing the password twice.
+    verified_password_hash = user.password_hash
+
     # Serialize concurrent logins for this account. On PostgreSQL, the row
     # lock ensures the last committed login is the only active device.
     user = db.query(User).filter(
@@ -220,7 +224,7 @@ def login(
             detail="Your account is inactive. Contact an Admin."
         )
 
-    if not verify_password(login_data.password, user.password_hash):
+    if user.password_hash != verified_password_hash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
