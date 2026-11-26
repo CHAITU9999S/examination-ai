@@ -23,6 +23,22 @@ interface HistoricalResult {
   published: boolean;
   submitted_at?: string | null;
 }
+interface OwnedExam {
+  id: number;
+  title: string;
+  subject?: string | null;
+  duration_minutes: number;
+  total_questions: number;
+  max_marks?: number | null;
+  assigned_question_count?: number;
+  exam_status?: string;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  published_at?: string | null;
+}
 interface ReviewSession {
   session_id: number;
   exam_id: number;
@@ -58,6 +74,7 @@ function formatDate(value?: string | null) {
 export default function ExaminerResultsPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
+  const [ownedExams, setOwnedExams] = useState<OwnedExam[]>([]);
   const [history, setHistory] = useState<HistoricalResult[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("latest");
@@ -79,25 +96,29 @@ export default function ExaminerResultsPage() {
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [sessionsResponse, historyResponse, profileResponse] = await Promise.all([
+      const [sessionsResponse, historyResponse, profileResponse, examsResponse] = await Promise.all([
         fetch(`${API_URL}/grading/sessions`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/results/staff/history`, { headers, cache: "no-store" }),
         fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams?mine=true`, { headers, cache: "no-store" }),
       ]);
-      if ([sessionsResponse, historyResponse, profileResponse].some((response) => response.status === 401 || response.status === 403)) {
+      if ([sessionsResponse, historyResponse, profileResponse, examsResponse].some((response) => response.status === 401 || response.status === 403)) {
         router.replace("/login");
         return;
       }
-      const [sessionData, historyData, profile] = await Promise.all([
+      const [sessionData, historyData, profile, examsData] = await Promise.all([
         sessionsResponse.json().catch(() => ({})),
         historyResponse.json().catch(() => ({})),
         profileResponse.json().catch(() => ({})),
+        examsResponse.json().catch(() => []),
       ]);
-      if (!sessionsResponse.ok || !historyResponse.ok || !profileResponse.ok) {
+      if (!sessionsResponse.ok || !historyResponse.ok || !profileResponse.ok || !examsResponse.ok) {
         throw new Error("Unable to load examination result history.");
       }
       setStaffRole(profile.role === "admin" ? "admin" : "examiner");
       setSessions(Array.isArray(sessionData.sessions) ? sessionData.sessions : []);
+      const exams = Array.isArray(examsData) ? examsData : Array.isArray(examsData?.exams) ? examsData.exams : [];
+      setOwnedExams(exams.filter((exam: OwnedExam) => Number(exam.created_by) === Number(profile.id)));
       setHistory(Array.isArray(historyData.results) ? historyData.results : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load sessions.");
@@ -232,6 +253,54 @@ export default function ExaminerResultsPage() {
         </div>
 
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
+        <section className="mt-8 space-y-6">
+          {(["completed_not_evaluated", "pending"] as string[]).length > 0 && (() => {
+            const examSessions = new Map<number, ReviewSession[]>();
+            sessions.forEach((session) => {
+              const current = examSessions.get(session.exam_id) || [];
+              current.push(session);
+              examSessions.set(session.exam_id, current);
+            });
+            const isSubmitted = (session: ReviewSession) => session.session_status === "submitted" || session.session_status === "auto_submitted";
+            const isEvaluated = (exam: OwnedExam) => {
+              if (exam.exam_status === "results_published") return true;
+              const submitted = (examSessions.get(exam.id) || []).filter(isSubmitted);
+              return submitted.length > 0 && submitted.every((session) => session.result_ready);
+            };
+            const evaluated = ownedExams.filter(isEvaluated);
+            const pending = ownedExams.filter((exam) => !isEvaluated(exam) && (exam.exam_status === "completed_not_evaluated" || (examSessions.get(exam.id) || []).some(isSubmitted)));
+            const renderExam = (exam: OwnedExam, evaluatedState: boolean) => (
+              <article key={exam.id} className="flex flex-col rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold">{exam.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
+                  <p className="mt-2 text-xs text-slate-400">Created by: <span className="font-medium text-slate-200">{exam.created_by_name || "You"}</span></p>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div><dt className="text-xs text-slate-500">Questions</dt><dd className="mt-1">{exam.total_questions}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
+                    <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Evaluation status</dt><dd className={evaluatedState ? "mt-1 font-semibold text-emerald-300" : "mt-1 font-semibold text-amber-300"}>{evaluatedState ? "Evaluated" : "Evaluation Pending"}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Scheduled start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Scheduled end</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
+                  </dl>
+                </div>
+                <div className="mt-5 border-t border-white/10 pt-4">
+                  <Link href={`/staff/manage-exams/${exam.id}`} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500">{evaluatedState ? "View Evaluation" : "Continue Evaluation"} →</Link>
+                </div>
+              </article>
+            );
+            return <>
+              <div className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Evaluation Pending</h2><p className="mt-1 text-sm text-slate-400">Examinations you created that have submitted student attempts awaiting evaluation.</p></div><span className="text-sm text-amber-300">{pending.length} examination(s)</span></div>
+                {loading ? <p className="py-8 text-center text-slate-400">Loading examinations...</p> : pending.length === 0 ? <p className="py-8 text-center text-slate-400">No examinations are currently pending evaluation.</p> : <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{pending.map((exam) => renderExam(exam, false))}</div>}
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Evaluated Examinations</h2><p className="mt-1 text-sm text-slate-400">Examinations for which all submitted student attempts have been evaluated or results published.</p></div><span className="text-sm text-emerald-300">{evaluated.length} examination(s)</span></div>
+                {loading ? <p className="py-8 text-center text-slate-400">Loading examinations...</p> : evaluated.length === 0 ? <p className="py-8 text-center text-slate-400">No evaluated examinations are available yet.</p> : <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{evaluated.map((exam) => renderExam(exam, true))}</div>}
+              </div>
+            </>;
+          })()}
+        </section>
         {message && <div role="status" className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-sm text-green-300">{message}</div>}
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
