@@ -24,8 +24,6 @@ interface Statistics {
   active_users: number;
   inactive_users: number;
   total_exams: number;
-  total_questions: number;
-  total_sessions: number;
 }
 
 interface NavigationItem {
@@ -87,6 +85,7 @@ export default function AdminDashboardPage() {
 
   const [user, setUser] = useState<User | null>(null);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [questionBankCount, setQuestionBankCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -124,7 +123,7 @@ export default function AdminDashboardPage() {
 
         const statsResponse = await fetch(
           `${API_URL}/admin/dashboard`,
-          { headers }
+          { headers, cache: "no-store" }
         );
 
         if (statsResponse.ok) {
@@ -137,6 +136,12 @@ export default function AdminDashboardPage() {
           );
         } else {
           throw new Error("Unable to load dashboard statistics.");
+        }
+
+        const banksResponse = await fetch(`${API_URL}/question-banks/browse`, { headers, cache: "no-store" });
+        if (banksResponse.ok) {
+          const banksData = await banksResponse.json();
+          setQuestionBankCount(Array.isArray(banksData) ? banksData.length : 0);
         }
       } catch (err) {
         setError(
@@ -166,8 +171,7 @@ export default function AdminDashboardPage() {
     { label: "Active Users", value: statistics?.active_users },
     { label: "Inactive Users", value: statistics?.inactive_users },
     { label: "Examinations", value: statistics?.total_exams },
-    { label: "Questions", value: statistics?.total_questions },
-    { label: "Exam Sessions", value: statistics?.total_sessions },
+    { label: "Question Banks", value: questionBankCount ?? undefined },
   ];
 
   if (loading) {
@@ -240,19 +244,14 @@ export default function AdminDashboardPage() {
           <h2 className="mb-5 text-xl font-bold">Management</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {navigationGroups.map((group) => (
-              <Link
+              <article
                 key={group.slug}
-                href={group.href || `/admin/sections/${group.slug}`}
                 className="rounded-2xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
               >
                 <h3 className="text-xl font-bold">{group.title}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{group.description}</p>
-                {group.items.length > 0 && (
-                  <p className="mt-4 text-xs font-semibold text-blue-300">
-                    {group.items.length} sections inside <span aria-hidden="true">→</span>
-                  </p>
-                )}
-              </Link>
+                <Link href={group.href || `/admin/sections/${group.slug}`} className="mt-5 inline-flex items-center gap-1 rounded-lg border border-blue-400/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10">View <span aria-hidden="true">→</span></Link>
+              </article>
             ))}
           </div>
         </section>

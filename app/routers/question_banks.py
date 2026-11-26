@@ -94,12 +94,15 @@ def _serialize_question_bank(db: Session, bank: QuestionCollection, owner: User 
 
     type_counts: dict[str, int] = {}
     difficulty_counts: dict[str, int] = {}
+    type_difficulty_counts: dict[str, dict[str, int]] = {}
     total_marks = 0.0
     for question_type, difficulty, marks in rows:
         type_name = getattr(question_type, "value", question_type)
         type_counts[type_name] = type_counts.get(type_name, 0) + 1
         level = (difficulty or "unspecified").casefold()
         difficulty_counts[level] = difficulty_counts.get(level, 0) + 1
+        type_difficulty_counts.setdefault(type_name, {})
+        type_difficulty_counts[type_name][level] = type_difficulty_counts[type_name].get(level, 0) + 1
         total_marks += float(marks or 0)
 
     return {
@@ -110,6 +113,7 @@ def _serialize_question_bank(db: Session, bank: QuestionCollection, owner: User 
         "question_count": len(rows),
         "question_types": type_counts,
         "difficulty_counts": difficulty_counts,
+        "question_type_difficulty_counts": type_difficulty_counts,
         "maximum_marks": total_marks,
         "created_by": owner.id if owner else bank.created_by,
         "created_by_name": owner.full_name if owner else "Deleted user",

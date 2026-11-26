@@ -83,6 +83,7 @@ export default function AccountManagementPage() {
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordSectionOpen, setPasswordSectionOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [historyError, setHistoryError] = useState("");
@@ -337,7 +338,7 @@ export default function AccountManagementPage() {
               </div>
             </form>
           ) : (
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4">
               <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
                 <p className="text-xs text-slate-400">Name</p>
                 <p className="mt-1 font-semibold">{profile?.full_name || "—"}</p>
@@ -362,7 +363,12 @@ export default function AccountManagementPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+        <div className="flex justify-start">
+          <button type="button" onClick={() => { setPasswordSectionOpen((open) => !open); setPasswordError(""); setPasswordMessage(""); }} aria-expanded={passwordSectionOpen} aria-controls="account-change-password" className="inline-flex items-center gap-2 rounded-lg border border-blue-400/40 px-4 py-2.5 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/10">
+            {passwordSectionOpen ? "Hide Change Password" : "Change Password"} <span aria-hidden="true">{passwordSectionOpen ? "↑" : "↓"}</span>
+          </button>
+        </div>
+        {passwordSectionOpen && <section id="account-change-password" className="rounded-2xl border border-white/10 bg-slate-900 p-6">
           <h2 className="text-2xl font-bold">Change Password</h2>
           <p className="mt-2 text-sm text-slate-400">
             You can change your password any number of times. Enter your current password to authorize each change.
@@ -390,7 +396,7 @@ export default function AccountManagementPage() {
             </label>
             <button type="submit" disabled={changingPassword} className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50">{changingPassword ? "Changing Password..." : "Change Password"}</button>
           </form>
-        </section>
+        </section>}
 
         <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
           <h2 className="text-2xl font-bold">Recent Login History</h2>

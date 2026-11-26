@@ -15,6 +15,7 @@ type Bank = {
   question_count: number;
   question_types: Record<string, number>;
   difficulty_counts: Record<string, number>;
+  question_type_difficulty_counts: Record<string, Record<string, number>>;
   maximum_marks: number;
   created_by_name: string;
   created_by_role: string;
@@ -135,15 +136,19 @@ export default function QuestionBanksPage() {
                         <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Maximum marks</p><p className="mt-1 font-semibold">{Number(bank.maximum_marks || 0).toLocaleString()}</p></div>
                       </div>
                       <div className="mt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Difficulty levels</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {["easy", "medium", "hard"].map((level) => <span key={level} className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs capitalize text-slate-300">{level}: {bank.difficulty_counts?.[level] || 0}</span>)}
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Question types</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {Object.entries(typeLabels).map(([type, label]) => <span key={type} className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs text-slate-300">{label}: {bank.question_types?.[type] || 0}</span>)}
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Questions by type and difficulty</p>
+                        <div className="mt-2 overflow-x-auto rounded-lg border border-white/10">
+                          <table className="w-full min-w-[390px] text-left text-xs">
+                            <thead className="bg-slate-900 text-slate-400"><tr><th className="p-2">Question type</th><th className="p-2 text-right">Easy</th><th className="p-2 text-right">Medium</th><th className="p-2 text-right">Hard</th><th className="p-2 text-right">Total</th></tr></thead>
+                            <tbody>
+                              {Object.entries(typeLabels).map(([type, label]) => {
+                                const counts = bank.question_type_difficulty_counts?.[type] || {};
+                                const easy = counts.easy || 0, medium = counts.medium || 0, hard = counts.hard || 0;
+                                return <tr key={type} className="border-t border-white/5 text-slate-300"><th className="p-2 font-medium">{label}</th><td className="p-2 text-right tabular-nums">{easy}</td><td className="p-2 text-right tabular-nums">{medium}</td><td className="p-2 text-right tabular-nums">{hard}</td><td className="p-2 text-right font-semibold tabular-nums">{bank.question_types?.[type] ?? easy + medium + hard}</td></tr>;
+                              })}
+                              <tr className="border-t border-white/10 bg-slate-900 font-semibold text-white"><th className="p-2">Total</th><td className="p-2 text-right tabular-nums">{bank.difficulty_counts?.easy || 0}</td><td className="p-2 text-right tabular-nums">{bank.difficulty_counts?.medium || 0}</td><td className="p-2 text-right tabular-nums">{bank.difficulty_counts?.hard || 0}</td><td className="p-2 text-right tabular-nums">{bank.question_count}</td></tr>
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                       <div className="mt-4 border-t border-white/10 pt-3 text-sm">

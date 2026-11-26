@@ -136,17 +136,16 @@ export default function ExaminerDashboardPage() {
         <section aria-label="Available sections">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {navigation.map((item) => (
-              <Link
+              <article
                 key={item.href}
-                href={item.href}
                 className="group rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
               >
                 <h2 className="text-lg font-bold transition group-hover:text-blue-400">
                   {item.title}
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">{item.description}</p>
-                <p className="mt-5 text-sm font-semibold text-blue-400">Open →</p>
-              </Link>
+                <Link href={item.href} className="mt-5 inline-flex items-center gap-1 rounded-lg border border-blue-400/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10">View <span aria-hidden="true">→</span></Link>
+              </article>
             ))}
           </div>
         </section>
