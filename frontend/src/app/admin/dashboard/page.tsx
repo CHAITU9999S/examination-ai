@@ -129,10 +129,11 @@ export default function AdminDashboardPage() {
 
         setUser(currentUser);
 
-        const statsResponse = await fetch(
-          `${API_URL}/admin/dashboard`,
-          { headers, cache: "no-store" }
-        );
+        // These dashboard summaries are independent, so request them together.
+        const [statsResponse, banksResponse] = await Promise.all([
+          fetch(`${API_URL}/admin/dashboard`, { headers, cache: "no-store" }),
+          fetch(`${API_URL}/question-banks/browse`, { headers, cache: "no-store" }),
+        ]);
 
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
@@ -146,7 +147,6 @@ export default function AdminDashboardPage() {
           throw new Error("Unable to load dashboard statistics.");
         }
 
-        const banksResponse = await fetch(`${API_URL}/question-banks/browse`, { headers, cache: "no-store" });
         if (banksResponse.ok) {
           const banksData = await banksResponse.json();
           setQuestionBankCount(Array.isArray(banksData) ? banksData.length : 0);
