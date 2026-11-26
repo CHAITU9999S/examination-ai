@@ -38,6 +38,7 @@ interface OwnedExam {
   start_time?: string | null;
   end_time?: string | null;
   published_at?: string | null;
+  selection_rules?: { group_counts?: Record<string, number> } | null;
 }
 interface ReviewSession {
   session_id: number;
@@ -276,13 +277,17 @@ export default function ExaminerResultsPage() {
                   <p className="mt-1 text-sm text-slate-400">{exam.subject || "No subject"}</p>
                   <p className="mt-2 text-xs text-slate-400">Created by: <span className="font-medium text-slate-200">{exam.created_by_name || "You"}</span></p>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div><dt className="text-xs text-slate-500">Questions</dt><dd className="mt-1">{exam.total_questions}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Questions in bank</dt><dd className="mt-1">{exam.assigned_question_count ?? "—"}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Questions per student</dt><dd className="mt-1">{exam.total_questions}</dd></div>
                     <div><dt className="text-xs text-slate-500">Maximum time</dt><dd className="mt-1">{exam.duration_minutes} minutes</dd></div>
                     <div><dt className="text-xs text-slate-500">Maximum marks</dt><dd className="mt-1">{exam.max_marks ?? "Not available"}</dd></div>
                     <div><dt className="text-xs text-slate-500">Evaluation status</dt><dd className={evaluatedState ? "mt-1 font-semibold text-emerald-300" : "mt-1 font-semibold text-amber-300"}>{evaluatedState ? "Evaluated" : "Evaluation Pending"}</dd></div>
                     <div><dt className="text-xs text-slate-500">Scheduled start</dt><dd className="mt-1">{formatDate(exam.start_time)}</dd></div>
                     <div><dt className="text-xs text-slate-500">Scheduled end</dt><dd className="mt-1">{formatDate(exam.end_time)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Published</dt><dd className="mt-1">{formatDate(exam.published_at)}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Exam ID</dt><dd className="mt-1">#{exam.id}</dd></div>
                   </dl>
+                  <p className="mt-4 text-xs leading-5 text-slate-400">{exam.selection_rules?.group_counts ? Object.entries(exam.selection_rules.group_counts).filter(([, count]) => Number(count) > 0).map(([key, count]) => { const [difficulty, type] = key.split("|"); return `${type.replaceAll("_", " ")} / ${difficulty}: ${count}`; }).join(" · ") || "No type/difficulty breakdown configured" : "Question type and difficulty counts configured in the examination"}</p>
                 </div>
                 <div className="mt-5 border-t border-white/10 pt-4">
                   <Link href={`/staff/manage-exams/${exam.id}`} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500">{evaluatedState ? "View Evaluation" : "Continue Evaluation"} →</Link>
