@@ -108,21 +108,47 @@ export default function ExaminerDashboardPage() {
       ]);
 
       const sessions = Array.isArray(sessionsData?.sessions) ? sessionsData.sessions : [];
-      const sessionsByExam = new Map<number, Array<{ is_published: boolean }>>();
-      for (const session of sessions) {
-        const examSessions = sessionsByExam.get(Number(session.exam_id)) || [];
-        examSessions.push({ is_published: Boolean(session.is_published) });
-        sessionsByExam.set(Number(session.exam_id), examSessions);
-      }
-      const evaluationCompleted = Array.from(sessionsByExam.values()).filter(
-        (examSessions) => examSessions.length > 0 && examSessions.every((session) => session.is_published)
-      ).length;
+      const publishedSessionIds = new Set(
+        sessions.filter((session: { is_published?: boolean }) => Boolean(session.is_published))
+          .map((session: { session_id: number }) => Number(session.session_id))
+      );
+      const ownExams = Array.isArray(examsData)
+        ? examsData
+        : Array.isArray(examsData?.exams)
+          ? examsData.exams
+          : [];
+
+      // Count an examination only when every currently assigned student has a
+      // session and that student's result has been published.
+      const assignmentResults = await Promise.all(
+        ownExams.map(async (exam: { id: number }) => {
+          try {
+            const assignmentResponse = await fetch(`${API_URL}/exams/${exam.id}/assignments`, {
+              headers,
+              cache: "no-store",
+            });
+            if (!assignmentResponse.ok) return false;
+            const assignmentData = await assignmentResponse.json();
+            const activeStudents = Array.isArray(assignmentData?.students)
+              ? assignmentData.students.filter((student: { is_active?: boolean }) => student.is_active)
+              : [];
+            return activeStudents.length > 0 && activeStudents.every(
+              (student: { session_id?: number | null }) =>
+                student.session_id !== null &&
+                student.session_id !== undefined &&
+                publishedSessionIds.has(Number(student.session_id))
+            );
+          } catch {
+            return false;
+          }
+        })
+      );
 
       setOverview({
         allQuestionBanks: Array.isArray(allBanksData) ? allBanksData.length : 0,
         myQuestionBanks: Array.isArray(myBanksData) ? myBanksData.length : 0,
-        myExaminations: Array.isArray(examsData) ? examsData.length : Array.isArray(examsData?.exams) ? examsData.exams.length : 0,
-        evaluationCompleted,
+        myExaminations: ownExams.length,
+        evaluationCompleted: assignmentResults.filter(Boolean).length,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load examiner dashboard.");
