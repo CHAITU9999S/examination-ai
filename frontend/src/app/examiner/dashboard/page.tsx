@@ -18,7 +18,7 @@ interface Examiner {
 const navigation = [
   {
     title: "Question Bank",
-    description: "Open the shared Question Bank section, including all question-bank subsections and options.",
+    description: "Browse all question banks and manage the question banks you own.",
     href: "/admin/sections/question-banks",
   },
   {
@@ -27,15 +27,35 @@ const navigation = [
     href: "/admin/sections/examinations",
   },
   {
+    title: "Results",
+    description: "Review submitted answers, evaluate examinations, and publish student results.",
+    href: "/examiner/results",
+  },
+  {
     title: "Account Management",
-    description: "Manage your personal details, password, and recent login history.",
+    description: "Manage your personal details, password, and login activity.",
     href: "/account/management",
   },
 ];
 
+interface DashboardOverview {
+  allQuestionBanks: number;
+  myQuestionBanks: number;
+  myExaminations: number;
+  evaluationCompleted: number;
+}
+
+const emptyOverview: DashboardOverview = {
+  allQuestionBanks: 0,
+  myQuestionBanks: 0,
+  myExaminations: 0,
+  evaluationCompleted: 0,
+};
+
 export default function ExaminerDashboardPage() {
   const router = useRouter();
   const [examiner, setExaminer] = useState<Examiner | null>(null);
+  const [overview, setOverview] = useState<DashboardOverview>(emptyOverview);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -69,6 +89,41 @@ export default function ExaminerDashboardPage() {
         return;
       }
       setExaminer(currentUser);
+
+      // Load overview figures independently so one unavailable statistic does not
+      // prevent the Examiner from opening the rest of the dashboard.
+      const headers = { Authorization: `Bearer ${token}` };
+      const [allBanksResponse, myBanksResponse, examsResponse, sessionsResponse] = await Promise.all([
+        fetch(`${API_URL}/question-banks/browse`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/question-banks/`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/exams?mine=true`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/grading/sessions`, { headers, cache: "no-store" }),
+      ]);
+
+      const [allBanksData, myBanksData, examsData, sessionsData] = await Promise.all([
+        allBanksResponse.ok ? allBanksResponse.json() : Promise.resolve([]),
+        myBanksResponse.ok ? myBanksResponse.json() : Promise.resolve([]),
+        examsResponse.ok ? examsResponse.json() : Promise.resolve([]),
+        sessionsResponse.ok ? sessionsResponse.json() : Promise.resolve({ sessions: [] }),
+      ]);
+
+      const sessions = Array.isArray(sessionsData?.sessions) ? sessionsData.sessions : [];
+      const sessionsByExam = new Map<number, Array<{ is_published: boolean }>>();
+      for (const session of sessions) {
+        const examSessions = sessionsByExam.get(Number(session.exam_id)) || [];
+        examSessions.push({ is_published: Boolean(session.is_published) });
+        sessionsByExam.set(Number(session.exam_id), examSessions);
+      }
+      const evaluationCompleted = Array.from(sessionsByExam.values()).filter(
+        (examSessions) => examSessions.length > 0 && examSessions.every((session) => session.is_published)
+      ).length;
+
+      setOverview({
+        allQuestionBanks: Array.isArray(allBanksData) ? allBanksData.length : 0,
+        myQuestionBanks: Array.isArray(myBanksData) ? myBanksData.length : 0,
+        myExaminations: Array.isArray(examsData) ? examsData.length : Array.isArray(examsData?.exams) ? examsData.exams.length : 0,
+        evaluationCompleted,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load examiner dashboard.");
     } finally {
@@ -133,18 +188,42 @@ export default function ExaminerDashboardPage() {
           </div>
         )}
 
+        <section aria-label="Examination Overview" className="mb-10">
+          <h2 className="mb-5 text-xl font-bold">Examination Overview</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "All Question Banks", value: overview.allQuestionBanks },
+              { label: "My Question Banks", value: overview.myQuestionBanks },
+              { label: "Examinations Created", value: overview.myExaminations },
+              { label: "Evaluations Completed", value: overview.evaluationCompleted },
+            ].map((item) => (
+              <article key={item.label} className="rounded-xl border border-white/10 bg-slate-900 p-6">
+                <p className="text-sm text-slate-400">{item.label}</p>
+                <p className="mt-3 text-3xl font-bold tabular-nums">{item.value.toLocaleString()}</p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">An evaluation is counted as completed only when results have been published for every student session in that examination.</p>
+        </section>
+
         <section aria-label="Available sections">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="mb-5 text-xl font-bold">Management</h2>
+          <div className="grid gap-5 sm:grid-cols-2">
             {navigation.map((item) => (
               <article
                 key={item.href}
-                className="group rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
+                className="group flex min-h-52 flex-col rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
               >
                 <h2 className="text-lg font-bold transition group-hover:text-blue-400">
                   {item.title}
                 </h2>
-                <p className="mt-3 text-sm leading-6 text-slate-400">{item.description}</p>
-                <Link href={item.href} className="mt-5 inline-flex items-center gap-1 rounded-lg border border-blue-400/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10">View <span aria-hidden="true">→</span></Link>
+                <p className="mt-3 flex-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                <Link
+                  href={item.href}
+                  className="mt-5 inline-flex min-h-12 w-fit items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+                >
+                  View <span aria-hidden="true">→</span>
+                </Link>
               </article>
             ))}
           </div>
