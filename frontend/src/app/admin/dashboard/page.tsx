@@ -247,11 +247,16 @@ export default function AdminDashboardPage() {
             {navigationGroups.map((group) => (
               <article
                 key={group.slug}
-                className="rounded-2xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
+                className="group flex min-h-52 flex-col rounded-xl border border-white/10 bg-slate-900 p-6 transition hover:border-blue-400/50 hover:bg-slate-800"
               >
-                <h3 className="text-xl font-bold">{group.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-400">{group.description}</p>
-                <Link href={group.href || `/admin/sections/${group.slug}`} className="mt-5 inline-flex items-center gap-1 rounded-lg border border-blue-400/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10">View <span aria-hidden="true">→</span></Link>
+                <h3 className="text-xl font-bold transition group-hover:text-blue-400">{group.title}</h3>
+                <p className="mt-2 flex-1 text-sm leading-6 text-slate-400">{group.description}</p>
+                <Link
+                  href={group.href || `/admin/sections/${group.slug}`}
+                  className="mt-5 inline-flex min-h-12 w-fit items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+                >
+                  View <span aria-hidden="true">→</span>
+                </Link>
               </article>
             ))}
           </div>
