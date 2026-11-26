@@ -178,7 +178,7 @@ export default function StudentDashboardPage() {
       {items.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No examinations in this section.</p> :
         <div className="mt-5 grid gap-5 xl:grid-cols-2">{items.map(exam => <ExamCard key={exam.id} exam={exam} action={
           kind === "available" ? <button type="button" onClick={() => startExam(exam)} disabled={!exam.can_start}
-            className="w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
+            className="min-h-12 w-full rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
             {exam.is_pending || exam.is_in_progress ? "Resume Examination" : exam.can_start ? "Start Examination" : "Not Started Yet"}
           </button> :
           kind === "completed" ? <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-emerald-900/50 px-5 py-3 font-semibold text-emerald-300">Completed</button> :
@@ -202,14 +202,6 @@ export default function StudentDashboardPage() {
             {student && <div className="mt-5 rounded-xl border border-white/10 bg-slate-900 p-5"><p className="font-semibold">{student.full_name}</p><p className="mt-1 text-sm text-slate-400">{student.email}</p><p className="mt-1 text-xs capitalize text-blue-400">{student.role}</p></div>}
           </section>
           {error && <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">{error}</div>}
-          <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[["Available Examinations", available.length, "text-green-300"], ["Upcoming Examinations", upcoming.length, "text-blue-300"], ["Completed Examinations", completed.length, "text-emerald-300"], ["Unattempted / Expired", expired.length, "text-red-300"]].map(([label, count, color]) =>
-              <div key={String(label)} className="rounded-2xl border border-white/10 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className={"mt-3 text-3xl font-bold " + color}>{count}</p></div>)}
-          </section>
-          {section("Available Examinations", available.length, "Scheduled examinations you can start or resume. Expiring Soon means the scheduled end time is within the next 12 hours.", available, "available")}
-          {section("Upcoming Examinations", upcoming.length, "Assigned examinations for which the creator has not assigned a complete schedule yet.", upcoming, "upcoming")}
-          {section("Completed Examinations", completed.length, "Submitted or automatically submitted examinations, newest submission first.", completed, "completed")}
-          {section("Unattempted / Expired Examinations", expired.length, "Examinations whose schedule ended without a completed submission.", expired, "expired")}
           <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Examination Overview</h2><p className="mt-1 text-sm text-slate-400">All assigned examinations across the four sections.</p></div>
               <button type="button" onClick={loadDashboard} disabled={loading} className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50">Refresh</button></div>
@@ -224,7 +216,14 @@ export default function StudentDashboardPage() {
                     <span className="text-slate-500">{exam.category === "completed" ? "Result Not Declared" : ""}</span>}</div>
               } />)}</div>}
           </section>
-          <div className="mt-8 flex flex-wrap justify-end gap-3"><Link href="/student/results" className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500">View Results</Link><Link href="/account/management" className="rounded-lg border border-white/20 px-5 py-3 text-sm hover:bg-white/10">Account Management</Link></div>
+          <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[["Available Examinations", available.length, "text-green-300"], ["Upcoming Examinations", upcoming.length, "text-blue-300"], ["Completed Examinations", completed.length, "text-emerald-300"], ["Unattempted / Expired", expired.length, "text-red-300"]].map(([label, count, color]) =>
+              <div key={String(label)} className="rounded-2xl border border-white/10 bg-slate-900 p-5"><p className="text-sm text-slate-400">{label}</p><p className={"mt-3 text-3xl font-bold " + color}>{count}</p></div>)}
+          </section>
+          {section("Available Examinations", available.length, "Scheduled examinations you can start or resume. Expiring Soon means the scheduled end time is within the next 12 hours.", available, "available")}
+          {section("Upcoming Examinations", upcoming.length, "Assigned examinations for which the creator has not assigned a complete schedule yet.", upcoming, "upcoming")}
+          {section("Completed Examinations", completed.length, "Submitted or automatically submitted examinations, newest submission first.", completed, "completed")}
+          {section("Unattempted / Expired Examinations", expired.length, "Examinations whose schedule ended without a completed submission.", expired, "expired")}
         </>}
       </div>
     </main>
