@@ -196,24 +196,6 @@ export default function ExaminerDashboardPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <section className="mb-10">
-          <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
-            Examiner workspace
-          </p>
-          <h1 className="mt-3 text-3xl font-bold">
-            Welcome, {examiner?.full_name || "Examiner"}
-          </h1>
-          {examiner?.department && (
-            <p className="mt-3 text-sm text-slate-400">Department: {examiner.department}</p>
-          )}
-        </section>
-
-        {error && (
-          <div role="alert" className="mb-8 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
         <section aria-label="Examination Overview" className="mb-10">
           <h2 className="mb-5 text-xl font-bold">Examination Overview</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -231,6 +213,24 @@ export default function ExaminerDashboardPage() {
           </div>
           <p className="mt-3 text-xs text-slate-500">An evaluation is counted as completed only when results have been published for every student session in that examination.</p>
         </section>
+
+        <section className="mb-10">
+          <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
+            Examiner workspace
+          </p>
+          <h1 className="mt-3 text-3xl font-bold">
+            Welcome, {examiner?.full_name || "Examiner"}
+          </h1>
+          {examiner?.department && (
+            <p className="mt-3 text-sm text-slate-400">Department: {examiner.department}</p>
+          )}
+        </section>
+
+        {error && (
+          <div role="alert" className="mb-8 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+            {error}
+          </div>
+        )}
 
         <section aria-label="Available sections">
           <h2 className="mb-5 text-xl font-bold">Management</h2>
