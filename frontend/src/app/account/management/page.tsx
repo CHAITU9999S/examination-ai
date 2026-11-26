@@ -257,7 +257,7 @@ export default function AccountManagementPage() {
     setDepartment(profile.department || "");
     setDateOfBirth(profile.date_of_birth || "");
     setEditing(false);
-    setActiveSection("personal");
+    setActiveSection("home");
     setProfileError("");
   }
 
