@@ -162,7 +162,7 @@ export default function AdminSectionPage() {
                     <div key={related.href}>
                       <p className="text-sm font-semibold text-slate-200">{related.title}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-500">{related.description}</p>
-                      <Link href={related.href} className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900">View <span aria-hidden="true">→</span></Link>
+                      <Link href={related.href} className="mt-5 inline-flex min-h-12 w-fit items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900">View <span aria-hidden="true">→</span></Link>
                     </div>
                   ))}
                 </div>
