@@ -106,6 +106,7 @@ export default function StudentDashboardPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startingExamId, setStartingExamId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("nearest");
@@ -151,11 +152,13 @@ export default function StudentDashboardPage() {
     return sortByDate(filtered, "start_time", "asc");
   }, [exams, search, sort]);
   async function startExam(exam: Exam) {
+    if (startingExamId !== null) return;
     setError("");
     if (!exam.can_start) {
       setError(exam.start_time && Date.now() < new Date(exam.start_time).getTime() ? "This examination has not started yet." : "This examination is no longer available to start.");
       return;
     }
+    setStartingExamId(exam.id);
     try {
       const headers = getHeaders(); if (!headers) return;
       const response = await fetch(API_URL + "/exam-sessions/start/" + exam.id, { method: "POST", headers });
@@ -171,15 +174,16 @@ export default function StudentDashboardPage() {
       sessionStorage.setItem("examguard_exam_id_" + sessionId, String(data.exam_id ?? exam.id));
       router.push("/student/exam/" + sessionId);
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to start examination."); }
+    finally { setStartingExamId(null); }
   }
   const section = (title: string, count: number, description: string, items: Exam[], kind: Exam["category"]) => (
     <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
       <div><h2 className="text-xl font-bold">{title} <span className="ml-2 text-blue-300">({count})</span></h2><p className="mt-1 text-sm text-slate-400">{description}</p></div>
       {items.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No examinations in this section.</p> :
         <div className="mt-5 grid gap-5 xl:grid-cols-2">{items.map(exam => <ExamCard key={exam.id} exam={exam} action={
-          kind === "available" ? <button type="button" onClick={() => startExam(exam)} disabled={!exam.can_start}
+          kind === "available" ? <button type="button" onClick={() => startExam(exam)} disabled={!exam.can_start || startingExamId !== null}
             className="min-h-12 w-full rounded-lg bg-cyan-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
-            {exam.is_pending || exam.is_in_progress ? "Resume Examination" : exam.can_start ? "Start Examination" : "Not Started Yet"}
+            {startingExamId === exam.id ? "Opening Examination..." : exam.is_pending || exam.is_in_progress ? "Resume Examination" : exam.can_start ? "Start Examination" : "Not Started Yet"}
           </button> :
           kind === "completed" ? <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-emerald-900/50 px-5 py-3 font-semibold text-emerald-300">Completed</button> :
           kind === "expired" ? <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-red-900/50 px-5 py-3 font-semibold text-red-300">Expired</button> :
