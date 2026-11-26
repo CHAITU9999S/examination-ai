@@ -73,6 +73,13 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    title: "Results",
+    description: "Review submitted answers, evaluate examinations, and publish results for examinations you created.",
+    slug: "results",
+    href: "/examiner/results",
+    items: [],
+  },
+  {
     title: "Account Management",
     description: "Manage your personal details, password, and recent login history.",
     slug: "account-management",
