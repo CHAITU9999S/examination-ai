@@ -33,6 +33,7 @@ export default function QuestionBanksPage() {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [workingBankId, setWorkingBankId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
@@ -81,13 +82,21 @@ export default function QuestionBanksPage() {
     const nextDescription = window.prompt("Description (leave empty for none)", bank.description || "");
     if (nextDescription === null) return;
     const auth = headers(); if (!auth) return;
-    const response = await fetch(`${API_URL}/question-banks/${bank.id}`, {
-      method: "PATCH", headers: auth,
-      body: JSON.stringify({ name: nextName.trim(), subject: nextSubject.trim() || null, description: nextDescription.trim() || null }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) { setError(data.detail || "Unable to update question bank."); return; }
-    await loadBanks();
+    setWorkingBankId(bank.id);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/question-banks/${bank.id}`, {
+        method: "PATCH", headers: auth,
+        body: JSON.stringify({ name: nextName.trim(), subject: nextSubject.trim() || null, description: nextDescription.trim() || null }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to update question bank.");
+      await loadBanks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to update question bank.");
+    } finally {
+      setWorkingBankId(null);
+    }
   }
 
   async function createBank(event: FormEvent) {
@@ -110,10 +119,18 @@ export default function QuestionBanksPage() {
   async function deleteBank(id: number) {
     if (!window.confirm("Delete this question bank? Unused questions may also be deleted. Questions used in other banks, examinations, or student records will be kept.")) return;
     const auth = headers(); if (!auth) return;
-    const response = await fetch(`${API_URL}/question-banks/${id}`, { method: "DELETE", headers: auth });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) { setError(data.detail || "Unable to delete question bank."); return; }
-    await loadBanks();
+    setWorkingBankId(id);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/question-banks/${id}`, { method: "DELETE", headers: auth });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to delete question bank.");
+      await loadBanks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to delete question bank.");
+    } finally {
+      setWorkingBankId(null);
+    }
   }
 
   return <main className="min-h-screen bg-slate-950 text-white">
@@ -164,8 +181,8 @@ export default function QuestionBanksPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link href={`/examiner/question-banks/${bank.id}`} className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold">View / Manage Questions</Link>
-                <button type="button" onClick={()=>editBank(bank)} className="rounded-lg border border-white/20 px-3 py-2 text-sm">Edit Bank</button>
-                <button type="button" onClick={()=>deleteBank(bank.id)} className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300">Delete Bank</button>
+                <button type="button" onClick={()=>editBank(bank)} disabled={workingBankId !== null} className="rounded-lg border border-white/20 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">{workingBankId === bank.id ? "Saving..." : "Edit Bank"}</button>
+                <button type="button" onClick={()=>deleteBank(bank.id)} disabled={workingBankId !== null} className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 disabled:cursor-not-allowed disabled:opacity-50">{workingBankId === bank.id ? "Deleting..." : "Delete Bank"}</button>
               </div>
             </article>)}
           </div>
