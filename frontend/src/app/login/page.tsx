@@ -9,6 +9,7 @@ interface LoginResponse {
   access_token?: string;
   token_type?: string;
   detail?: string;
+  user?: UserResponse;
 }
 
 interface UserResponse {
@@ -78,21 +79,30 @@ export default function LoginPage() {
         throw new Error("The server did not return an access token.");
       }
 
-      const userResponse = await fetch(`${API_URL}/users/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${loginData.access_token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      let user: UserResponse;
 
-      if (!userResponse.ok) {
-        throw new Error(
-          "Login succeeded, but your account information could not be loaded."
-        );
+      if (loginData.user) {
+        // Newer backends return the authenticated profile with the token,
+        // avoiding a second sequential request after successful sign-in.
+        user = loginData.user;
+      } else {
+        // Keep compatibility with an older backend during deployment rollout.
+        const userResponse = await fetch(`${API_URL}/users/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${loginData.access_token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!userResponse.ok) {
+          throw new Error(
+            "Login succeeded, but your account information could not be loaded."
+          );
+        }
+
+        user = await userResponse.json();
       }
-
-      const user: UserResponse = await userResponse.json();
 
       if (!user.is_active) {
         throw new Error("Your account is inactive. Contact an administrator.");

@@ -270,5 +270,13 @@ def login(
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user={
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "department": user.department,
+            "role": user.role,
+            "is_active": user.is_active,
+        },
     )

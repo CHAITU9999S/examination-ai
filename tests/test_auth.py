@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 from jose import jwt
 
+from app.models import User
+
 from app.auth import (
     JWT_SECRET_KEY,
     JWT_ALGORITHM,
@@ -133,3 +135,34 @@ assert application_secret == expected
         text=True,
         env=env,
     )
+
+
+
+def test_login_returns_authenticated_user_with_access_token(client, db_session):
+    user = User(
+        full_name="Login Test Student",
+        email="login-test@example.com",
+        password_hash=hash_password("TestPassword123"),
+        role="student",
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": "login-test@example.com", "password": "TestPassword123"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["access_token"]
+    assert payload["user"] == {
+        "id": user.id,
+        "full_name": "Login Test Student",
+        "email": "login-test@example.com",
+        "department": None,
+        "role": "student",
+        "is_active": True,
+    }
