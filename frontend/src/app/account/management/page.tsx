@@ -17,6 +17,7 @@ interface Profile {
   department_edit_count: number;
   date_of_birth_edit_count: number;
   role: string;
+  is_active: boolean | null;
 }
 
 interface LoginRecord {
@@ -350,6 +351,10 @@ export default function AccountManagementPage() {
                 {profileMessage && <div role="status" className="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{profileMessage}</div>}
                 <div className="mt-6 grid gap-4">
                   <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Account ID</p>
+                    <p className="mt-1 font-semibold tabular-nums">{profile?.id ?? "Not available"}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
                     <p className="text-xs text-slate-400">Name</p>
                     <p className="mt-1 font-semibold">{profile?.full_name || "Not provided"}</p>
                     <p className="mt-2 text-xs text-slate-500">{remainingEdits(profile?.full_name_edit_count || 0)} of 3 edits remaining</p>
@@ -372,6 +377,10 @@ export default function AccountManagementPage() {
                   <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
                     <p className="text-xs text-slate-400">Account Type</p>
                     <p className="mt-1 font-semibold capitalize">{profile?.role || "Not available"}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                    <p className="text-xs text-slate-400">Account Status</p>
+                    <p className="mt-1 font-semibold">{profile?.is_active === undefined || profile?.is_active === null ? "Not available" : profile.is_active ? "Active" : "Inactive"}</p>
                   </div>
                 </div>
               </section>
