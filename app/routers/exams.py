@@ -85,6 +85,7 @@ def create_exam(
         subject=data.subject,
         duration_minutes=data.duration_minutes,
         total_questions=data.total_questions,
+        total_marks=data.total_marks,
         randomize_questions=data.randomize_questions,
         selection_rules=data.selection_rules,
 
@@ -114,6 +115,7 @@ def create_exam(
                 "subject": exam.subject,
                 "duration_minutes": exam.duration_minutes,
                 "total_questions": exam.total_questions,
+                "total_marks": exam.total_marks,
                 "randomize_questions": exam.randomize_questions,
                 "selection_rules": exam.selection_rules,
                 "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if exam.start_time else None,
