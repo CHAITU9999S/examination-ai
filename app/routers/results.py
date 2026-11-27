@@ -111,6 +111,43 @@ def _student_report_image_response(question, session, kind: str, db: Session):
     )
 
 
+
+
+def _report_score_summary(paper: list[dict], total_marks: float | None = None, obtained_marks: float | None = None) -> dict:
+    """Calculate report totals only from marks that have actually been awarded."""
+    evaluated = [
+        item for item in paper
+        if item.get("awarded_marks") is not None
+    ]
+    positive_earned = round(sum(
+        max(0.0, float(item["awarded_marks"])) for item in evaluated
+    ), 2)
+    negative_deducted = round(sum(
+        abs(min(0.0, float(item["awarded_marks"]))) for item in evaluated
+    ), 2)
+    correct = wrong = partial = 0
+    for item in evaluated:
+        awarded = float(item["awarded_marks"])
+        maximum = float(item.get("maximum_marks") or 0)
+        if abs(awarded - maximum) < 0.0001:
+            correct += 1
+        elif awarded <= 0:
+            wrong += 1
+        else:
+            partial += 1
+    return {
+        "positive_marks_earned": positive_earned if evaluated else None,
+        "negative_marks_deducted": negative_deducted if evaluated else None,
+        "maximum_positive_marks": round(sum(float(item.get("maximum_marks") or 0) for item in paper), 2),
+        "configured_negative_marks": round(sum(float(item.get("negative_marks") or 0) for item in paper), 2),
+        "total_marks_obtained": obtained_marks,
+        "total_marks": total_marks,
+        "evaluated_questions": len(evaluated),
+        "correct_questions": correct if evaluated else None,
+        "wrong_questions": wrong if evaluated else None,
+        "partially_correct_questions": partial if evaluated else None,
+    }
+
 def _get_percentile(db: Session, exam_id: int, obtained_marks: float):
     cohort_query = db.query(Result).join(
         ExamSession,
@@ -431,6 +468,7 @@ def get_my_ended_exam_paper(
             "question_text": question.question_text,
             "question_type": getattr(question.question_type, "value", question.question_type),
             "maximum_marks": float(question.marks or 0),
+            "negative_marks": float(question.negative_marks or 0),
             "awarded_marks": answer.awarded_marks if answer and published_result else None,
             "student_answer": answer.answer_text if answer else None,
             "student_selected_options": selected_option_texts,
@@ -444,12 +482,34 @@ def get_my_ended_exam_paper(
             "student_answer_image_url": f"/results/exams/{exam.id}/paper/{question.id}/image/student" if answer and answer.image_data else None,
         })
 
+    total_marks = (
+        float(published_result.total_marks)
+        if published_result is not None and published_result.total_marks is not None
+        else round(sum(item["maximum_marks"] for item in paper), 2)
+    )
+    obtained_marks = (
+        float(published_result.obtained_marks)
+        if published_result is not None and published_result.obtained_marks is not None
+        else None
+    )
     return {
         "exam_id": exam.id,
         "exam_title": exam.title,
         "subject": exam.subject,
+        "exam_details": {
+            "duration_minutes": exam.duration_minutes,
+            "total_questions": len(paper),
+            "total_marks": total_marks,
+            "negative_marking_enabled": bool(exam.negative_marking),
+            "start_time": exam.start_time.isoformat() if exam.start_time else None,
+            "end_time": exam.end_time.isoformat() if exam.end_time else None,
+            "creator_name": _exam_attribution(session, exam, db)["creator_name"] if session else (db.query(User).filter(User.id == exam.created_by).first().full_name if exam.created_by and db.query(User).filter(User.id == exam.created_by).first() else None),
+            "assigned_by_name": _exam_attribution(session, exam, db)["assigned_by_name"] if session else None,
+        },
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
+        "result_published": bool(published_result),
+        **_report_score_summary(paper, total_marks, obtained_marks),
         "paper": paper,
     }
 
@@ -541,6 +601,7 @@ def get_admin_student_assigned_paper(
             "question_type": getattr(question.question_type, "value", question.question_type),
             "difficulty": question.difficulty,
             "maximum_marks": float(question.marks or 0),
+            "negative_marks": float(question.negative_marks or 0),
             "awarded_marks": float(answer.awarded_marks) if answer is not None and answer.awarded_marks is not None else None,
             "student_answer": answer.answer_text if answer is not None else None,
             "student_selected_options": selected_option_texts,
@@ -556,19 +617,34 @@ def get_admin_student_assigned_paper(
         })
 
     calculated_total = round(sum(item["maximum_marks"] for item in paper), 2)
+    obtained_marks = float(result.obtained_marks) if result and result.obtained_marks is not None else None
+    total_marks = float(result.total_marks) if result and result.total_marks is not None else calculated_total
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    assigner = db.query(User).filter(User.id == assignment.assigned_by).first()
     return {
         "exam_id": exam.id,
         "exam_title": exam.title,
         "subject": exam.subject,
         "student_id": student_id,
+        "exam_details": {
+            "duration_minutes": exam.duration_minutes,
+            "total_questions": len(paper),
+            "total_marks": total_marks,
+            "negative_marking_enabled": bool(exam.negative_marking),
+            "start_time": exam.start_time.isoformat() if exam.start_time else None,
+            "end_time": exam.end_time.isoformat() if exam.end_time else None,
+            "creator_name": creator.full_name if creator else None,
+            "assigned_by_name": assigner.full_name if assigner else None,
+        },
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
         "paper_is_preview": session is None,
         "result_published": bool(result and result.is_published),
-        "obtained_marks": float(result.obtained_marks) if result and result.obtained_marks is not None else None,
-        "total_marks": float(result.total_marks) if result and result.total_marks is not None else calculated_total,
+        "obtained_marks": obtained_marks,
+        "total_marks": total_marks,
         "percentage": float(result.percentage) if result and result.percentage is not None else None,
         "grade": result.grade if result and result.is_published else None,
+        **_report_score_summary(paper, total_marks, obtained_marks),
         "paper": paper,
     }
 
