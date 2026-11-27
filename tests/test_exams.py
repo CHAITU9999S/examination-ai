@@ -2013,6 +2013,9 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
 
     question_marks = {question.id: question.marks for question in questions}
     question_by_id = {question.id: question for question in questions}
+    session_by_student = {session.student_id: session for session in sessions}
+    first_session = session_by_student[first_student.id]
+    second_session = session_by_student[second_student.id]
     assert all(
         sum(question_marks[question_id] for question_id in session.selected_question_ids) == 4
         for session in sessions
@@ -2021,8 +2024,8 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
         len({question_by_id[question_id].question_type for question_id in session.selected_question_ids}) == 2
         for session in sessions
     )
-    assert set(sessions[0].selected_question_ids) != set(sessions[1].selected_question_ids)
-    first_paper = list(sessions[0].selected_question_ids)
+    assert set(first_session.selected_question_ids) != set(second_session.selected_question_ids)
+    first_paper = list(first_session.selected_question_ids)
     revoke_response = client.delete(
         f"/exams/{exam_id}/assignments/{first_student.id}",
         headers=get_auth_headers(creator),
@@ -2035,8 +2038,8 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
         headers=get_auth_headers(creator),
     )
     assert reassign_response.status_code == 200
-    db_session.refresh(sessions[0])
-    assert sessions[0].selected_question_ids == first_paper
+    db_session.refresh(first_session)
+    assert first_session.selected_question_ids == first_paper
 
 
 
