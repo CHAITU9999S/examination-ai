@@ -458,6 +458,10 @@ def get_admin_student_assigned_paper(
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
+    exam_end = normalize_to_naive_utc(exam.end_time)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if exam_end is None or now_utc < exam_end:
+        raise HTTPException(status_code=403, detail="Student performance reports are available only after the examination schedule ends.")
 
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
@@ -572,6 +576,10 @@ def get_admin_student_paper_image(
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if exam is None:
         raise HTTPException(status_code=404, detail="Examination not found.")
+    exam_end = normalize_to_naive_utc(exam.end_time)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if exam_end is None or now_utc < exam_end:
+        raise HTTPException(status_code=403, detail="Student performance report images are available only after the examination schedule ends.")
     session = db.query(ExamSession).filter(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == student_id,
