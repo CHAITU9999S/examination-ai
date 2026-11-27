@@ -54,6 +54,7 @@ function StudentTrackingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromExaminations = searchParams.get("from") === "examinations";
+  const reportReturnHref = fromExaminations ? "/admin/performance?from=examinations" : "/admin/performance";
   const [students, setStudents] = useState<StudentPerformance[]>([]);
   const [role, setRole] = useState<"admin" | "examiner" | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
