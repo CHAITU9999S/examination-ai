@@ -20,6 +20,7 @@ interface QuestionResult {
   expected_answer_image_url?: string | null;
   student_answer_image_url?: string | null;
   maximum_marks: number;
+  negative_marks?: number | null;
   awarded_marks: number;
   outcome: "correct" | "incorrect" | "partial" | "unanswered";
   examiner_feedback?: string | null;
@@ -51,6 +52,25 @@ interface CohortDistribution {
 
 interface ResultDetails {
   exam_title: string;
+  subject?: string | null;
+  exam_details?: {
+    duration_minutes?: number | null;
+    total_questions?: number | null;
+    total_marks?: number | null;
+    negative_marking_enabled?: boolean | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    creator_name?: string | null;
+  };
+  positive_marks_earned?: number | null;
+  negative_marks_deducted?: number | null;
+  maximum_positive_marks?: number | null;
+  configured_negative_marks?: number | null;
+  evaluated_questions?: number | null;
+  correct_questions?: number | null;
+  wrong_questions?: number | null;
+  partially_correct_questions?: number | null;
+  unanswered_questions?: number | null;
   creator_name?: string | null;
   creator_role?: string | null;
   assigned_by_name?: string | null;
@@ -202,6 +222,29 @@ export default function StudentResultDetailPage() {
           <>
             <h1 className="text-3xl font-bold">{result.exam_title}</h1>
             <p className="mt-2 text-xs text-slate-400">Created by: {result.creator_name || "Unknown"} · Assigned by: {result.assigned_by_name || "Unknown"}</p>
+            <section className="mt-6 rounded-2xl border border-white/10 bg-slate-900 p-5">
+              <h2 className="text-lg font-bold">Examination Performance Summary</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Positive marks earned</p><p className="mt-1 text-xl font-bold">{result.positive_marks_earned ?? "Not available"}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Negative marks deducted</p><p className="mt-1 text-xl font-bold">{result.negative_marks_deducted ?? "Not available"}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Total marks obtained</p><p className="mt-1 text-xl font-bold">{result.obtained_marks}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum total marks</p><p className="mt-1 text-xl font-bold">{result.total_marks}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Correct questions</p><p className="mt-1 text-xl font-bold">{result.correct_questions ?? "Not available"}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Wrong questions</p><p className="mt-1 text-xl font-bold">{result.wrong_questions ?? "Not available"}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Partially correct</p><p className="mt-1 text-xl font-bold">{result.partially_correct_questions ?? "Not available"}</p></article>
+                <article className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Unanswered / evaluated</p><p className="mt-1 text-xl font-bold">{result.unanswered_questions ?? "—"} / {result.evaluated_questions ?? "—"}</p></article>
+              </div>
+              <div className="mt-4 grid gap-2 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300 sm:grid-cols-2">
+                <p>Subject: {result.subject || "Not available"}</p>
+                <p>Duration: {result.exam_details?.duration_minutes != null ? `${result.exam_details.duration_minutes} minutes` : "Not available"}</p>
+                <p>Questions in paper: {result.exam_details?.total_questions ?? result.question_results.length}</p>
+                <p>Positive marks available: {result.maximum_positive_marks ?? "Not available"}</p>
+                <p>Configured negative marks: {result.configured_negative_marks ?? "Not available"}</p>
+                <p>Negative marking: {result.exam_details?.negative_marking_enabled == null ? "Not available" : result.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
+                <p>Starts: {result.exam_details?.start_time ? new Date(result.exam_details.start_time).toLocaleString() : "Not available"}</p>
+                <p>Ends: {result.exam_details?.end_time ? new Date(result.exam_details.end_time).toLocaleString() : "Not available"}</p>
+              </div>
+            </section>
             {result.face_photo_url && (
               <section className="mt-6 flex justify-end">
                 <figure className="w-32 rounded-xl border border-white/10 bg-slate-900 p-3 text-center">
@@ -309,7 +352,7 @@ export default function StudentResultDetailPage() {
                       {currentQuestion.question_image_url && <StudentReportImage url={currentQuestion.question_image_url} alt="Question image" />}
                     </div>
                     <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3">
-                      <p className="text-xs text-slate-400">Final marks awarded</p>
+                      <p className="text-xs text-slate-400">Final marks awarded · Negative marks: {currentQuestion.negative_marks ?? "Not available"}</p>
                       <p className="mt-1 text-xl font-bold tabular-nums">{currentQuestion.awarded_marks} / {currentQuestion.maximum_marks}</p>
                     </div>
                   </div>
