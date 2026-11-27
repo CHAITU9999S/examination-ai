@@ -119,6 +119,54 @@ def _get_selection_question_pool(
     return questions
 
 
+
+def _generate_exact_marks_selection(questions, number_of_questions, total_marks, seed):
+    """Choose an exact-size paper whose question marks add to the configured total."""
+    import random
+
+    target_cents = round(float(total_marks) * 100)
+    if target_cents <= 0 or not math.isclose(target_cents / 100, float(total_marks), abs_tol=0.0001):
+        raise ValueError("Total Marks must be a positive amount with at most two decimal places.")
+
+    type_names = sorted({_enum_value(question.question_type) for question in questions})
+    type_bits = {name: 1 << index for index, name in enumerate(type_names)}
+    shuffled = list(questions)
+    rng = random.Random(seed)
+    rng.shuffle(shuffled)
+
+    # State includes the number of selected questions, accumulated cents,
+    # and question-type bitmask so papers use as many available types as possible.
+    states = {(0, 0, 0): ()}
+    for question in shuffled:
+        marks_cents = round(float(question.marks or 0) * 100)
+        if marks_cents <= 0:
+            continue
+        bit = type_bits[_enum_value(question.question_type)]
+        previous_states = list(states.items())
+        for (count, amount, type_mask), selected in previous_states:
+            if count >= number_of_questions or amount + marks_cents > target_cents:
+                continue
+            key = (count + 1, amount + marks_cents, type_mask | bit)
+            if key not in states:
+                states[key] = selected + (question.id,)
+
+    candidates = [
+        (mask, ids)
+        for (count, amount, mask), ids in states.items()
+        if count == number_of_questions and amount == target_cents
+    ]
+    if not candidates:
+        raise ValueError(
+            f"The assigned question bank cannot create a paper with exactly "
+            f"{number_of_questions} questions and {float(total_marks):g} total marks. "
+            "Add eligible questions or adjust Total Questions/Total Marks."
+        )
+
+    best_type_count = max(mask.bit_count() for mask, _ in candidates)
+    diverse_candidates = [ids for mask, ids in candidates if mask.bit_count() == best_type_count]
+    return list(rng.choice(diverse_candidates))
+
+
 # ==========================================
 # GENERATE SESSION QUESTION IDS
 # ==========================================
@@ -187,6 +235,38 @@ def generate_session_question_ids(
         exam,
         len(questions),
     )
+
+    # In unconfigured mode, each paper must meet the exact question count
+    # and exact total marks. The session stores the resulting IDs permanently.
+    if not rules.get("group_counts") and exam.total_marks is not None:
+        existing = db.query(ExamSession.selected_question_ids).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.selected_question_ids.isnot(None),
+        ).all()
+        used = {
+            frozenset(row[0]) for row in existing
+            if isinstance(row[0], list) and len(row[0]) == question_count
+        }
+        selected = None
+        for seed_salt in range(100):
+            candidate = _generate_exact_marks_selection(
+                questions,
+                question_count,
+                exam.total_marks,
+                f"{exam.id}-{student_id}-{seed_salt}",
+            )
+            if frozenset(candidate) not in used:
+                selected = candidate
+                break
+        if selected is None:
+            selected = _generate_exact_marks_selection(
+                questions, question_count, exam.total_marks,
+                f"{exam.id}-{student_id}-fallback",
+            )
+        if not exam.randomize_questions:
+            order = {question.id: index for index, question in enumerate(questions)}
+            selected.sort(key=lambda question_id: order[question_id])
+        return selected
 
     question_ids = [
         question.id
