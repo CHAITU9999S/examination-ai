@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminSectionNavigation from "../admin/components/AdminSectionNavigation";
+import { formatISTDateTime } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type Exam = { id:number; title:string; subject?:string|null; duration_minutes:number; total_questions:number; start_time?:string|null; end_time?:string|null; max_marks?:number|null; created_by?:number; created_by_name?:string|null; created_by_role?:string|null };
 type Student = { student_id:number; full_name:string; email:string; department?:string|null; is_active:boolean; assigned_by_name?:string|null; assigned_by_role?:string|null; session_id?:number|null; session_status?:string|null; student_exam_status:string };
 type Review = { questions:Array<{question_order:number;answer_id:number|null;evaluation_count:number; awarded_marks:number|null; maximum_marks:number; evaluation_history:Array<{evaluation_number:number;marks:number}>;is_objective:boolean}> };
 type ResultRow = {session_id:number; student_id:number; result_published:boolean; obtained_marks:number|null; total_marks:number|null; grade:string|null; session_status:string};
-function dateText(value?:string|null){if(!value)return "Not assigned";const d=new Date(value);return Number.isNaN(d.getTime())?"Not available":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
+function dateText(value?:string|null){return formatISTDateTime(value, "Not assigned");}
 function statusText(value:string){return ({schedule_not_started:"Schedule not started yet",not_taken:"Exam not taken by the student",partially_attempted:"Partially attempted",completed:"Exam completed",expired:"Exam expired"} as Record<string,string>)[value]||value;}
 export default function ExamStudentRoster({examId,readOnly=false}:{examId:string;readOnly?:boolean}){
  const router=useRouter();
