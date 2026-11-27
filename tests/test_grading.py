@@ -770,6 +770,12 @@ def test_staff_can_view_student_answers_in_the_exact_paper_order(
         assert payload["questions"][0]["question_order"] == 1
         assert payload["questions"][0]["question_id"] == data["question"].id
         assert payload["questions"][0]["answer_text"] == data["answer"].answer_text
+        assert "positive_marks_earned" in payload
+        assert "negative_marks_deducted" in payload
+        assert "correct_questions" in payload
+        assert "wrong_questions" in payload
+        assert "exam_details" in payload
+        assert "negative_marks" in payload["questions"][0]
 
 def test_review_displays_selected_option_text_instead_of_only_option_ids(
     client, db_session, grading_data
