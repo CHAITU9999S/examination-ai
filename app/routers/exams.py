@@ -1780,6 +1780,7 @@ def update_exam_configuration(
         "subject": data.subject,
         "duration_minutes": data.duration_minutes,
         "total_questions": data.total_questions,
+        "total_marks": data.total_marks,
         "randomize_questions": data.randomize_questions,
         "selection_rules": data.selection_rules,
         "start_time": normalize_schedule_input_to_naive_utc(data.start_time).replace(tzinfo=timezone.utc).isoformat() if data.start_time else None,
@@ -1804,6 +1805,7 @@ def update_exam_configuration(
         exam.subject = data.subject
         exam.duration_minutes = data.duration_minutes
         exam.total_questions = data.total_questions
+        exam.total_marks = data.total_marks
         exam.randomize_questions = data.randomize_questions
         exam.selection_rules = data.selection_rules
         exam.start_time = normalize_schedule_input_to_naive_utc(data.start_time)
