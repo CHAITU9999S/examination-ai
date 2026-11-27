@@ -439,6 +439,8 @@ def get_my_ended_exam_paper(
         ).first()
         if session is not None else None
     )
+    creator = db.query(User).filter(User.id == exam.created_by).first()
+    assigner = db.query(User).filter(User.id == assignment.assigned_by).first()
     paper = []
     for question_id in selected_ids:
         question = question_map[question_id]
@@ -503,8 +505,8 @@ def get_my_ended_exam_paper(
             "negative_marking_enabled": bool(exam.negative_marking),
             "start_time": exam.start_time.isoformat() if exam.start_time else None,
             "end_time": exam.end_time.isoformat() if exam.end_time else None,
-            "creator_name": _exam_attribution(session, exam, db)["creator_name"] if session else (db.query(User).filter(User.id == exam.created_by).first().full_name if exam.created_by and db.query(User).filter(User.id == exam.created_by).first() else None),
-            "assigned_by_name": _exam_attribution(session, exam, db)["assigned_by_name"] if session else None,
+            "creator_name": creator.full_name if creator else None,
+            "assigned_by_name": assigner.full_name if assigner else None,
         },
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
