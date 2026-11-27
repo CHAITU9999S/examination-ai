@@ -295,7 +295,9 @@ def list_exams(
         group_counts = selection_rules.get("group_counts") if isinstance(selection_rules, dict) else None
         maximum = None
 
-        if isinstance(group_counts, dict):
+        if exam.total_marks is not None and not group_counts:
+            maximum = float(exam.total_marks)
+        elif isinstance(group_counts, dict):
             needed_groups = [
                 (key.split("|", 1)[0], key.split("|", 1)[1], int(count))
                 for key, count in group_counts.items()
@@ -977,6 +979,23 @@ def assign_exam_questions(
                     question_order=order,
                 )
             )
+
+        db.flush()
+        if not (exam.selection_rules or {}).get("group_counts") and exam.total_marks is not None:
+            try:
+                # Validate the requested question-count/marks combination before
+                # accepting the bank configuration.
+                generate_session_question_ids(
+                    exam=exam,
+                    student_id=current_user.id,
+                    db=db,
+                )
+            except ValueError as error:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(error),
+                )
 
         db.commit()
 
@@ -2324,6 +2343,7 @@ def get_exam_details(
         "subject": exam.subject,
         "duration_minutes": exam.duration_minutes,
         "total_questions": exam.total_questions,
+        "total_marks": exam.total_marks,
         "randomize_questions": exam.randomize_questions,
         "selection_rules": exam.selection_rules or {},
         "start_time": exam.start_time.replace(tzinfo=timezone.utc) if exam.start_time and exam.start_time.tzinfo is None else exam.start_time,
