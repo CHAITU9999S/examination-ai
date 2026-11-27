@@ -1153,6 +1153,7 @@ def test_exam_configuration_has_three_revisions(client, db_session):
     fourth_update = valid_exam_data()
     fourth_update["total_questions"] = 1
     fourth_update["selection_rules"] = {}
+    fourth_update["total_marks"] = 4
     response = client.put(
         f"/exams/{exam_id}",
         json=fourth_update,
