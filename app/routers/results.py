@@ -786,6 +786,7 @@ def get_my_result_details(
                 ]
         question_results.append({
             **score,
+            "negative_marks": float(question.negative_marks or 0) if question else 0.0,
             "question_text": question.question_text if question else None,
             "student_answer": answer.answer_text if answer else None,
             "student_selected_options": student_selected_options,
@@ -814,13 +815,40 @@ def get_my_result_details(
         session.exam_id,
         float(result.obtained_marks or 0),
     )
+    evaluated_questions = [item for item in question_results if item.get("awarded_marks") is not None]
+    positive_marks_earned = round(sum(max(0.0, float(item["awarded_marks"])) for item in evaluated_questions), 2)
+    negative_marks_deducted = round(sum(abs(min(0.0, float(item["awarded_marks"]))) for item in evaluated_questions), 2)
+    correct_questions = sum(1 for item in question_results if item["outcome"] == "correct")
+    wrong_questions = sum(1 for item in question_results if item["outcome"] == "incorrect")
+    partially_correct_questions = sum(1 for item in question_results if item["outcome"] == "partial")
+    unanswered_questions = sum(1 for item in question_results if item["outcome"] == "unanswered")
+    creator = db.query(User).filter(User.id == exam.created_by).first() if exam else None
 
     return {
         "result_id": result.id,
         "session_id": session.id,
         "exam_id": session.exam_id,
         "exam_title": exam.title if exam else None,
+        "subject": exam.subject if exam else None,
+        "exam_details": {
+            "duration_minutes": exam.duration_minutes if exam else None,
+            "total_questions": len(question_results),
+            "total_marks": float(result.total_marks) if result.total_marks is not None else None,
+            "negative_marking_enabled": bool(exam.negative_marking) if exam else None,
+            "start_time": exam.start_time.isoformat() if exam and exam.start_time else None,
+            "end_time": exam.end_time.isoformat() if exam and exam.end_time else None,
+            "creator_name": creator.full_name if creator else None,
+        },
         **_exam_attribution(session, exam, db),
+        "positive_marks_earned": positive_marks_earned,
+        "negative_marks_deducted": negative_marks_deducted,
+        "maximum_positive_marks": round(sum(float(item.get("maximum_marks") or 0) for item in question_results), 2),
+        "configured_negative_marks": round(sum(float(item.get("negative_marks") or 0) for item in question_results), 2),
+        "evaluated_questions": len(evaluated_questions),
+        "correct_questions": correct_questions,
+        "wrong_questions": wrong_questions,
+        "partially_correct_questions": partially_correct_questions,
+        "unanswered_questions": unanswered_questions,
         "submitted_at": session.submitted_at,
         "published_at": result.published_at,
         "face_photo_url": f"/results/sessions/{session.id}/face-photo" if session.face_capture_data else None,
