@@ -128,6 +128,12 @@ def test_student_can_open_own_published_result(client, db_session):
     assert data["result_id"] == result.id
     assert data["obtained_marks"] == 7.5
     assert data["percentage"] == 75
+    assert "positive_marks_earned" in data
+    assert "negative_marks_deducted" in data
+    assert "correct_questions" in data
+    assert "wrong_questions" in data
+    assert "exam_details" in data
+    assert data["exam_details"]["duration_minutes"] == 45
     distribution = data["cohort_distribution"]
     assert distribution["cohort_size"] == 1
     assert distribution["current_student_percentage"] == 75.0
@@ -310,6 +316,12 @@ def test_unattempted_student_sees_only_their_fixed_paper_without_fabricated_answ
     assert paper[0]["student_answer"] is None
     assert paper[0]["awarded_marks"] is None
     assert paper[0]["maximum_marks"] == 2
+    assert "negative_marks" in paper[0]
+    assert "positive_marks_earned" in response.json()
+    assert "negative_marks_deducted" in response.json()
+    assert "correct_questions" in response.json()
+    assert "wrong_questions" in response.json()
+    assert "exam_details" in response.json()
 
 
 def test_attempted_student_cannot_view_answers_until_result_is_published(
