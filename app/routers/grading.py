@@ -948,7 +948,7 @@ def get_session_answer_review(
             "duration_minutes": exam.duration_minutes,
             "total_questions": len(review_items),
             "total_marks": total_marks,
-            "negative_marking_enabled": bool(exam.negative_marking),
+            "negative_marking_enabled": exam.negative_marking,
             "start_time": exam.start_time.isoformat() if exam.start_time else None,
             "end_time": exam.end_time.isoformat() if exam.end_time else None,
             "creator_name": creator.full_name if creator else None,
