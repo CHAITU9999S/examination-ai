@@ -78,6 +78,7 @@ interface QuestionMarksRevision {
   changed_by: number;
   created_at: string;
 }
+type QuestionSettingsDraft = { maximumMarks: string; negativeMarks: string; timerSeconds: string };
 
 const INDIA_TIME_ZONE = "Asia/Kolkata";
 
@@ -121,6 +122,7 @@ export default function ExamQuestionBankPage() {
   const [questionMarksRevisionsUsed, setQuestionMarksRevisionsUsed] = useState(0);
   const [questionMarksCanEdit, setQuestionMarksCanEdit] = useState(false);
   const [questionMarksLocked, setQuestionMarksLocked] = useState(false);
+  const [questionSettingsDrafts, setQuestionSettingsDrafts] = useState<Record<number, QuestionSettingsDraft>>({});
   const [useConfigGroupCounts, setUseConfigGroupCounts] = useState(false);
   const [configGroupCounts, setConfigGroupCounts] = useState<Record<string, string>>(defaultConfigGroupCounts);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
@@ -215,7 +217,13 @@ export default function ExamQuestionBankPage() {
       setQuestionMarksRevisionsUsed(Number(marksSettings.revisions_used || 0));
       setQuestionMarksCanEdit(Boolean(marksSettings.can_edit));
       setQuestionMarksLocked(Boolean(marksSettings.has_sessions));
-      setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
+      const loadedQuestions: BankQuestion[] = Array.isArray(bank.questions) ? bank.questions : [];
+      setQuestions(loadedQuestions);
+      setQuestionSettingsDrafts(Object.fromEntries(loadedQuestions.map((question) => [question.question_id, {
+        maximumMarks: String(question.marks),
+        negativeMarks: String(question.negative_marks ?? 0),
+        timerSeconds: question.question_time_limit_seconds == null ? "" : String(question.question_time_limit_seconds),
+      }])));
 
       if (!config.can_edit) {
         setConfigRevisions([]);
@@ -504,67 +512,75 @@ export default function ExamQuestionBankPage() {
     } finally { setWorking(false); }
   }
 
-  async function saveTimer(questionId: number, secondsValue: string) {
-    setWorking(true); setError(""); setMessage("");
-    try {
-      const seconds = secondsValue.trim() ? Number(secondsValue) : null;
-      await request(`/exams/${examId}/questions/${questionId}/timer`, {
-        method: "PATCH",
-        body: JSON.stringify({ seconds }),
-      });
-      setMessage("Question timer saved.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save question timer.");
-    } finally { setWorking(false); }
+  function updateQuestionSettingsDraft(questionId: number, field: keyof QuestionSettingsDraft, value: string) {
+    setQuestionSettingsDrafts((current) => ({
+      ...current,
+      [questionId]: {
+        ...(current[questionId] || { maximumMarks: "", negativeMarks: "0", timerSeconds: "" }),
+        [field]: value,
+      },
+    }));
   }
 
-  async function saveQuestionMaximumMarks(questionId: number, value: string) {
-    setWorking(true); setError(""); setMessage("");
-    try {
-      const question = questions.find((item) => item.question_id === questionId);
-      if (!question) throw new Error("Question not found in this examination.");
-      const targetGroup = `${question.difficulty}|${question.question_type}`;
-      const maximumMarks = Number(value);
-      if (!Number.isFinite(maximumMarks) || maximumMarks <= 0) {
-        throw new Error("Maximum marks must be a positive number.");
-      }
-      if (Math.abs(Number(question.marks) - maximumMarks) < 0.0001) return;
-      const parsedMarks = Object.fromEntries(questionMarkGroups.map((group) => [
-        group.key,
-        group.key === targetGroup
-          ? maximumMarks
-          : Number(questionMarksByGroup[group.key] ?? questions.find((item) => `${item.difficulty}|${item.question_type}` === group.key)?.marks ?? 1),
-      ]));
-      if (Object.values(parsedMarks).some((item) => !Number.isFinite(item) || item <= 0)) {
-        throw new Error("Enter a positive maximum mark for every question group.");
-      }
-      await request(`/exams/${examId}/question-marks`, {
-        method: "PUT",
-        body: JSON.stringify({ marks_by_group: parsedMarks }),
-      });
-      setMessage(`Maximum marks updated to ${maximumMarks} for all ${question.difficulty} ${question.question_type.replaceAll("_", " ")} questions in this examination.`);
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save question maximum marks.");
-    } finally { setWorking(false); }
-  }
+  async function saveQuestionSettings(questionId: number) {
+    const question = questions.find((item) => item.question_id === questionId);
+    if (!question) { setError("Question not found in this examination."); return; }
+    const draft = questionSettingsDrafts[questionId] || {
+      maximumMarks: String(question.marks),
+      negativeMarks: String(question.negative_marks ?? 0),
+      timerSeconds: question.question_time_limit_seconds == null ? "" : String(question.question_time_limit_seconds),
+    };
+    const maximumMarks = Number(draft.maximumMarks);
+    const negativeMarks = Number(draft.negativeMarks);
+    const timerSeconds = draft.timerSeconds.trim() ? Number(draft.timerSeconds) : null;
+    if (!Number.isFinite(maximumMarks) || maximumMarks <= 0) { setError("Maximum marks must be a positive number."); return; }
+    if (!Number.isFinite(negativeMarks) || negativeMarks < 0) { setError("Negative marks must be a non-negative number."); return; }
+    if (timerSeconds !== null && (!Number.isInteger(timerSeconds) || timerSeconds < 1 || timerSeconds > 7200)) {
+      setError("Question timer must be a whole number between 1 and 7200 seconds, or left blank.");
+      return;
+    }
 
-  async function saveNegativeMarks(questionId: number, value: string) {
+    const marksChanged = Math.abs(Number(question.marks) - maximumMarks) >= 0.0001;
+    const negativeChanged = Math.abs(Number(question.negative_marks ?? 0) - negativeMarks) >= 0.0001;
+    const timerChanged = (question.question_time_limit_seconds ?? null) !== timerSeconds;
+    if (!marksChanged && !negativeChanged && !timerChanged) {
+      setError("");
+      setMessage("There are no unsaved changes for this question.");
+      return;
+    }
+
     setWorking(true); setError(""); setMessage("");
     try {
-      const negativeMarks = Number(value);
-      if (!Number.isFinite(negativeMarks) || negativeMarks < 0) {
-        throw new Error("Negative marks must be a non-negative number.");
+      if (marksChanged) {
+        const targetGroup = `${question.difficulty}|${question.question_type}`;
+        const parsedMarks = Object.fromEntries(questionMarkGroups.map((group) => [
+          group.key,
+          group.key === targetGroup
+            ? maximumMarks
+            : Number(questions.find((item) => `${item.difficulty}|${item.question_type}` === group.key)?.marks ?? 1),
+        ]));
+        await request(`/exams/${examId}/question-marks`, {
+          method: "PUT",
+          body: JSON.stringify({ marks_by_group: parsedMarks }),
+        });
       }
-      await request(`/exams/${examId}/questions/${questionId}/negative-marks`, {
-        method: "PATCH",
-        body: JSON.stringify({ negative_marks: negativeMarks }),
-      });
-      setMessage("Question penalty saved. It applies only when negative marking is enabled for this examination.");
+      if (negativeChanged) {
+        await request(`/exams/${examId}/questions/${questionId}/negative-marks`, {
+          method: "PATCH",
+          body: JSON.stringify({ negative_marks: negativeMarks }),
+        });
+      }
+      if (timerChanged) {
+        await request(`/exams/${examId}/questions/${questionId}/timer`, {
+          method: "PATCH",
+          body: JSON.stringify({ seconds: timerSeconds }),
+        });
+      }
+      setMessage("Question time and marks settings saved.");
       await loadAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save question penalty.");
+      setError(err instanceof Error ? err.message : "Unable to save question settings. Check the saved values before trying again.");
+      await loadAll();
     } finally { setWorking(false); }
   }
 
@@ -916,14 +932,15 @@ export default function ExamQuestionBankPage() {
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <label className="text-xs text-slate-400">Maximum marks for this question
-                      <input key={`marks-${question.question_id}-${question.marks}`} type="number" min="0.01" step="0.01" defaultValue={question.marks} disabled={working || questionMarksLocked || !questionMarksCanEdit || questionMarksRevisionsUsed >= 3} onBlur={(e) => void saveQuestionMaximumMarks(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white disabled:opacity-50" />
+                      <input type="number" min="0.01" step="0.01" value={questionSettingsDrafts[question.question_id]?.maximumMarks ?? String(question.marks)} onChange={(e) => updateQuestionSettingsDraft(question.question_id, "maximumMarks", e.target.value)} disabled={working || questionMarksLocked || !questionMarksCanEdit || questionMarksRevisionsUsed >= 3} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white disabled:opacity-50" />
                     </label>
                     <label className="text-xs text-slate-400">Negative marks for a wrong answer
-                      <input key={`negative-${question.question_id}-${question.negative_marks ?? 0}`} type="number" min="0" step="0.01" defaultValue={question.negative_marks ?? 0} onBlur={(e) => void saveNegativeMarks(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
+                      <input type="number" min="0" step="0.01" value={questionSettingsDrafts[question.question_id]?.negativeMarks ?? String(question.negative_marks ?? 0)} onChange={(e) => updateQuestionSettingsDraft(question.question_id, "negativeMarks", e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
                     </label>
                     <label className="text-xs text-slate-400">Question timer (seconds; blank = no separate limit)
-                      <input key={`timer-${question.question_id}-${question.question_time_limit_seconds}`} type="number" min="1" max="7200" defaultValue={question.question_time_limit_seconds ?? ""} onBlur={(e) => void saveTimer(question.question_id, e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
+                      <input type="number" min="1" max="7200" value={questionSettingsDrafts[question.question_id]?.timerSeconds ?? (question.question_time_limit_seconds == null ? "" : String(question.question_time_limit_seconds))} onChange={(e) => updateQuestionSettingsDraft(question.question_id, "timerSeconds", e.target.value)} className="ml-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-white" />
                     </label>
+                    <button type="button" onClick={() => void saveQuestionSettings(question.question_id)} disabled={working} className="rounded-lg bg-cyan-600 px-4 py-2 text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50">Save Question Settings</button>
                   </div>
                 </article>
               ))}
