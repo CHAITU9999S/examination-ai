@@ -129,7 +129,7 @@ function SessionEvaluationPageContent(){
     {!data.result_published&&<p className="mt-3 text-xs text-amber-300">The result has not been published. Current per-question evaluation marks are shown below to authorized staff.</p>}
    </section>
    <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
     
     {question&&<div className="mt-6 space-y-5">
      <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{questionImage&&<img src={questionImage} alt="Examination question image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}{o.is_correct&&<span className="ml-2 text-green-300">(Correct answer)</span>}</li>)}</ul>}</div>

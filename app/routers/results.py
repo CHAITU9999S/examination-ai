@@ -416,7 +416,6 @@ def get_my_ended_exam_paper(
             "maximum_marks": float(question.marks or 0),
             "awarded_marks": answer.awarded_marks if answer and published_result else None,
             "student_answer": answer.answer_text if answer else None,
-            "student_selected_options": student_selected_options,
             "correct_answer": question.expected_answer or question.model_answer_text,
             "correct_options": [option.option_text for option in options if option.is_correct],
             "options": [option.option_text for option in options],
@@ -524,6 +523,7 @@ def get_my_result_details(
             **score,
             "question_text": question.question_text if question else None,
             "student_answer": answer.answer_text if answer else None,
+            "student_selected_options": student_selected_options,
             "correct_answer": (
                 (question.expected_answer or question.model_answer_text)
                 if question else None
