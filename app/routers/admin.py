@@ -1107,6 +1107,7 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
         }
 
     flat_performance = []
+    backfilled_sessions = False
     now = datetime.utcnow()
     for assignment, exam, student, creator, assigner in assignment_rows:
         session = db.query(ExamSession).filter(
@@ -1152,10 +1153,10 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
                     db.add(session)
                 else:
                     session.selected_question_ids = selected_ids
-                db.commit()
-                db.refresh(session)
+                db.flush()
+                backfilled_sessions = True
             except ValueError:
-                db.rollback()
+                pass
 
         result = (
             db.query(Result).filter(Result.session_id == session.id).first()
@@ -1324,6 +1325,9 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             "student_name": student.full_name,
             **attempt,
         })
+
+    if backfilled_sessions:
+        db.commit()
 
     return {
         "total_students": len(student_items),
