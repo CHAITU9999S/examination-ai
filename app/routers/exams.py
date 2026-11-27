@@ -1446,12 +1446,21 @@ def assign_exam_to_students(
                 ExamAssignment.student_id == student.id,
             ).first()
 
-            student_session = db.query(ExamSession.id).filter(
+            student_session = db.query(ExamSession).filter(
                 ExamSession.exam_id == exam_id,
                 ExamSession.student_id == student.id,
             ).first()
 
-            if assignment is not None and not assignment.is_active and student_session is not None:
+            student_has_started_session = bool(
+                student_session is not None
+                and (
+                    student_session.started_at is not None
+                    or student_session.prestart_stage is not None
+                    or student_session.prestart_expires_at is not None
+                    or student_session.status != "not_started"
+                )
+            )
+            if assignment is not None and not assignment.is_active and student_has_started_session:
                 raise HTTPException(
                     status_code=409,
                     detail=f"{student.full_name} already has an examination session. Their revoked access cannot be restored.",
