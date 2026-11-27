@@ -125,6 +125,7 @@ export default function ExamQuestionBankPage() {
   const [questionMarksLocked, setQuestionMarksLocked] = useState(false);
   const [questionSettingsDrafts, setQuestionSettingsDrafts] = useState<Record<number, QuestionSettingsDraft>>({});
   const [useConfigGroupCounts, setUseConfigGroupCounts] = useState(false);
+  const [usesLegacyTypeDifficulty, setUsesLegacyTypeDifficulty] = useState(false);
   const [configGroupCounts, setConfigGroupCounts] = useState<Record<string, string>>(defaultConfigGroupCounts);
   const [staffRole, setStaffRole] = useState<"admin" | "examiner">("examiner");
   const [sourceBanks, setSourceBanks] = useState<SourceBank[]>([]);
@@ -201,8 +202,17 @@ export default function ExamQuestionBankPage() {
         end_time: toISTDateTimeLocal(config.end_time),
       });
       setSubject(config.subject || "");
-      const savedGroupCounts = config.selection_rules?.group_counts as Record<string, number> | undefined;
+      const savedRules = config.selection_rules && typeof config.selection_rules === "object"
+        ? config.selection_rules as Record<string, unknown>
+        : {};
+      const savedGroupCounts = savedRules.group_counts as Record<string, number> | undefined;
+      const hasLegacyTypeDifficulty = !savedGroupCounts && [
+        "difficulty",
+        "difficulty_counts",
+        "question_type_counts",
+      ].some((key) => Object.prototype.hasOwnProperty.call(savedRules, key));
       setUseConfigGroupCounts(Boolean(savedGroupCounts));
+      setUsesLegacyTypeDifficulty(hasLegacyTypeDifficulty);
       setConfigGroupCounts({
         ...defaultConfigGroupCounts,
         ...(savedGroupCounts
@@ -389,6 +399,7 @@ export default function ExamQuestionBankPage() {
     event.preventDefault();
     if (!examConfig) return;
     let selectionRules: Record<string, unknown> = {};
+    let totalMarks: number | null = null;
     if (useConfigGroupCounts) {
       const parsed = Object.fromEntries(
         Object.entries(configGroupCounts).map(([key, value]) => [key, Number(value || 0)])
@@ -403,6 +414,14 @@ export default function ExamQuestionBankPage() {
         return;
       }
       selectionRules = { group_counts: parsed };
+    } else if (usesLegacyTypeDifficulty) {
+      selectionRules = examConfig.selection_rules || {};
+    } else {
+      totalMarks = Number(examConfig.total_marks);
+      if (!Number.isFinite(totalMarks) || totalMarks <= 0) {
+        setError("Enter a positive Total Marks value when type/difficulty configuration is not selected.");
+        return;
+      }
     }
 
     setWorking(true); setError(""); setMessage("");
@@ -412,6 +431,7 @@ export default function ExamQuestionBankPage() {
         body: JSON.stringify({
           ...examConfig,
           selection_rules: selectionRules,
+          total_marks: totalMarks,
           duration_minutes: Number(examConfig.duration_minutes),
           total_questions: Number(examConfig.total_questions),
           start_time: examConfig.start_time ? istDateTimeToIso(examConfig.start_time) : null,
@@ -706,9 +726,38 @@ export default function ExamQuestionBankPage() {
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-800/60 p-4">
                 <label className="flex items-center gap-3 text-sm text-slate-200">
-                  <input type="checkbox" checked={useConfigGroupCounts} onChange={(e) => setUseConfigGroupCounts(e.target.checked)} />
+                  <input type="checkbox" checked={useConfigGroupCounts} onChange={(e) => {
+                    setUseConfigGroupCounts(e.target.checked);
+                    setUsesLegacyTypeDifficulty(false);
+                  }} />
                   Use exact question counts by type and difficulty
                 </label>
+                {!useConfigGroupCounts && !usesLegacyTypeDifficulty && (
+                  <div className="mt-4">
+                    <label className="mb-2 block text-sm text-slate-300">Total Marks
+                      <input
+                        required
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={examConfig.total_marks == null ? "" : String(examConfig.total_marks)}
+                        onChange={(e) => setExamConfig((current) => current ? {
+                          ...current,
+                          total_marks: e.target.value === "" ? null : Number(e.target.value),
+                        } : current)}
+                        className={fieldClass}
+                      />
+                    </label>
+                    <p className="mt-2 text-xs text-slate-400">
+                      Each student's randomized paper must contain exactly the configured number of questions and add up to this total.
+                    </p>
+                  </div>
+                )}
+                {usesLegacyTypeDifficulty && !useConfigGroupCounts && (
+                  <p className="mt-3 text-xs text-slate-400">
+                    This examination uses its existing type/difficulty configuration. It will be preserved when you save.
+                  </p>
+                )}
                 {useConfigGroupCounts && (
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full min-w-[720px] text-left text-xs">
