@@ -163,6 +163,13 @@ def _generate_exact_marks_selection(questions, number_of_questions, total_marks,
         )
 
     best_type_count = max(mask.bit_count() for mask, _ in candidates)
+    if number_of_questions > 1 and len(type_names) > 1 and best_type_count < 2:
+        raise ValueError(
+            "The requested Total Questions and Total Marks cannot produce a paper "
+            "containing more than one question type, although multiple eligible "
+            "question types are available. Adjust the question count, total marks, "
+            "or eligible question bank."
+        )
     diverse_candidates = [ids for mask, ids in candidates if mask.bit_count() == best_type_count]
     return list(rng.choice(diverse_candidates))
 
