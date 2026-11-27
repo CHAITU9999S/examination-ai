@@ -58,6 +58,8 @@ interface ResultDetails {
     total_questions?: number | null;
     total_marks?: number | null;
     negative_marking_enabled?: boolean | null;
+    proctoring_enabled?: boolean | null;
+    max_tab_switch_warnings?: number | null;
     start_time?: string | null;
     end_time?: string | null;
     creator_name?: string | null;
@@ -241,6 +243,8 @@ export default function StudentResultDetailPage() {
                 <p>Positive marks available: {result.maximum_positive_marks ?? "Not available"}</p>
                 <p>Configured negative marks: {result.configured_negative_marks ?? "Not available"}</p>
                 <p>Negative marking: {result.exam_details?.negative_marking_enabled == null ? "Not available" : result.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
+                  <p>AI proctoring: {result.exam_details?.proctoring_enabled == null ? "Not available" : result.exam_details.proctoring_enabled ? "Enabled" : "Disabled"}</p>
+                  <p>Maximum tab-switch warnings: {result.exam_details?.max_tab_switch_warnings ?? "Not available"}</p>
                 <p>Starts: {result.exam_details?.start_time ? new Date(result.exam_details.start_time).toLocaleString() : "Not available"}</p>
                 <p>Ends: {result.exam_details?.end_time ? new Date(result.exam_details.end_time).toLocaleString() : "Not available"}</p>
               </div>
