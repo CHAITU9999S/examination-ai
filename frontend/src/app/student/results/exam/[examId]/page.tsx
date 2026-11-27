@@ -33,6 +33,8 @@ interface PaperReport {
     total_questions?: number | null;
     total_marks?: number | null;
     negative_marking_enabled?: boolean | null;
+    proctoring_enabled?: boolean | null;
+    max_tab_switch_warnings?: number | null;
     start_time?: string | null;
     end_time?: string | null;
     creator_name?: string | null;
@@ -123,6 +125,8 @@ export default function StudentAssignedPaperReportPage() {
                 <p>Positive marks available: {report.maximum_positive_marks ?? "Not available"}</p>
                 <p>Configured negative marks: {report.configured_negative_marks ?? "Not available"}</p>
                 <p>Negative marking: {report.exam_details?.negative_marking_enabled == null ? "Not available" : report.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
+                  <p>AI proctoring: {report.exam_details?.proctoring_enabled == null ? "Not available" : report.exam_details.proctoring_enabled ? "Enabled" : "Disabled"}</p>
+                  <p>Maximum tab-switch warnings: {report.exam_details?.max_tab_switch_warnings ?? "Not available"}</p>
                 <p>Created by: {report.exam_details?.creator_name || "Not available"}</p>
                 <p>Assigned by: {report.exam_details?.assigned_by_name || "Not available"}</p>
                 <p>Starts: {report.exam_details?.start_time ? new Date(report.exam_details.start_time).toLocaleString() : "Not available"}</p>
