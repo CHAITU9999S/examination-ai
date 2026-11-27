@@ -183,7 +183,7 @@ function StudentExaminationsPageContent() {
                   {attemptedExams.map((attempt) => (
                     <Link
                       key={attempt.assignment_id}
-                      href={scope === "schedule" ? `/admin/student-schedule/${studentId}/${attempt.exam_id}` : attempt.is_taken && attempt.session_id ? `/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=${encodeURIComponent(returnTo)}` : `/admin/student-performance-report/${attempt.exam_id}/${studentId}`}
+                      href={scope === "schedule" ? `/admin/student-schedule/${studentId}/${attempt.exam_id}` : attempt.session_id ? `/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=${encodeURIComponent(returnTo)}` : `/admin/student-performance-report/${attempt.exam_id}/${studentId}`}
                       className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-800/60 p-4 hover:bg-white/5"
                     >
                       <span>
