@@ -436,6 +436,117 @@ def get_my_ended_exam_paper(
     }
 
 
+@router.get("/exams/{exam_id}/students/{student_id}/paper")
+def get_admin_student_assigned_paper(
+    exam_id: int,
+    student_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a student's assigned paper and answers for Admin performance review."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only Admins can view global student performance reports.")
+
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="This examination is not actively assigned to the selected student.")
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+
+    session = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student_id,
+    ).order_by(ExamSession.id.desc()).first()
+    try:
+        selected_ids = (
+            list(session.selected_question_ids)
+            if session is not None and isinstance(session.selected_question_ids, list) and session.selected_question_ids
+            else generate_session_question_ids(exam, student_id, db)
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+
+    questions = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(selected_ids or [-1]),
+    ).all()
+    question_map = {question.id: question for question in questions}
+    if len(question_map) != len(selected_ids):
+        raise HTTPException(status_code=409, detail="One or more questions in the assigned paper are no longer available.")
+
+    answers = db.query(Answer).filter(
+        Answer.session_id == session.id,
+    ).all() if session is not None else []
+    answer_map = {answer.question_id: answer for answer in answers}
+    result = db.query(Result).filter(
+        Result.session_id == session.id,
+    ).first() if session is not None else None
+
+    paper = []
+    for order, question_id in enumerate(selected_ids, start=1):
+        question = question_map[question_id]
+        options = db.query(Option).filter(
+            Option.question_id == question_id,
+        ).order_by(Option.id).all()
+        answer = answer_map.get(question_id)
+        selected_option_texts = []
+        if answer is not None and getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"}:
+            try:
+                selected_option_ids = json.loads(answer.answer_text or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                selected_option_ids = []
+            if isinstance(selected_option_ids, int):
+                selected_option_ids = [selected_option_ids]
+            if isinstance(selected_option_ids, list):
+                selected_map = {option.id: option.option_text for option in options}
+                for option_id in selected_option_ids:
+                    try:
+                        normalized_id = int(option_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if normalized_id in selected_map:
+                        selected_option_texts.append(selected_map[normalized_id])
+
+        paper.append({
+            "question_id": question.id,
+            "question_order": order,
+            "question_text": question.question_text,
+            "question_type": getattr(question.question_type, "value", question.question_type),
+            "difficulty": question.difficulty,
+            "maximum_marks": float(question.marks or 0),
+            "awarded_marks": float(answer.awarded_marks) if answer is not None and answer.awarded_marks is not None else None,
+            "student_answer": answer.answer_text if answer is not None else None,
+            "student_selected_options": selected_option_texts,
+            "correct_answer": question.expected_answer or question.model_answer_text,
+            "correct_options": [option.option_text for option in options if option.is_correct],
+            "options": [option.option_text for option in options],
+            "question_image_available": bool(question.question_image_data),
+            "expected_answer_image_available": bool(question.expected_answer_image_data),
+            "student_answer_image_available": bool(answer and answer.image_data),
+        })
+
+    calculated_total = round(sum(item["maximum_marks"] for item in paper), 2)
+    return {
+        "exam_id": exam.id,
+        "exam_title": exam.title,
+        "subject": exam.subject,
+        "student_id": student_id,
+        "session_id": session.id if session else None,
+        "session_status": session.status if session else "not_attempted",
+        "result_published": bool(result and result.is_published),
+        "obtained_marks": float(result.obtained_marks) if result and result.obtained_marks is not None else None,
+        "total_marks": float(result.total_marks) if result and result.total_marks is not None else calculated_total,
+        "percentage": float(result.percentage) if result and result.percentage is not None else None,
+        "grade": result.grade if result and result.is_published else None,
+        "paper": paper,
+    }
+
+
 @router.get("/{session_id}")
 def get_my_result_details(
     session_id: int,
