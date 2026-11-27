@@ -371,3 +371,36 @@ def test_attempted_student_cannot_view_answers_until_result_is_published(
     assert paper[0]["awarded_marks"] == 1.5
     assert paper[0]["maximum_marks"] == 2
     assert paper[0]["correct_answer"] == assigned_question.expected_answer
+
+
+
+def test_admin_performance_report_uses_exact_students_assigned_paper(client, db_session):
+    student = create_user(db_session, "admin-report-student@example.com")
+    creator = create_user(db_session, "admin-report-creator@example.com", role="examiner")
+    admin = create_user(db_session, "admin-report-admin@example.com", role="admin")
+    exam, questions = _create_ended_assigned_paper(db_session, student, creator)
+    assigned_question = questions[1]
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        started_at=None,
+        submitted_at=None,
+        status="not_started",
+        selected_question_ids=[assigned_question.id],
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    response = client.get(
+        f"/results/exams/{exam.id}/students/{student.id}/paper",
+        headers=login_headers(client, admin.email),
+    )
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["paper_is_preview"] is False
+    assert len(report["paper"]) == 1
+    assert report["paper"][0]["question_id"] == assigned_question.id
+    assert report["paper"][0]["correct_answer"] == assigned_question.expected_answer
+    assert report["paper"][0]["student_answer"] is None
+    assert report["paper"][0]["awarded_marks"] is None
