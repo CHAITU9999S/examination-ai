@@ -15,6 +15,7 @@ def valid_exam_data():
         "subject": "Programming",
         "duration_minutes": 60,
         "total_questions": 20,
+        "total_marks": 40,
         "randomize_questions": True,
         "start_time": now + timedelta(days=1),
         "end_time": now + timedelta(days=2),
@@ -66,6 +67,27 @@ def test_valid_exam():
 
     assert exam.duration_minutes == 60
     assert exam.total_questions == 20
+
+
+def test_exam_requires_total_marks_without_type_difficulty_configuration():
+    data = valid_exam_data()
+    data.pop("total_marks")
+
+    with pytest.raises(ValidationError):
+        ExamCreate(**data)
+
+
+def test_existing_type_difficulty_configuration_does_not_require_separate_total_marks():
+    data = valid_exam_data()
+    data.pop("total_marks")
+    data["selection_rules"] = {
+        "difficulty_counts": {"easy": 20},
+        "question_type_counts": {"MCQ": 20},
+    }
+
+    exam = ExamCreate(**data)
+
+    assert exam.total_marks is None
 
 
 def test_exam_rejects_zero_duration():
