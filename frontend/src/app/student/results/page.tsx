@@ -132,7 +132,7 @@ export default function StudentResultsPage() {
 
                 </> : <p className="font-semibold text-amber-300">Result Not Declared</p>}
                 {exam.session_id && <Link href={"/student/results/" + exam.session_id} className="mt-4 inline-block font-semibold text-blue-300 hover:text-blue-200">View detailed performance →</Link>}
-                {exam.category === "expired" && <Link href={"/student/results/exam/" + exam.id} className="mt-3 inline-block font-semibold text-cyan-300 hover:text-cyan-200">View question paper and answers →</Link>}
+                {(exam.category === "expired" || exam.result_published) && <Link href={"/student/results/exam/" + exam.id} className="mt-3 inline-block font-semibold text-cyan-300 hover:text-cyan-200">View question paper and answers →</Link>}
               </div>
             </article>)}</div>}
         </section>
