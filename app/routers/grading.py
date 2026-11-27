@@ -878,6 +878,7 @@ def get_session_answer_review(
             "question_type": question_type_value,
             "difficulty": question.difficulty,
             "maximum_marks": question.marks,
+            "negative_marks": question.negative_marks,
             "expected_answer": question.expected_answer,
             "model_answer_text": question.model_answer_text,
             "options": [
@@ -913,10 +914,53 @@ def get_session_answer_review(
             "is_objective": getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"},
         })
 
+    evaluated_items = [
+        item for item in review_items if item["awarded_marks"] is not None
+    ]
+    positive_marks_earned = round(sum(
+        max(0.0, float(item["awarded_marks"])) for item in evaluated_items
+    ), 2)
+    negative_marks_deducted = round(sum(
+        abs(min(0.0, float(item["awarded_marks"]))) for item in evaluated_items
+    ), 2)
+    correct_questions = wrong_questions = partially_correct_questions = 0
+    for item in evaluated_items:
+        awarded = float(item["awarded_marks"])
+        maximum = float(item["maximum_marks"] or 0)
+        if abs(awarded - maximum) < 0.0001:
+            correct_questions += 1
+        elif awarded <= 0:
+            wrong_questions += 1
+        else:
+            partially_correct_questions += 1
+    total_marks = (
+        float(result.total_marks)
+        if result is not None and result.total_marks is not None
+        else round(sum(float(item["maximum_marks"] or 0) for item in review_items), 2)
+    )
+    creator = db.query(User).filter(User.id == exam.created_by).first()
     return {
         "session_id": session.id,
         "exam_id": exam.id,
         "exam_title": exam.title,
+        "subject": exam.subject,
+        "exam_details": {
+            "duration_minutes": exam.duration_minutes,
+            "total_questions": len(review_items),
+            "total_marks": total_marks,
+            "negative_marking_enabled": bool(exam.negative_marking),
+            "start_time": exam.start_time.isoformat() if exam.start_time else None,
+            "end_time": exam.end_time.isoformat() if exam.end_time else None,
+            "creator_name": creator.full_name if creator else None,
+        },
+        "positive_marks_earned": positive_marks_earned if evaluated_items else None,
+        "negative_marks_deducted": negative_marks_deducted if evaluated_items else None,
+        "maximum_positive_marks": total_marks,
+        "configured_negative_marks": round(sum(float(item["negative_marks"] or 0) for item in review_items), 2),
+        "evaluated_questions": len(evaluated_items),
+        "correct_questions": correct_questions if evaluated_items else None,
+        "wrong_questions": wrong_questions if evaluated_items else None,
+        "partially_correct_questions": partially_correct_questions if evaluated_items else None,
         **_exam_attribution(exam, session.student_id, db),
         "student_id": student.id if student else session.student_id,
         "student_name": student.full_name if student else "Unknown student",
