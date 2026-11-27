@@ -542,6 +542,7 @@ def get_admin_student_assigned_paper(
         "student_id": student_id,
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
+        "paper_is_preview": session is None,
         "result_published": bool(result and result.is_published),
         "obtained_marks": float(result.obtained_marks) if result and result.obtained_marks is not None else None,
         "total_marks": float(result.total_marks) if result and result.total_marks is not None else calculated_total,
