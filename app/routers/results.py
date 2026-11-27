@@ -60,6 +60,27 @@ def _require_student_result_access(
     return result
 
 
+def _require_published_result_for_submitted_report(session: ExamSession | None, db: Session):
+    """Do not expose answer keys for submitted attempts before result publication."""
+    if session is None:
+        return
+    is_submitted = (
+        session.status in {"submitted", "auto_submitted"}
+        or (session.submitted_at is not None and session.status != "expired")
+    )
+    if not is_submitted:
+        return
+    published_result = db.query(Result).filter(
+        Result.session_id == session.id,
+        Result.is_published.is_(True),
+    ).first()
+    if published_result is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The examination result is not published yet.",
+        )
+
+
 def _student_report_image_response(question, session, kind: str, db: Session):
     """Serve a student's own post-exam question, answer, or model-answer image."""
     if kind == "question":
@@ -287,6 +308,7 @@ def get_my_ended_exam_paper_image(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == current_user.id,
     ).order_by(ExamSession.id.desc()).first()
+    _require_published_result_for_submitted_report(session, db)
     selected_ids = (
         list(session.selected_question_ids)
         if session is not None and isinstance(session.selected_question_ids, list)
@@ -346,6 +368,7 @@ def get_my_ended_exam_paper(
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == current_user.id,
     ).order_by(ExamSession.id.desc()).first()
+    _require_published_result_for_submitted_report(session, db)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     exam_end = normalize_to_naive_utc(exam.end_time)
