@@ -54,6 +54,7 @@ interface ExamConfiguration {
   subject: string;
   duration_minutes: number;
   total_questions: number;
+  total_marks?: number | null;
   randomize_questions: boolean;
   selection_rules: Record<string, unknown>;
   start_time: string;
