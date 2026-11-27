@@ -432,7 +432,6 @@ def get_my_ended_exam_paper(
         "subject": exam.subject,
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
-        "paper_is_preview": session is None,
         "paper": paper,
     }
 
