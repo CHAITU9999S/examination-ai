@@ -1115,6 +1115,7 @@ def test_exam_configuration_has_three_revisions(client, db_session):
     exam_data = valid_exam_data()
     exam_data["total_questions"] = 1
     exam_data["selection_rules"] = {}
+    exam_data["total_marks"] = 4
     create_response = client.post(
         "/exams/",
         json=exam_data,
@@ -1164,6 +1165,7 @@ def test_question_marks_revisions_do_not_use_exam_configuration_limit(client, db
     exam_data = valid_exam_data()
     exam_data["total_questions"] = 1
     exam_data["selection_rules"] = {}
+    exam_data["total_marks"] = 4
     create_response = client.post(
         "/exams/",
         json=exam_data,
