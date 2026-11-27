@@ -2012,6 +2012,7 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
     assert all(len(session.selected_question_ids) == 2 for session in sessions)
 
     question_marks = {question.id: question.marks for question in questions}
+    question_by_id = {question.id: question for question in questions}
     assert all(
         sum(question_marks[question_id] for question_id in session.selected_question_ids) == 4
         for session in sessions
@@ -2021,8 +2022,6 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
         for session in sessions
     )
     assert set(sessions[0].selected_question_ids) != set(sessions[1].selected_question_ids)
-
-    question_by_id = {question.id: question for question in questions}
     first_paper = list(sessions[0].selected_question_ids)
     revoke_response = client.delete(
         f"/exams/{exam_id}/assignments/{first_student.id}",
