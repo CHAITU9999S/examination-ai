@@ -1197,7 +1197,7 @@ def test_question_marks_revisions_do_not_use_exam_configuration_limit(client, db
     update_data = valid_exam_data()
     update_data["total_questions"] = 1
     update_data["selection_rules"] = {}
-        update_data["total_marks"] = 4
+    update_data["total_marks"] = 4
     update_response = client.put(
         f"/exams/{exam_id}",
         json=update_data,
