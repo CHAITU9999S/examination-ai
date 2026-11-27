@@ -187,6 +187,7 @@ export default function AdminStudentPerformanceReportPage() {
                   <p>Configured negative marks: {report.configured_negative_marks ?? "Not available"}</p>
                   <p>Negative marking: {report.exam_details?.negative_marking_enabled == null ? "Not available" : report.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
                   <p>Created by: {report.exam_details?.creator_name || "Not available"}</p>
+                  <p>Assigned by: {report.exam_details?.assigned_by_name || "Not available"}</p>
                   <p>Starts: {report.exam_details?.start_time ? new Date(report.exam_details.start_time).toLocaleString() : "Not available"}</p>
                   <p>Ends: {report.exam_details?.end_time ? new Date(report.exam_details.end_time).toLocaleString() : "Not available"}</p>
                 </div>
