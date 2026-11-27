@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 type HistoryItem={evaluation_number:number;marks:number;created_at?:string|null};
 type QuestionReview={
  question_id:number;question_order:number;question_text:string;question_image_url?:string|null;expected_answer_image_url?:string|null;question_type:string;difficulty:string;
- maximum_marks:number;expected_answer?:string|null;model_answer_text?:string|null;
+ maximum_marks:number;negative_marks?:number|null;expected_answer?:string|null;model_answer_text?:string|null;
  options:Array<{id:number;option_text:string;is_correct:boolean}>;
  answer_id:number|null;answer_text?:string|null;selected_options?:string[];answer_image_url?:string|null;
  ai_suggested_marks?:number|null;ai_justification?:string|null;awarded_marks?:number|null;
