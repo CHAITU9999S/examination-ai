@@ -116,7 +116,12 @@ function StudentExaminationsPageContent() {
   }, [load, studentId]);
 
   const attemptedExams = useMemo(() => (student?.attempts || [])
-    .filter((attempt) => scope !== "tracking" || attempt.is_taken)
+    .filter((attempt) => {
+      if (scope === "tracking") return attempt.is_taken;
+      const endTime = attempt.exam_end_time ? new Date(attempt.exam_end_time).getTime() : Number.NaN;
+      if (scope === "schedule") return !Number.isFinite(endTime) || endTime > Date.now();
+      return Number.isFinite(endTime) && endTime <= Date.now();
+    })
     .filter((attempt) => !searchTerm.trim() || [
       attempt.exam_title,
       attempt.exam_subject,
@@ -177,13 +182,13 @@ function StudentExaminationsPageContent() {
                 </div>
               </div>
               {attemptedExams.length === 0 ? (
-                <p className="py-10 text-center text-slate-400">No attempted examinations are available for this student in your permitted records.</p>
+                <p className="py-10 text-center text-slate-400">{scope === "schedule" ? "No future examinations are assigned to this student." : scope === "global" ? "No past assigned examinations are available for this student." : "No attempted examinations are available for this student in your permitted records."}</p>
               ) : (
                 <div className="space-y-3">
                   {attemptedExams.map((attempt) => (
                     <Link
                       key={attempt.assignment_id}
-                      href={scope === "schedule" ? `/admin/student-schedule/${studentId}/${attempt.exam_id}` : attempt.session_id ? `/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=${encodeURIComponent(returnTo)}` : `/admin/student-performance-report/${attempt.exam_id}/${studentId}`}
+                      href={scope === "schedule" ? `/admin/student-schedule/${studentId}/${attempt.exam_id}` : attempt.is_taken && attempt.session_id ? `/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=${encodeURIComponent(returnTo)}` : `/admin/student-performance-report/${attempt.exam_id}/${studentId}`}
                       className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-800/60 p-4 hover:bg-white/5"
                     >
                       <span>
