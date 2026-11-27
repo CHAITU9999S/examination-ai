@@ -379,7 +379,7 @@ def get_my_ended_exam_paper(
     try:
         selected_ids = (
             list(session.selected_question_ids)
-            if session is not None and isinstance(session.selected_question_ids, list)
+            if session is not None and isinstance(session.selected_question_ids, list) and session.selected_question_ids
             else generate_session_question_ids(exam, current_user.id, db)
         )
     except ValueError as error:
@@ -409,6 +409,23 @@ def get_my_ended_exam_paper(
             Option.question_id == question_id
         ).order_by(Option.id).all()
         answer = answer_map.get(question_id)
+        selected_option_texts = []
+        if answer is not None and getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"}:
+            try:
+                selected_option_ids = json.loads(answer.answer_text or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                selected_option_ids = []
+            if isinstance(selected_option_ids, int):
+                selected_option_ids = [selected_option_ids]
+            if isinstance(selected_option_ids, list):
+                selected_map = {option.id: option.option_text for option in options}
+                for option_id in selected_option_ids:
+                    try:
+                        normalized_id = int(option_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if normalized_id in selected_map:
+                        selected_option_texts.append(selected_map[normalized_id])
         paper.append({
             "question_id": question.id,
             "question_text": question.question_text,
@@ -416,6 +433,7 @@ def get_my_ended_exam_paper(
             "maximum_marks": float(question.marks or 0),
             "awarded_marks": answer.awarded_marks if answer and published_result else None,
             "student_answer": answer.answer_text if answer else None,
+            "student_selected_options": selected_option_texts,
             "correct_answer": question.expected_answer or question.model_answer_text,
             "correct_options": [option.option_text for option in options if option.is_correct],
             "options": [option.option_text for option in options],
