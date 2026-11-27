@@ -465,9 +465,9 @@ def get_student_examination_overview(
             ExamSession.student_id == current_user.id,
         ).order_by(ExamSession.id.desc()).first()
 
-        # Backfill a fixed paper for older unconfigured randomized assignments
-        # that predate assignment-time session creation.
-        if not configured_counts and exam.total_marks is not None and (
+        # Backfill a fixed paper for existing assignments that predate
+        # assignment-time session creation, regardless of selection mode.
+        if (
             session is None
             or (
                 session.status == "not_started"
@@ -1493,13 +1493,10 @@ def assign_exam_to_students(
         raise HTTPException(status_code=400, detail="Every assigned account must be an active Student.")
 
     try:
-        # For unconfigured randomized papers, freeze each student's exact
-        # question selection when the assignment is created. The pre-created
-        # not-started session is reused when the student later opens the exam.
-        freeze_paper_on_assignment = (
-            not (exam.selection_rules or {}).get("group_counts")
-            and exam.total_marks is not None
-        )
+        # Freeze each student's exact question selection when the assignment
+        # is created. The same selection rules are used for configured and
+        # unconfigured papers; the pre-created session is reused on exam start.
+        freeze_paper_on_assignment = True
 
         for student in students:
             assignment = db.query(ExamAssignment).filter(
