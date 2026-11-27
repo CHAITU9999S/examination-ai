@@ -316,12 +316,16 @@ export default function StudentResultDetailPage() {
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
                       <p className="text-xs font-semibold text-slate-400">Your submitted answer</p>
-                      {currentQuestion.student_selected_options && currentQuestion.student_selected_options.length > 0 ? (
-                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">
-                          {currentQuestion.student_selected_options.map((option, index) => <li key={index}>{option}</li>)}
-                        </ul>
+                      {currentQuestion.student_selected_options !== undefined ? (
+                        currentQuestion.student_selected_options.length > 0 ? (
+                          <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">
+                            {currentQuestion.student_selected_options.map((option, index) => <li key={index}>{option}</li>)}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-sm text-slate-200">Not attempted</p>
+                        )
                       ) : (
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{currentQuestion.question_type === "MCQ" || currentQuestion.question_type === "multi_select" ? "Not attempted" : currentQuestion.student_answer?.trim() || (currentQuestion.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{currentQuestion.student_answer?.trim() || (currentQuestion.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
                       )}
                       {currentQuestion.student_answer_image_url && <StudentReportImage url={currentQuestion.student_answer_image_url} alt="Your submitted answer image" />}
                     </div>
