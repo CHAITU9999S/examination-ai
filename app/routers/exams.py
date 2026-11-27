@@ -1432,6 +1432,14 @@ def assign_exam_to_students(
         raise HTTPException(status_code=400, detail="Every assigned account must be an active Student.")
 
     try:
+        # For unconfigured randomized papers, freeze each student's exact
+        # question selection when the assignment is created. The pre-created
+        # not-started session is reused when the student later opens the exam.
+        freeze_paper_on_assignment = (
+            not (exam.selection_rules or {}).get("group_counts")
+            and exam.total_marks is not None
+        )
+
         for student in students:
             assignment = db.query(ExamAssignment).filter(
                 ExamAssignment.exam_id == exam_id,
@@ -1456,9 +1464,34 @@ def assign_exam_to_students(
                     assigned_by=current_user.id,
                     is_active=True,
                 ))
+                db.flush()
             else:
                 assignment.is_active = True
                 assignment.assigned_by = current_user.id
+
+            if freeze_paper_on_assignment and student_session is None:
+                try:
+                    selected_question_ids = generate_session_question_ids(
+                        exam=exam,
+                        student_id=student.id,
+                        db=db,
+                    )
+                except ValueError as error:
+                    raise HTTPException(status_code=400, detail=str(error))
+
+                db.add(ExamSession(
+                    exam_id=exam_id,
+                    student_id=student.id,
+                    started_at=None,
+                    expires_at=None,
+                    status="not_started",
+                    prestart_stage=None,
+                    prestart_expires_at=None,
+                    selected_question_ids=selected_question_ids,
+                    visited_question_ids=[],
+                ))
+                db.flush()
+
         _audit_exam_action(db, current_user.id, "exam_assigned_to_students", {
             "exam_id": exam_id,
             "student_ids": data.student_ids,
