@@ -2037,3 +2037,76 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
     assert reassign_response.status_code == 200
     db_session.refresh(sessions[0])
     assert sessions[0].selected_question_ids == first_paper
+
+
+
+def test_random_paper_rejects_single_type_when_other_types_are_eligible(client, db_session):
+    creator = create_user(db_session, "examiner", "mixed-paper-creator@test.com")
+    student = create_user(db_session, "student", "mixed-paper-student@test.com")
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    response = client.post(
+        "/exams/",
+        json={
+            "title": "Require Mixed Question Types",
+            "subject": "General Knowledge",
+            "duration_minutes": 30,
+            "total_questions": 2,
+            "total_marks": 4,
+            "randomize_questions": True,
+            "selection_rules": {},
+            "start_time": start.isoformat(),
+            "end_time": (start + timedelta(hours=2)).isoformat(),
+        },
+        headers=get_auth_headers(creator),
+    )
+    assert response.status_code == 201
+    exam_id = response.json()["exam_id"]
+
+    questions = [
+        QuestionBank(
+            question_text="MCQ one",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="MCQ two",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Short answer",
+            question_type="short_answer",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=3,
+        ),
+    ]
+    db_session.add_all(questions)
+    db_session.commit()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam_id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.commit()
+
+    assignment_response = client.post(
+        f"/exams/{exam_id}/assignments",
+        json={"student_ids": [student.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert assignment_response.status_code == 400
+    assert "more than one question type" in assignment_response.json()["detail"]
+    assert db_session.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student.id,
+    ).first() is None
+    assert db_session.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student.id,
+    ).first() is None
