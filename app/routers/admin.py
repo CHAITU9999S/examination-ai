@@ -26,6 +26,7 @@ from app.services.admin_service import (
     get_dashboard_statistics,
     record_admin_activity,
 )
+from app.services.session_service import generate_session_question_ids
 
 
 router = APIRouter(
@@ -1113,13 +1114,58 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             ExamSession.student_id == student.id,
         ).order_by(ExamSession.id.desc()).first()
 
+        selection_rules = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+        uses_type_difficulty_configuration = any(
+            key in selection_rules
+            for key in ("group_counts", "difficulty", "difficulty_counts", "question_type_counts")
+        )
+        if (
+            not uses_type_difficulty_configuration
+            and exam.total_marks is not None
+            and (
+                session is None
+                or (
+                    session.status == "not_started"
+                    and not session.selected_question_ids
+                    and session.prestart_stage is None
+                )
+            )
+        ):
+            try:
+                selected_ids = generate_session_question_ids(
+                    exam=exam,
+                    student_id=student.id,
+                    db=db,
+                )
+                if session is None:
+                    session = ExamSession(
+                        exam_id=exam.id,
+                        student_id=student.id,
+                        started_at=None,
+                        expires_at=None,
+                        status="not_started",
+                        prestart_stage=None,
+                        prestart_expires_at=None,
+                        selected_question_ids=selected_ids,
+                        visited_question_ids=[],
+                    )
+                    db.add(session)
+                else:
+                    session.selected_question_ids = selected_ids
+                db.commit()
+                db.refresh(session)
+            except ValueError:
+                db.rollback()
+
         result = (
             db.query(Result).filter(Result.session_id == session.id).first()
             if session is not None else None
         )
 
         question_ids = list(session.selected_question_ids or []) if session else []
-        if not question_ids:
+        if not question_ids and not (
+            not uses_type_difficulty_configuration and exam.total_marks is not None
+        ):
             question_ids = [
                 row[0] for row in db.query(ExamQuestion.question_id).filter(
                     ExamQuestion.exam_id == exam.id
@@ -1135,11 +1181,19 @@ def _build_student_performance(current_user: User, db: Session, include_all_assi
             question_id: float(maximum_marks or 0)
             for question_id, maximum_marks in question_rows
         }
-        total_questions = len(question_ids) if question_ids else int(exam.total_questions or 0)
+        total_questions = (
+            len(question_ids)
+            if question_ids
+            else int(exam.total_questions or 0)
+        )
         total_marks = (
             float(result.total_marks)
             if result is not None and result.total_marks is not None
-            else sum(question_marks.values()) if question_marks else None
+            else sum(question_marks.values())
+            if question_marks
+            else float(exam.total_marks)
+            if not uses_type_difficulty_configuration and exam.total_marks is not None
+            else None
         )
 
         answers = (
