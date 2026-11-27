@@ -209,7 +209,7 @@ export default function ManageExamsPage() {
                   </div>
                   <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
                     <Link href={`/staff/manage-exams/${exam.id}`} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold hover:bg-cyan-500">Students & Evaluation</Link>
-                    <Link href={`/examiner/exams/${exam.id}/question-bank`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Question Bank</Link>
+                    <Link href={`/examiner/exams/${exam.id}/question-bank`} className="rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-white/10">Edit</Link>
                     {exam.published_at ? <span className="rounded-lg border border-emerald-500/40 px-3 py-2 text-xs text-emerald-300">Published</span> : <button type="button" onClick={() => publishExam(exam)} disabled={workingId !== null} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50">{workingId === exam.id ? "Publishing..." : "Publish Examination"}</button>}
                     <button type="button" onClick={() => deleteExam(exam)} disabled={workingId !== null} className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">{workingId === exam.id ? "Deleting..." : "Delete"}</button>
                   </div>
