@@ -12,6 +12,7 @@ interface PaperQuestion {
   question_text: string;
   question_type: string;
   maximum_marks: number;
+  negative_marks?: number | null;
   awarded_marks?: number | null;
   student_answer?: string | null;
   student_selected_options?: string[];
@@ -26,6 +27,27 @@ interface PaperReport {
   exam_title: string;
   subject?: string | null;
   session_status: string;
+  result_published?: boolean;
+  exam_details?: {
+    duration_minutes?: number | null;
+    total_questions?: number | null;
+    total_marks?: number | null;
+    negative_marking_enabled?: boolean | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    creator_name?: string | null;
+    assigned_by_name?: string | null;
+  };
+  positive_marks_earned?: number | null;
+  negative_marks_deducted?: number | null;
+  maximum_positive_marks?: number | null;
+  configured_negative_marks?: number | null;
+  total_marks_obtained?: number | null;
+  total_marks?: number | null;
+  evaluated_questions?: number | null;
+  correct_questions?: number | null;
+  wrong_questions?: number | null;
+  partially_correct_questions?: number | null;
   paper: PaperQuestion[];
 }
 
@@ -80,6 +102,29 @@ export default function StudentAssignedPaperReportPage() {
             <h1 className="text-3xl font-bold">{report.exam_title}</h1>
             <p className="mt-2 text-slate-400">{report.subject || "Subject not specified"} · Assigned paper · {report.session_status.replaceAll("_", " ")}</p>
             <p className="mt-4 text-sm text-slate-400">This report is available after the examination ends. It shows the question paper assigned to your account, the correct answers, and any answers you submitted.</p>
+            <section className="mt-6 rounded-2xl border border-white/10 bg-slate-900 p-5">
+              <h2 className="text-lg font-bold">Examination Performance Summary</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Positive marks earned</p><p className="mt-1 text-xl font-bold">{report.positive_marks_earned ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Negative marks deducted</p><p className="mt-1 text-xl font-bold">{report.negative_marks_deducted ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Total marks obtained</p><p className="mt-1 text-xl font-bold">{report.total_marks_obtained ?? "Not published"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum total marks</p><p className="mt-1 text-xl font-bold">{report.total_marks ?? report.exam_details?.total_marks ?? "Not available"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Correct questions</p><p className="mt-1 text-xl font-bold">{report.correct_questions ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Wrong questions</p><p className="mt-1 text-xl font-bold">{report.wrong_questions ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Partially correct</p><p className="mt-1 text-xl font-bold">{report.partially_correct_questions ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Evaluated questions</p><p className="mt-1 text-xl font-bold">{report.evaluated_questions ?? "Not evaluated"}</p></div>
+              </div>
+              <div className="mt-4 grid gap-2 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300 sm:grid-cols-2">
+                <p>Duration: {report.exam_details?.duration_minutes != null ? `${report.exam_details.duration_minutes} minutes` : "Not available"}</p>
+                <p>Questions in this paper: {report.exam_details?.total_questions ?? report.paper.length}</p>
+                <p>Positive marks available: {report.maximum_positive_marks ?? "Not available"}</p>
+                <p>Configured negative marks: {report.configured_negative_marks ?? "Not available"}</p>
+                <p>Negative marking: {report.exam_details?.negative_marking_enabled == null ? "Not available" : report.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
+                <p>Created by: {report.exam_details?.creator_name || "Not available"}</p>
+                <p>Starts: {report.exam_details?.start_time ? new Date(report.exam_details.start_time).toLocaleString() : "Not available"}</p>
+                <p>Ends: {report.exam_details?.end_time ? new Date(report.exam_details.end_time).toLocaleString() : "Not available"}</p>
+              </div>
+            </section>
             <section className="mt-8 space-y-5">
               {report.paper.map((question, index) => (
                 <article key={question.question_id} className="rounded-xl border border-white/10 bg-slate-900 p-5">
@@ -89,7 +134,7 @@ export default function StudentAssignedPaperReportPage() {
                       <h2 className="mt-2 whitespace-pre-wrap font-semibold">{question.question_text}</h2>
                       {question.question_image_url && <StudentReportImage url={question.question_image_url} alt="Question image" />}
                     </div>
-                    <p className="text-sm font-semibold text-slate-300">Marks: {question.awarded_marks ?? "—"} / {question.maximum_marks}</p>
+                    <p className="text-sm font-semibold text-slate-300">Marks: {question.awarded_marks ?? "—"} / {question.maximum_marks} · Negative: {question.negative_marks ?? "Not available"}</p>
                   </div>
                   {question.options.length > 0 && <div className="mt-4 space-y-2">
                     {question.options.map((option, optionIndex) => <p key={optionIndex} className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300">{option}</p>)}
