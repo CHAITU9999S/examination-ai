@@ -240,6 +240,8 @@ class ExamCreate(BaseModel):
 
     total_questions: int = Field(gt=0)
 
+    total_marks: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+
     randomize_questions: bool = True
 
     selection_rules: dict[str, Any] | None = None
@@ -266,6 +268,11 @@ class ExamCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_schedule_times(self):
+        uses_group_counts = bool((self.selection_rules or {}).get("group_counts"))
+        if uses_group_counts and self.total_marks is not None:
+            raise ValueError("Total Marks is configured through the selected type/difficulty groups; do not enter a separate total.")
+        if not uses_group_counts and self.total_marks is None:
+            raise ValueError("Enter Total Marks when type/difficulty configuration is not selected.")
         if (self.start_time is None) != (self.end_time is None):
             raise ValueError(
                 "Enter both examination schedule times, or leave both empty."
