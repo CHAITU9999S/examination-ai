@@ -14,6 +14,7 @@ interface PaperQuestion {
   maximum_marks: number;
   awarded_marks?: number | null;
   student_answer?: string | null;
+  student_selected_options?: string[];
   correct_answer?: string | null;
   correct_options: string[];
   options: string[];
@@ -96,7 +97,7 @@ export default function StudentAssignedPaperReportPage() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-lg border border-white/10 bg-slate-800 p-3">
                       <p className="text-xs font-semibold text-slate-400">Your answer</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_answer?.trim() || (question.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_selected_options?.length ? question.student_selected_options.join(", ") : question.student_answer?.trim() || (question.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
                       {question.student_answer_image_url && <StudentReportImage url={question.student_answer_image_url} alt="Your submitted answer image" />}
                     </div>
                     <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-3">
