@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import StudentReportImage from "@/components/StudentReportImage";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -14,6 +15,9 @@ interface QuestionResult {
   student_answer?: string | null;
   correct_answer?: string | null;
   correct_options?: string[];
+  question_image_url?: string | null;
+  expected_answer_image_url?: string | null;
+  student_answer_image_url?: string | null;
   maximum_marks: number;
   awarded_marks: number;
   outcome: "correct" | "incorrect" | "partial" | "unanswered";
@@ -291,6 +295,7 @@ export default function StudentResultDetailPage() {
                     <div>
                       <p className="text-xs text-slate-500">Question {item.question_id} · {item.question_type}</p>
                       <p className="mt-2 whitespace-pre-wrap font-medium">{item.question_text || "Question text unavailable"}</p>
+                      {item.question_image_url && <StudentReportImage url={item.question_image_url} alt="Question image" />}
                     </div>
                     <span className="rounded-full bg-slate-800 px-3 py-1 text-xs capitalize text-slate-300">
                       {item.outcome}
@@ -302,7 +307,8 @@ export default function StudentResultDetailPage() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-lg border border-white/10 bg-slate-800 p-3">
                       <p className="text-xs font-semibold text-slate-400">Your answer</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.student_answer?.trim() || "Not attempted"}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.student_answer?.trim() || (item.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
+                      {item.student_answer_image_url && <StudentReportImage url={item.student_answer_image_url} alt="Your submitted answer image" />}
                     </div>
                     <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-3">
                       <p className="text-xs font-semibold text-emerald-300">Correct answer</p>
@@ -313,6 +319,7 @@ export default function StudentResultDetailPage() {
                       ) : (
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.correct_answer?.trim() || "No model answer provided"}</p>
                       )}
+                      {item.expected_answer_image_url && <StudentReportImage url={item.expected_answer_image_url} alt="Expected answer image" />}
                     </div>
                   </div>
                   {item.rubric_scores && item.rubric_scores.length > 0 && (

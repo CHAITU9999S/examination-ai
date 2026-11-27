@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import StudentReportImage from "@/components/StudentReportImage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -16,6 +17,9 @@ interface PaperQuestion {
   correct_answer?: string | null;
   correct_options: string[];
   options: string[];
+  question_image_url?: string | null;
+  expected_answer_image_url?: string | null;
+  student_answer_image_url?: string | null;
 }
 interface PaperReport {
   exam_title: string;
@@ -82,6 +86,7 @@ export default function StudentAssignedPaperReportPage() {
                     <div>
                       <p className="text-xs text-slate-500">Question {index + 1} · {question.question_type.replaceAll("_", " ")}</p>
                       <h2 className="mt-2 whitespace-pre-wrap font-semibold">{question.question_text}</h2>
+                      {question.question_image_url && <StudentReportImage url={question.question_image_url} alt="Question image" />}
                     </div>
                     <p className="text-sm font-semibold text-slate-300">Marks: {question.awarded_marks ?? "—"} / {question.maximum_marks}</p>
                   </div>
@@ -91,13 +96,15 @@ export default function StudentAssignedPaperReportPage() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-lg border border-white/10 bg-slate-800 p-3">
                       <p className="text-xs font-semibold text-slate-400">Your answer</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_answer?.trim() || "Not attempted"}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_answer?.trim() || (question.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
+                      {question.student_answer_image_url && <StudentReportImage url={question.student_answer_image_url} alt="Your submitted answer image" />}
                     </div>
                     <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-3">
                       <p className="text-xs font-semibold text-emerald-300">Correct answer</p>
                       {question.correct_options.length > 0 ?
                         <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">{question.correct_options.map((option, optionIndex) => <li key={optionIndex}>{option}</li>)}</ul> :
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.correct_answer?.trim() || "No model answer provided"}</p>}
+                      {question.expected_answer_image_url && <StudentReportImage url={question.expected_answer_image_url} alt="Expected answer image" />}
                     </div>
                   </div>
                 </article>

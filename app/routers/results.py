@@ -60,6 +60,35 @@ def _require_student_result_access(
     return result
 
 
+def _student_report_image_response(question, session, kind: str, db: Session):
+    """Serve a student's own post-exam question, answer, or model-answer image."""
+    if kind == "question":
+        image_data = question.question_image_data
+        mime_type = question.question_image_mime_type
+    elif kind == "expected":
+        image_data = question.expected_answer_image_data
+        mime_type = question.expected_answer_image_mime_type
+    elif kind == "student":
+        if session is None:
+            raise HTTPException(status_code=404, detail="No submitted answer image is available.")
+        answer = db.query(Answer).filter(
+            Answer.session_id == session.id,
+            Answer.question_id == question.id,
+        ).first()
+        image_data = answer.image_data if answer else None
+        mime_type = answer.image_mime_type if answer else None
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported report image type.")
+
+    if not image_data:
+        raise HTTPException(status_code=404, detail="This report image is not available.")
+    return Response(
+        content=image_data,
+        media_type=mime_type or "application/octet-stream",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 def _get_percentile(db: Session, exam_id: int, obtained_marks: float):
     cohort_query = db.query(Result).join(
         ExamSession,
@@ -230,6 +259,67 @@ def get_my_result_session_status(
     }
 
 
+@router.get("/exams/{exam_id}/paper/{question_id}/image/{kind}")
+def get_my_ended_exam_paper_image(
+    exam_id: int,
+    question_id: int,
+    kind: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can view their assigned question papers.")
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == current_user.id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="No active assignment was found for this examination.")
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+    exam_end = normalize_to_naive_utc(exam.end_time)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if exam_end is None or now < exam_end:
+        raise HTTPException(status_code=403, detail="Report images are available after the examination schedule ends.")
+    session = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == current_user.id,
+    ).order_by(ExamSession.id.desc()).first()
+    selected_ids = (
+        list(session.selected_question_ids)
+        if session is not None and isinstance(session.selected_question_ids, list)
+        else generate_session_question_ids(exam, current_user.id, db)
+    )
+    if question_id not in selected_ids:
+        raise HTTPException(status_code=404, detail="Question not found in your assigned paper.")
+    question = db.query(QuestionBank).filter(QuestionBank.id == question_id).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    return _student_report_image_response(question, session, kind, db)
+
+
+@router.get("/sessions/{session_id}/questions/{question_id}/image/{kind}")
+def get_my_published_result_image(
+    session_id: int,
+    question_id: int,
+    kind: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Examination session not found.")
+    _require_student_result_access(session, current_user, db)
+    if question_id not in (session.selected_question_ids or []):
+        raise HTTPException(status_code=404, detail="Question not found in your examination paper.")
+    question = db.query(QuestionBank).filter(QuestionBank.id == question_id).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    return _student_report_image_response(question, session, kind, db)
+
+
 @router.get("/exams/{exam_id}/paper")
 def get_my_ended_exam_paper(
     exam_id: int,
@@ -305,8 +395,11 @@ def get_my_ended_exam_paper(
             "correct_answer": question.expected_answer or question.model_answer_text,
             "correct_options": [option.option_text for option in options if option.is_correct],
             "options": [option.option_text for option in options],
-            "question_image_available": bool(question.question_image_path or question.question_image_data),
+            "question_image_available": bool(question.question_image_data),
+            "question_image_url": f"/results/exams/{exam.id}/paper/{question.id}/image/question" if question.question_image_data else None,
             "expected_answer_image_available": bool(question.expected_answer_image_data),
+            "expected_answer_image_url": f"/results/exams/{exam.id}/paper/{question.id}/image/expected" if question.expected_answer_image_data else None,
+            "student_answer_image_url": f"/results/exams/{exam.id}/paper/{question.id}/image/student" if answer and answer.image_data else None,
         })
 
     return {
@@ -395,6 +488,9 @@ def get_my_result_details(
                 if question else None
             ),
             "correct_options": [item[0] for item in correct_options],
+            "question_image_url": f"/results/sessions/{session.id}/questions/{question.id}/image/question" if question and question.question_image_data else None,
+            "expected_answer_image_url": f"/results/sessions/{session.id}/questions/{question.id}/image/expected" if question and question.expected_answer_image_data else None,
+            "student_answer_image_url": f"/results/sessions/{session.id}/questions/{question.id}/image/student" if answer and answer.image_data else None,
             "outcome": outcome,
             "examiner_feedback": (
                 answer.examiner_feedback if answer else None
