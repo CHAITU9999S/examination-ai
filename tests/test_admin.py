@@ -875,3 +875,82 @@ def test_examiner_activity_logs_include_examination_and_question_bank_changes(
     }.issubset(actions)
     assert "student_login" not in actions
 
+
+
+
+def test_admin_student_performance_uses_exact_unconfigured_random_paper(client, db_session, admin, student):
+    start = datetime.utcnow() + timedelta(hours=1)
+    exam = Exam(
+        title="Admin exact random paper",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=2,
+        total_marks=4,
+        selection_rules={},
+        start_time=start,
+        end_time=start + timedelta(hours=2),
+        created_by=admin.id,
+    )
+    db_session.add(exam)
+    db_session.flush()
+    questions = [
+        QuestionBank(
+            question_text="Admin report MCQ one",
+            question_type="MCQ",
+            subject="Science",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Admin report MCQ two",
+            question_type="MCQ",
+            subject="Science",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Admin report short answer",
+            question_type="short_answer",
+            subject="Science",
+            difficulty="easy",
+            marks=2,
+        ),
+    ]
+    db_session.add_all(questions)
+    db_session.flush()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=admin.id,
+        is_active=True,
+    ))
+    db_session.commit()
+
+    response = client.get(
+        "/admin/student-performance",
+        headers=get_auth_headers(client, admin.email, "AdminPass123!"),
+    )
+    assert response.status_code == 200
+    student_item = next(
+        item for item in response.json()["students"]
+        if item["student_id"] == student.id
+    )
+    attempt = next(
+        item for item in student_item["attempts"]
+        if item["exam_id"] == exam.id
+    )
+    assert attempt["total_questions"] == 2
+    assert attempt["total_marks"] == 4
+
+    session = db_session.query(ExamSession).filter(
+        ExamSession.exam_id == exam.id,
+        ExamSession.student_id == student.id,
+    ).first()
+    assert session is not None
+    assert len(session.selected_question_ids) == 2
