@@ -15,7 +15,7 @@ type QuestionReview={
  ai_suggested_marks?:number|null;ai_justification?:string|null;awarded_marks?:number|null;
  evaluation_count:number;evaluation_history:HistoryItem[];examiner_feedback?:string|null;is_objective:boolean;
 };
-type ReviewData={session_id:number;exam_id:number;exam_title:string;subject?:string|null;exam_details?:{duration_minutes?:number|null;total_questions?:number|null;total_marks?:number|null;negative_marking_enabled?:boolean|null;start_time?:string|null;end_time?:string|null;creator_name?:string|null};positive_marks_earned?:number|null;negative_marks_deducted?:number|null;maximum_positive_marks?:number|null;configured_negative_marks?:number|null;evaluated_questions?:number|null;correct_questions?:number|null;wrong_questions?:number|null;partially_correct_questions?:number|null;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
+type ReviewData={session_id:number;exam_id:number;exam_title:string;subject?:string|null;exam_details?:{duration_minutes?:number|null;total_questions?:number|null;total_marks?:number|null;negative_marking_enabled?:boolean|null;proctoring_enabled?:boolean|null;max_tab_switch_warnings?:number|null;start_time?:string|null;end_time?:string|null;creator_name?:string|null};positive_marks_earned?:number|null;negative_marks_deducted?:number|null;maximum_positive_marks?:number|null;configured_negative_marks?:number|null;evaluated_questions?:number|null;correct_questions?:number|null;wrong_questions?:number|null;partially_correct_questions?:number|null;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
 function dateText(value?:string|null){return formatISTDateTime(value, "—");}
 function SessionEvaluationPageContent(){
  const params=useParams<{examId:string;sessionId:string}>();
@@ -137,6 +137,8 @@ function SessionEvaluationPageContent(){
      <p>Positive marks available: {data.maximum_positive_marks??"Not available"}</p>
      <p>Configured negative marks: {data.configured_negative_marks??"Not available"}</p>
      <p>Negative marking: {data.exam_details?.negative_marking_enabled==null?"Not available":data.exam_details.negative_marking_enabled?"Enabled":"Disabled"}</p>
+     <p>AI proctoring: {data.exam_details?.proctoring_enabled==null?"Not available":data.exam_details.proctoring_enabled?"Enabled":"Disabled"}</p>
+     <p>Maximum tab-switch warnings: {data.exam_details?.max_tab_switch_warnings??"Not available"}</p>
      <p>Starts: {data.exam_details?.start_time?dateText(data.exam_details.start_time):"Not available"}</p>
      <p>Ends: {data.exam_details?.end_time?dateText(data.exam_details.end_time):"Not available"}</p>
     </div>
