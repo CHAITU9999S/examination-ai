@@ -458,7 +458,56 @@ def get_student_examination_overview(
     for assignment, exam in assignments:
         creator = db.query(User).filter(User.id == exam.created_by).first()
         assigner = db.query(User).filter(User.id == assignment.assigned_by).first()
-        question_rows = db.query(
+        selection_rules = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+        configured_counts = selection_rules.get("group_counts")
+        session = db.query(ExamSession).filter(
+            ExamSession.exam_id == exam.id,
+            ExamSession.student_id == current_user.id,
+        ).order_by(ExamSession.id.desc()).first()
+
+        # Backfill a fixed paper for older unconfigured randomized assignments
+        # that predate assignment-time session creation.
+        if not configured_counts and exam.total_marks is not None and (
+            session is None
+            or (
+                session.status == "not_started"
+                and not session.selected_question_ids
+                and session.prestart_stage is None
+            )
+        ):
+            try:
+                selected_ids = generate_session_question_ids(
+                    exam=exam,
+                    student_id=current_user.id,
+                    db=db,
+                )
+                if session is None:
+                    session = ExamSession(
+                        exam_id=exam.id,
+                        student_id=current_user.id,
+                        started_at=None,
+                        expires_at=None,
+                        status="not_started",
+                        prestart_stage=None,
+                        prestart_expires_at=None,
+                        selected_question_ids=selected_ids,
+                        visited_question_ids=[],
+                    )
+                    db.add(session)
+                else:
+                    session.selected_question_ids = selected_ids
+                db.flush()
+            except ValueError:
+                # Keep the overview available; the paper endpoint will explain
+                # that this legacy assignment has no valid paper combination.
+                pass
+
+        selected_question_ids = (
+            session.selected_question_ids
+            if session is not None and isinstance(session.selected_question_ids, list) and session.selected_question_ids
+            else None
+        )
+        question_query = db.query(
             QuestionBank.question_type,
             QuestionBank.difficulty,
             QuestionBank.marks,
@@ -468,7 +517,10 @@ def get_student_examination_overview(
             ExamQuestion, ExamQuestion.question_id == QuestionBank.id
         ).filter(
             ExamQuestion.exam_id == exam.id
-        ).all()
+        )
+        if selected_question_ids:
+            question_query = question_query.filter(QuestionBank.id.in_(selected_question_ids))
+        question_rows = question_query.all()
 
         group_rows = {}
         for question_type, difficulty, marks, negative_marks, time_limit in question_rows:
@@ -484,8 +536,6 @@ def get_student_examination_overview(
             })
             group["count"] += 1
 
-        selection_rules = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
-        configured_counts = selection_rules.get("group_counts")
         breakdown = []
         maximum_marks = 0.0
         total_negative_marks = 0.0
@@ -523,6 +573,19 @@ def get_student_examination_overview(
 
         breakdown.sort(key=lambda row: (row["difficulty"], row["question_type"]))
         question_count = sum(row["count"] for row in breakdown)
+        if not configured_counts and exam.total_marks is not None:
+            if selected_question_ids:
+                maximum_marks = float(sum(
+                    float(question.marks or 0)
+                    for question in db.query(QuestionBank).filter(
+                        QuestionBank.id.in_(selected_question_ids)
+                    ).all()
+                ))
+                question_count = len(selected_question_ids)
+            else:
+                maximum_marks = float(exam.total_marks)
+                question_count = int(exam.total_questions or 0)
+                breakdown = []
         instructions_value = (
             selection_rules.get("instructions")
             or selection_rules.get("exam_instructions")
@@ -537,11 +600,6 @@ def get_student_examination_overview(
             ]
         else:
             instructions = []
-
-        session = db.query(ExamSession).filter(
-            ExamSession.exam_id == exam.id,
-            ExamSession.student_id == current_user.id,
-        ).order_by(ExamSession.id.desc()).first()
 
         start_at = normalize_to_naive_utc(exam.start_time)
         end_at = normalize_to_naive_utc(exam.end_time)
