@@ -44,6 +44,8 @@ interface PaperReport {
   configured_negative_marks?: number | null;
   total_marks_obtained?: number | null;
   total_marks?: number | null;
+  percentage?: number | null;
+  grade?: string | null;
   evaluated_questions?: number | null;
   correct_questions?: number | null;
   wrong_questions?: number | null;
@@ -113,6 +115,7 @@ export default function StudentAssignedPaperReportPage() {
                 <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Wrong questions</p><p className="mt-1 text-xl font-bold">{report.wrong_questions ?? "Not evaluated"}</p></div>
                 <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Partially correct</p><p className="mt-1 text-xl font-bold">{report.partially_correct_questions ?? "Not evaluated"}</p></div>
                 <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Evaluated questions</p><p className="mt-1 text-xl font-bold">{report.evaluated_questions ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Percentage / Grade</p><p className="mt-1 text-xl font-bold">{report.result_published ? `${report.percentage ?? "—"}% / ${report.grade || "—"}` : "Not published"}</p></div>
               </div>
               <div className="mt-4 grid gap-2 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300 sm:grid-cols-2">
                 <p>Duration: {report.exam_details?.duration_minutes != null ? `${report.exam_details.duration_minutes} minutes` : "Not available"}</p>
