@@ -232,13 +232,6 @@ function StudentTrackingPageContent() {
                   </span>
                 </Link>
               ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
             </div>
           )}
         </section>

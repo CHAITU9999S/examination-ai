@@ -230,13 +230,6 @@ export default function StudentPerformancePage() {
                   </span>
                 </Link>
               ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
             </div>
           )}
         </section>
