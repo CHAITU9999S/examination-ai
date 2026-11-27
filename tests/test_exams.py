@@ -1946,8 +1946,8 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
         "title": "Fixed Random Papers",
         "subject": "General Knowledge",
         "duration_minutes": 30,
-        "total_questions": 1,
-        "total_marks": 2,
+        "total_questions": 2,
+        "total_marks": 4,
         "randomize_questions": True,
         "selection_rules": {},
         "start_time": start.isoformat(),
@@ -1964,13 +1964,26 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
 
     questions = [
         QuestionBank(
-            question_text=f"Fixed paper question {index}",
+            question_text="Fixed MCQ question one",
             question_type="MCQ",
             subject="General Knowledge",
             difficulty="easy",
             marks=2,
-        )
-        for index in range(3)
+        ),
+        QuestionBank(
+            question_text="Fixed MCQ question two",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Fixed short-answer question",
+            question_type="short_answer",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
     ]
     db_session.add_all(questions)
     db_session.commit()
@@ -1996,15 +2009,20 @@ def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client
     assert len(sessions) == 2
     assert all(session.status == "not_started" for session in sessions)
     assert all(session.started_at is None for session in sessions)
-    assert all(len(session.selected_question_ids) == 1 for session in sessions)
+    assert all(len(session.selected_question_ids) == 2 for session in sessions)
 
     question_marks = {question.id: question.marks for question in questions}
     assert all(
-        sum(question_marks[question_id] for question_id in session.selected_question_ids) == 2
+        sum(question_marks[question_id] for question_id in session.selected_question_ids) == 4
+        for session in sessions
+    )
+    assert all(
+        len({question_by_id[question_id].question_type for question_id in session.selected_question_ids}) == 2
         for session in sessions
     )
     assert set(sessions[0].selected_question_ids) != set(sessions[1].selected_question_ids)
 
+    question_by_id = {question.id: question for question in questions}
     first_paper = list(sessions[0].selected_question_ids)
     revoke_response = client.delete(
         f"/exams/{exam_id}/assignments/{first_student.id}",
