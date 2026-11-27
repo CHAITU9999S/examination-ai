@@ -1115,7 +1115,7 @@ def test_exam_configuration_has_three_revisions(client, db_session):
     exam_data = valid_exam_data()
     exam_data["total_questions"] = 1
     exam_data["selection_rules"] = {}
-    exam_data["total_marks"] = 4
+    exam_data["total_marks"] = 1
     create_response = client.post(
         "/exams/",
         json=exam_data,
@@ -1141,7 +1141,7 @@ def test_exam_configuration_has_three_revisions(client, db_session):
         update_data = valid_exam_data()
         update_data["total_questions"] = 1
         update_data["selection_rules"] = {}
-        update_data["total_marks"] = 4
+        update_data["total_marks"] = 1
         update_data["title"] = f"Configuration revision {revision}"
         response = client.put(
             f"/exams/{exam_id}",
@@ -1153,7 +1153,7 @@ def test_exam_configuration_has_three_revisions(client, db_session):
     fourth_update = valid_exam_data()
     fourth_update["total_questions"] = 1
     fourth_update["selection_rules"] = {}
-    fourth_update["total_marks"] = 4
+    fourth_update["total_marks"] = 1
     response = client.put(
         f"/exams/{exam_id}",
         json=fourth_update,
