@@ -34,6 +34,7 @@ export default function ExaminerExamsPage() {
   const [subject, setSubject] = useState("");
   const [duration, setDuration] = useState("60");
   const [totalQuestions, setTotalQuestions] = useState("20");
+  const [totalMarks, setTotalMarks] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [negativeMarking, setNegativeMarking] = useState(false);
@@ -99,6 +100,7 @@ export default function ExaminerExamsPage() {
     setSubject("");
     setDuration("60");
     setTotalQuestions("20");
+    setTotalMarks("");
     setStartTime("");
     setEndTime("");
     setNegativeMarking(false);
@@ -118,6 +120,7 @@ export default function ExaminerExamsPage() {
 
     const durationValue = Number(duration);
     const questionCount = Number(totalQuestions);
+    const totalMarksValue = Number(totalMarks);
     const sensitivity = Number(gazeSensitivity);
     const tabWarnings = Number(maxTabWarnings);
 
@@ -139,6 +142,11 @@ export default function ExaminerExamsPage() {
       questionCount <= 0
     ) {
       setError("Question count must be a positive whole number.");
+      return;
+    }
+
+    if (!useGroupCounts && (!Number.isFinite(totalMarksValue) || totalMarksValue <= 0)) {
+      setError("Total Marks must be a positive number when type/difficulty configuration is not selected.");
       return;
     }
 
@@ -215,6 +223,7 @@ export default function ExaminerExamsPage() {
         subject: subject.trim(),
         duration_minutes: durationValue,
         total_questions: questionCount,
+        total_marks: useGroupCounts ? null : totalMarksValue,
         start_time: startIso,
         end_time: endIso,
         randomize_questions: randomizeQuestions,
@@ -470,6 +479,26 @@ export default function ExaminerExamsPage() {
                 />
                 Configure each student's paper by question type and difficulty
               </label>
+              {!useGroupCounts && (
+                <div className="mt-4">
+                  <label htmlFor="totalMarks" className="mb-2 block text-sm font-medium">
+                    Total Marks
+                  </label>
+                  <input
+                    id="totalMarks"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    value={totalMarks}
+                    onChange={(event) => setTotalMarks(event.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-blue-500"
+                  />
+                  <p className="mt-2 text-xs text-slate-400">
+                    Every student's randomized paper will contain exactly {totalQuestions || "the specified"} questions and add up to this total.
+                  </p>
+                </div>
+              )}
               {useGroupCounts && (
                 <div className="mt-4 overflow-x-auto">
                   <p className="mb-3 text-xs text-slate-400">
