@@ -465,14 +465,21 @@ def get_student_examination_overview(
             ExamSession.student_id == current_user.id,
         ).order_by(ExamSession.id.desc()).first()
 
-        # Backfill a fixed paper for existing assignments that predate
-        # assignment-time session creation, regardless of selection mode.
+        uses_type_difficulty_configuration = any(
+            key in selection_rules
+            for key in ("group_counts", "difficulty", "difficulty_counts", "question_type_counts")
+        )
+        # Backfill the new unconfigured random-paper mode for older assignments.
         if (
-            session is None
-            or (
-                session.status == "not_started"
-                and not session.selected_question_ids
-                and session.prestart_stage is None
+            not uses_type_difficulty_configuration
+            and exam.total_marks is not None
+            and (
+                session is None
+                or (
+                    session.status == "not_started"
+                    and not session.selected_question_ids
+                    and session.prestart_stage is None
+                )
             )
         ):
             try:
@@ -576,7 +583,7 @@ def get_student_examination_overview(
 
         breakdown.sort(key=lambda row: (row["difficulty"], row["question_type"]))
         question_count = sum(row["count"] for row in breakdown)
-        if not configured_counts and exam.total_marks is not None:
+        if not uses_type_difficulty_configuration and exam.total_marks is not None:
             if selected_question_ids:
                 maximum_marks = float(sum(
                     float(question.marks or 0)
@@ -1493,10 +1500,16 @@ def assign_exam_to_students(
         raise HTTPException(status_code=400, detail="Every assigned account must be an active Student.")
 
     try:
-        # Freeze each student's exact question selection when the assignment
-        # is created. The same selection rules are used for configured and
-        # unconfigured papers; the pre-created session is reused on exam start.
-        freeze_paper_on_assignment = True
+        selection_rules = exam.selection_rules if isinstance(exam.selection_rules, dict) else {}
+        uses_type_difficulty_configuration = any(
+            key in selection_rules
+            for key in ("group_counts", "difficulty", "difficulty_counts", "question_type_counts")
+        )
+        # The new unconfigured random-paper mode is frozen at assignment time.
+        # Existing Type/Difficulty paper generation remains unchanged.
+        freeze_paper_on_assignment = (
+            not uses_type_difficulty_configuration and exam.total_marks is not None
+        )
 
         for student in students:
             assignment = db.query(ExamAssignment).filter(
