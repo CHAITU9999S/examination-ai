@@ -14,6 +14,7 @@ interface ReportQuestion {
   question_type: string;
   difficulty: string;
   maximum_marks: number;
+  negative_marks?: number | null;
   awarded_marks?: number | null;
   student_answer?: string | null;
   student_selected_options?: string[];
@@ -37,6 +38,24 @@ interface StudentReport {
   total_marks?: number | null;
   percentage?: number | null;
   grade?: string | null;
+  exam_details?: {
+    duration_minutes?: number | null;
+    total_questions?: number | null;
+    total_marks?: number | null;
+    negative_marking_enabled?: boolean | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    creator_name?: string | null;
+    assigned_by_name?: string | null;
+  };
+  positive_marks_earned?: number | null;
+  negative_marks_deducted?: number | null;
+  maximum_positive_marks?: number | null;
+  configured_negative_marks?: number | null;
+  evaluated_questions?: number | null;
+  correct_questions?: number | null;
+  wrong_questions?: number | null;
+  partially_correct_questions?: number | null;
   paper: ReportQuestion[];
 }
 
@@ -151,9 +170,26 @@ export default function AdminStudentPerformanceReportPage() {
               <p className="mt-1 text-slate-400">{report.subject || "No subject"}</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Session status</p><p className="mt-1 font-semibold capitalize">{report.session_status.replaceAll("_", " ")}</p></div>
-                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Final obtained marks</p><p className="mt-1 font-semibold">{report.obtained_marks ?? "Not finalised"}</p></div>
-                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum marks</p><p className="mt-1 font-semibold">{report.total_marks ?? "—"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Total marks obtained</p><p className="mt-1 font-semibold">{report.obtained_marks ?? "Not finalised"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum / total marks</p><p className="mt-1 font-semibold">{report.total_marks ?? report.exam_details?.total_marks ?? "Not available"}</p></div>
                 <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Result status</p><p className="mt-1 font-semibold">{report.result_published ? "Published" : "Not published"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Positive marks earned</p><p className="mt-1 font-semibold">{report.positive_marks_earned ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Negative marks deducted</p><p className="mt-1 font-semibold">{report.negative_marks_deducted ?? "Not evaluated"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Correct / Wrong</p><p className="mt-1 font-semibold">{report.correct_questions ?? "—"} / {report.wrong_questions ?? "—"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Partially correct / evaluated</p><p className="mt-1 font-semibold">{report.partially_correct_questions ?? "—"} / {report.evaluated_questions ?? "—"}</p></div>
+              </div>
+              <div className="mt-4 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300">
+                <h2 className="font-semibold text-white">Examination details</h2>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <p>Duration: {report.exam_details?.duration_minutes != null ? `${report.exam_details.duration_minutes} minutes` : "Not available"}</p>
+                  <p>Questions in this paper: {report.exam_details?.total_questions ?? report.paper.length}</p>
+                  <p>Positive marks available: {report.maximum_positive_marks ?? report.exam_details?.total_marks ?? "Not available"}</p>
+                  <p>Configured negative marks: {report.configured_negative_marks ?? "Not available"}</p>
+                  <p>Negative marking: {report.exam_details?.negative_marking_enabled == null ? "Not available" : report.exam_details.negative_marking_enabled ? "Enabled" : "Disabled"}</p>
+                  <p>Created by: {report.exam_details?.creator_name || "Not available"}</p>
+                  <p>Starts: {report.exam_details?.start_time ? dateText(report.exam_details.start_time) : "Not available"}</p>
+                  <p>Ends: {report.exam_details?.end_time ? dateText(report.exam_details.end_time) : "Not available"}</p>
+                </div>
               </div>
             </section>
             {report.paper_is_preview && <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">No examination session was created for this student. The questions below are a generated paper preview using the current examination selection settings; no submitted answers or marks are recorded.</p>}
@@ -172,7 +208,7 @@ export default function AdminStudentPerformanceReportPage() {
                     <div className="rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs font-semibold text-cyan-300">Expected answer</p><p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.correct_answer || (question.correct_options?.length ? question.correct_options.join(", ") : "No expected answer configured.")}</p>{expectedAnswerImage && <img src={expectedAnswerImage} alt="Expected answer" className="mt-3 max-h-72 rounded-lg object-contain" />}</div>
                     <div className="rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs font-semibold text-cyan-300">Submitted answer</p><p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_selected_options?.length ? question.student_selected_options.join(", ") : question.student_answer || "Not attempted"}</p>{studentAnswerImage && <img src={studentAnswerImage} alt="Student submitted answer" className="mt-3 max-h-72 rounded-lg object-contain" />}</div>
                   </div>
-                  <div className="mt-4 rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs text-slate-400">Final marks awarded / Maximum marks</p><p className="mt-1 text-xl font-bold">{question.awarded_marks ?? "Not finalised"} / {question.maximum_marks}</p></div>
+                  <div className="mt-4 rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs text-slate-400">Final marks awarded / Maximum marks · Negative marks: {question.negative_marks ?? "Not available"}</p><p className="mt-1 text-xl font-bold">{question.awarded_marks ?? "Not finalised"} / {question.maximum_marks}</p></div>
                 </article>
               ) : <p className="py-10 text-center text-slate-400">No question paper is available.</p>}
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
