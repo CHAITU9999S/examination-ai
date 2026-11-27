@@ -15,7 +15,7 @@ type QuestionReview={
  ai_suggested_marks?:number|null;ai_justification?:string|null;awarded_marks?:number|null;
  evaluation_count:number;evaluation_history:HistoryItem[];examiner_feedback?:string|null;is_objective:boolean;
 };
-type ReviewData={session_id:number;exam_id:number;exam_title:string;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
+type ReviewData={session_id:number;exam_id:number;exam_title:string;subject?:string|null;exam_details?:{duration_minutes?:number|null;total_questions?:number|null;total_marks?:number|null;negative_marking_enabled?:boolean|null;start_time?:string|null;end_time?:string|null;creator_name?:string|null};positive_marks_earned?:number|null;negative_marks_deducted?:number|null;maximum_positive_marks?:number|null;configured_negative_marks?:number|null;evaluated_questions?:number|null;correct_questions?:number|null;wrong_questions?:number|null;partially_correct_questions?:number|null;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
 function dateText(value?:string|null){return formatISTDateTime(value, "—");}
 function SessionEvaluationPageContent(){
  const params=useParams<{examId:string;sessionId:string}>();
@@ -125,11 +125,25 @@ function SessionEvaluationPageContent(){
      <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Final marks</p><p className="mt-1 text-2xl font-bold">{data.result_published&&data.result_obtained_marks!==null&&data.result_obtained_marks!==undefined?`${data.result_obtained_marks} / ${data.result_total_marks}`:"Not published"}</p></div>
      <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Percentage</p><p className="mt-1 text-2xl font-bold">{data.result_published&&resultPercentage!==null?`${resultPercentage.toFixed(2)}%`:"Not published"}</p></div>
      <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Grade / status</p><p className="mt-1 text-2xl font-bold">{data.result_published?data.result_grade||"—":data.session_status.replaceAll("_"," ")}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Positive marks earned</p><p className="mt-1 text-xl font-bold">{data.positive_marks_earned??"Not evaluated"}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Negative marks deducted</p><p className="mt-1 text-xl font-bold">{data.negative_marks_deducted??"Not evaluated"}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Correct / Wrong</p><p className="mt-1 text-xl font-bold">{data.correct_questions??"—"} / {data.wrong_questions??"—"}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Partially correct / evaluated</p><p className="mt-1 text-xl font-bold">{data.partially_correct_questions??"—"} / {data.evaluated_questions??"—"}</p></div>
+    </div>
+    <div className="mt-4 grid gap-2 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300 sm:grid-cols-2">
+     <p>Subject: {data.subject||"Not available"}</p>
+     <p>Duration: {data.exam_details?.duration_minutes!=null?`${data.exam_details.duration_minutes} minutes`:"Not available"}</p>
+     <p>Total / maximum marks: {data.result_total_marks??data.exam_details?.total_marks??"Not available"}</p>
+     <p>Positive marks available: {data.maximum_positive_marks??"Not available"}</p>
+     <p>Configured negative marks: {data.configured_negative_marks??"Not available"}</p>
+     <p>Negative marking: {data.exam_details?.negative_marking_enabled==null?"Not available":data.exam_details.negative_marking_enabled?"Enabled":"Disabled"}</p>
+     <p>Starts: {data.exam_details?.start_time?dateText(data.exam_details.start_time):"Not available"}</p>
+     <p>Ends: {data.exam_details?.end_time?dateText(data.exam_details.end_time):"Not available"}</p>
     </div>
     {!data.result_published&&<p className="mt-3 text-xs text-amber-300">The result has not been published. Current per-question evaluation marks are shown below to authorized staff.</p>}
    </section>
    <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} positive marks · {question?.negative_marks??0} negative marks</p></div>
     
     {question&&<div className="mt-6 space-y-5">
      <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{questionImage&&<img src={questionImage} alt="Examination question image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}{o.is_correct&&<span className="ml-2 text-green-300">(Correct answer)</span>}</li>)}</ul>}</div>
