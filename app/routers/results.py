@@ -432,6 +432,7 @@ def get_my_ended_exam_paper(
         "subject": exam.subject,
         "session_id": session.id if session else None,
         "session_status": session.status if session else "not_attempted",
+        "paper_is_preview": session is None,
         "paper": paper,
     }
 
@@ -526,8 +527,11 @@ def get_admin_student_assigned_paper(
             "correct_options": [option.option_text for option in options if option.is_correct],
             "options": [option.option_text for option in options],
             "question_image_available": bool(question.question_image_data),
+            "question_image_url": f"/results/exams/{exam.id}/students/{student_id}/paper/{question.id}/image/question" if question.question_image_data else None,
             "expected_answer_image_available": bool(question.expected_answer_image_data),
+            "expected_answer_image_url": f"/results/exams/{exam.id}/students/{student_id}/paper/{question.id}/image/expected" if question.expected_answer_image_data else None,
             "student_answer_image_available": bool(answer and answer.image_data),
+            "student_answer_image_url": f"/results/exams/{exam.id}/students/{student_id}/paper/{question.id}/image/student" if answer and answer.image_data else None,
         })
 
     calculated_total = round(sum(item["maximum_marks"] for item in paper), 2)
@@ -545,6 +549,44 @@ def get_admin_student_assigned_paper(
         "grade": result.grade if result and result.is_published else None,
         "paper": paper,
     }
+
+
+@router.get("/exams/{exam_id}/students/{student_id}/paper/{question_id}/image/{kind}")
+def get_admin_student_paper_image(
+    exam_id: int,
+    student_id: int,
+    question_id: int,
+    kind: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only Admins can view global student performance reports.")
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == student_id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="This examination is not actively assigned to the selected student.")
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+    session = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student_id,
+    ).order_by(ExamSession.id.desc()).first()
+    selected_ids = (
+        list(session.selected_question_ids)
+        if session is not None and isinstance(session.selected_question_ids, list) and session.selected_question_ids
+        else generate_session_question_ids(exam, student_id, db)
+    )
+    if question_id not in selected_ids:
+        raise HTTPException(status_code=404, detail="Question not found in this student's assigned paper.")
+    question = db.query(QuestionBank).filter(QuestionBank.id == question_id).first()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    return _student_report_image_response(question, session, kind, db)
 
 
 @router.get("/{session_id}")
