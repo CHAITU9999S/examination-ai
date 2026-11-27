@@ -1,7 +1,16 @@
 from datetime import datetime, timedelta
 
 from app.auth import hash_password
-from app.models import Exam, ExamSession, Result, User
+from app.models import (
+    Answer,
+    Exam,
+    ExamAssignment,
+    ExamQuestion,
+    ExamSession,
+    QuestionBank,
+    Result,
+    User,
+)
 
 
 def create_user(db_session, email, role="student"):
@@ -223,3 +232,142 @@ def test_student_cannot_view_face_photo_before_result_publication(client, db_ses
         headers=login_headers(client, student.email),
     )
     assert response.status_code == 404
+
+
+
+def _create_ended_assigned_paper(db_session, student, creator):
+    now = datetime.utcnow()
+    exam = Exam(
+        title="Assigned Paper Report",
+        subject="Science",
+        duration_minutes=30,
+        total_questions=1,
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=1),
+        created_by=creator.id,
+    )
+    db_session.add(exam)
+    db_session.commit()
+    db_session.refresh(exam)
+
+    questions = [
+        QuestionBank(
+            question_text=f"Report question {index}",
+            question_type="short_answer",
+            subject="Science",
+            difficulty="easy",
+            marks=2,
+            expected_answer=f"Expected answer {index}",
+        )
+        for index in range(2)
+    ]
+    db_session.add_all(questions)
+    db_session.commit()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.add(ExamAssignment(
+        exam_id=exam.id,
+        student_id=student.id,
+        assigned_by=creator.id,
+        is_active=True,
+    ))
+    db_session.commit()
+    return exam, questions
+
+
+def test_unattempted_student_sees_only_their_fixed_paper_without_fabricated_answers(
+    client, db_session
+):
+    student = create_user(db_session, "unattempted-paper@example.com")
+    creator = create_user(db_session, "unattempted-paper-creator@example.com", role="examiner")
+    exam, questions = _create_ended_assigned_paper(db_session, student, creator)
+    assigned_question = questions[1]
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        started_at=None,
+        submitted_at=None,
+        status="not_started",
+        selected_question_ids=[assigned_question.id],
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    response = client.get(
+        f"/results/exams/{exam.id}/paper",
+        headers=login_headers(client, student.email),
+    )
+
+    assert response.status_code == 200
+    paper = response.json()["paper"]
+    assert len(paper) == 1
+    assert paper[0]["question_id"] == assigned_question.id
+    assert paper[0]["correct_answer"] == assigned_question.expected_answer
+    assert paper[0]["student_answer"] is None
+    assert paper[0]["awarded_marks"] is None
+    assert paper[0]["maximum_marks"] == 2
+
+
+def test_attempted_student_cannot_view_answers_until_result_is_published(
+    client, db_session
+):
+    student = create_user(db_session, "attempted-paper@example.com")
+    creator = create_user(db_session, "attempted-paper-creator@example.com", role="examiner")
+    exam, questions = _create_ended_assigned_paper(db_session, student, creator)
+    assigned_question = questions[0]
+    now = datetime.utcnow()
+    session = ExamSession(
+        exam_id=exam.id,
+        student_id=student.id,
+        started_at=now - timedelta(minutes=30),
+        submitted_at=now - timedelta(minutes=1),
+        status="submitted",
+        selected_question_ids=[assigned_question.id],
+    )
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+    db_session.add(Answer(
+        session_id=session.id,
+        question_id=assigned_question.id,
+        answer_text="Student's submitted answer",
+        awarded_marks=1.5,
+    ))
+    result = Result(
+        session_id=session.id,
+        total_marks=2,
+        obtained_marks=1.5,
+        percentage=75,
+        question_scores=[],
+        evaluated_at=now,
+        is_published=False,
+    )
+    db_session.add(result)
+    db_session.commit()
+
+    headers = login_headers(client, student.email)
+    blocked = client.get(
+        f"/results/exams/{exam.id}/paper",
+        headers=headers,
+    )
+    assert blocked.status_code == 403
+
+    result.is_published = True
+    result.published_at = datetime.utcnow()
+    db_session.commit()
+    published = client.get(
+        f"/results/exams/{exam.id}/paper",
+        headers=headers,
+    )
+    assert published.status_code == 200
+    paper = published.json()["paper"]
+    assert len(paper) == 1
+    assert paper[0]["question_id"] == assigned_question.id
+    assert paper[0]["student_answer"] == "Student's submitted answer"
+    assert paper[0]["awarded_marks"] == 1.5
+    assert paper[0]["maximum_marks"] == 2
+    assert paper[0]["correct_answer"] == assigned_question.expected_answer
