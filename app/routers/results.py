@@ -496,13 +496,16 @@ def get_my_result_details(
         else:
             outcome = "partial"
 
-        correct_options = (
-            db.query(Option.option_text)
-            .filter(Option.question_id == question_id, Option.is_correct.is_(True))
+        option_rows = (
+            db.query(Option.id, Option.option_text, Option.is_correct)
+            .filter(Option.question_id == question_id)
             .order_by(Option.id)
             .all()
             if question is not None else []
         )
+        correct_options = [
+            option_text for _, option_text, is_correct in option_rows if is_correct
+        ]
         student_selected_options = []
         if answer is not None and question is not None and getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"}:
             try:
@@ -512,13 +515,20 @@ def get_my_result_details(
             if isinstance(selected_option_ids, int):
                 selected_option_ids = [selected_option_ids]
             if isinstance(selected_option_ids, list):
-                selected_option_ids = [option_id for option_id in selected_option_ids if isinstance(option_id, int)]
-                selected_option_rows = db.query(Option.id, Option.option_text).filter(
-                    Option.question_id == question_id,
-                    Option.id.in_(selected_option_ids or [-1]),
-                ).all()
-                selected_option_map = {option_id: option_text for option_id, option_text in selected_option_rows}
-                student_selected_options = [selected_option_map[option_id] for option_id in selected_option_ids if option_id in selected_option_map]
+                normalized_option_ids = []
+                for option_id in selected_option_ids:
+                    try:
+                        normalized_option_ids.append(int(option_id))
+                    except (TypeError, ValueError):
+                        continue
+                selected_option_map = {
+                    option_id: option_text for option_id, option_text, _ in option_rows
+                }
+                student_selected_options = [
+                    selected_option_map[option_id]
+                    for option_id in normalized_option_ids
+                    if option_id in selected_option_map
+                ]
         question_results.append({
             **score,
             "question_text": question.question_text if question else None,
