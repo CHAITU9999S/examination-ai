@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -26,9 +27,7 @@ interface Exam {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Not assigned";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) + " IST";
+  return formatISTDateTime(value);
 }
 
 function statusFor(exam: Exam) {

@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -41,13 +42,7 @@ interface FlaggedSession {
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleString("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "medium",
-      });
+  return formatISTDateTime(value, "—");
 }
 
 export default function StaffProctoringReviewPage() {

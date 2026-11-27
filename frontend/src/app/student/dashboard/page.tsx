@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatISTDateTime } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TWELVE_HOURS = 12 * 60 * 60 * 1000;
@@ -27,10 +28,7 @@ interface Exam {
 }
 function formatDate(value?: string | null) {
   if (!value) return "Not scheduled";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("en-IN", {
-    dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata",
-  }) + " IST";
+  return formatISTDateTime(value, "—");
 }
 function expiringSoon(exam: Exam) {
   if (exam.category !== "available" || !exam.end_time) return false;

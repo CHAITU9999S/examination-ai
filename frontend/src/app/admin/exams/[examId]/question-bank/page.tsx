@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -140,7 +141,7 @@ export default function AdminQuestionBankViewPage() {
               {marksRevisions.map((revision) => (
                 <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                   <p className="font-semibold">Revision {revision.revision_number}</p>
-                  <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST · Staff account #{revision.changed_by}</p>
+                  <p className="mt-1 text-slate-500">{formatISTDateTime(revision.created_at)} · Staff account #{revision.changed_by}</p>
                   <p className="mt-2 text-slate-400">{Object.entries(revision.marks_snapshot).map(([key, value]) => `${key.replace("|", " · ")}: ${value} marks`).join(" | ")}</p>
                 </div>
               ))}

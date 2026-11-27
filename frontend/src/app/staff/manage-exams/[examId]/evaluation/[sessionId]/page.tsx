@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -15,7 +16,7 @@ type QuestionReview={
  evaluation_count:number;evaluation_history:HistoryItem[];examiner_feedback?:string|null;is_objective:boolean;
 };
 type ReviewData={session_id:number;exam_id:number;exam_title:string;creator_name?:string|null;creator_role?:string|null;assigned_by_name?:string|null;assigned_by_role?:string|null;student_id:number;student_name:string;department?:string|null;session_status:string;started_at?:string|null;submitted_at?:string|null;face_photo_url?:string|null;result_published:boolean;result_obtained_marks?:number|null;result_total_marks?:number|null;result_grade?:string|null;questions:QuestionReview[]};
-function dateText(value?:string|null){if(!value)return "—";const d=new Date(value);return Number.isNaN(d.getTime())?"—":d.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})+" IST";}
+function dateText(value?:string|null){return formatISTDateTime(value, "—");}
 function SessionEvaluationPageContent(){
  const params=useParams<{examId:string;sessionId:string}>();
  const router=useRouter();const search=useSearchParams();

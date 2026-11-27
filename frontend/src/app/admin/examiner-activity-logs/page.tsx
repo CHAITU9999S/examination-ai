@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
+import { formatISTDateTime } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -22,10 +23,7 @@ function formatAction(action: string) {
 
 function formatDate(value: string | null) {
   if (!value) return "Unknown time";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Unknown time"
-    : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" });
+  return formatISTDateTime(value, "Unknown time");
 }
 
 function describeActivity(log: ExaminerActivity) {

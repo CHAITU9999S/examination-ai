@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -724,7 +725,7 @@ export default function ExamQuestionBankPage() {
                 {configRevisions.map((revision) => (
                   <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                     <span className="font-semibold">{revision.revision_number === 0 ? "Initial configuration" : `Revision ${revision.revision_number}`}</span>
-                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST · Staff account #{revision.changed_by}</span>
+                    <span className="ml-3 text-slate-500">{formatISTDateTime(revision.created_at)} · Staff account #{revision.changed_by}</span>
                     <p className="mt-2 text-slate-400">{String(revision.configuration.title || "Untitled")} · {String(revision.configuration.duration_minutes || "—")} minutes · {String(revision.configuration.total_questions || "—")} questions · Subject: {String(revision.configuration.subject || "—")}</p>
                   </div>
                 ))}
@@ -741,7 +742,7 @@ export default function ExamQuestionBankPage() {
             </p>
             <p className="mt-2 text-sm text-cyan-300">
               Current schedule: {examConfig.start_time && examConfig.end_time
-                ? `${new Date(istDateTimeToIso(examConfig.start_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST to ${new Date(istDateTimeToIso(examConfig.end_time)).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST`
+                ? `${formatISTDateTime(istDateTimeToIso(examConfig.start_time))} to ${formatISTDateTime(istDateTimeToIso(examConfig.end_time))}`
                 : "Not scheduled"}
             </p>
             {examConfig.start_time && examConfig.end_time &&
@@ -818,7 +819,7 @@ export default function ExamQuestionBankPage() {
                 {questionMarksRevisions.map((revision) => (
                   <div key={revision.revision_number} className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
                     <span className="font-semibold">Revision {revision.revision_number}</span>
-                    <span className="ml-3 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE })} IST · Staff account #{revision.changed_by}</span>
+                    <span className="ml-3 text-slate-500">{formatISTDateTime(revision.created_at)} · Staff account #{revision.changed_by}</span>
                     <p className="mt-2 text-slate-400">{Object.entries(revision.marks_snapshot).map(([key, value]) => `${key.replace("|", " · ")}: ${value} marks`).join(" | ")}</p>
                   </div>
                 ))}

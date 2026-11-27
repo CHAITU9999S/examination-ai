@@ -11,6 +11,9 @@ interface QuestionResult {
   question_id: number;
   question_text?: string | null;
   question_type?: string;
+  student_answer?: string | null;
+  correct_answer?: string | null;
+  correct_options?: string[];
   maximum_marks: number;
   awarded_marks: number;
   outcome: "correct" | "incorrect" | "partial" | "unanswered";
@@ -296,6 +299,22 @@ export default function StudentResultDetailPage() {
                   <p className="mt-4 text-sm text-slate-300">
                     Marks: {item.awarded_marks} / {item.maximum_marks}
                   </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-white/10 bg-slate-800 p-3">
+                      <p className="text-xs font-semibold text-slate-400">Your answer</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.student_answer?.trim() || "Not attempted"}</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-3">
+                      <p className="text-xs font-semibold text-emerald-300">Correct answer</p>
+                      {item.correct_options && item.correct_options.length > 0 ? (
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">
+                          {item.correct_options.map((option, index) => <li key={index}>{option}</li>)}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.correct_answer?.trim() || "No model answer provided"}</p>
+                      )}
+                    </div>
+                  </div>
                   {item.rubric_scores && item.rubric_scores.length > 0 && (
                     <div className="mt-4 rounded-lg border border-white/10 bg-slate-800 p-4">
                       <p className="text-sm font-semibold text-slate-200">Rubric breakdown</p>

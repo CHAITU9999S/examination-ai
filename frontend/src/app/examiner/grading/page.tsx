@@ -1,5 +1,5 @@
-
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -967,7 +967,7 @@ export default function ExaminerGradingPage() {
                     {markRevisionInfo.history.map((revision) => (
                       <div key={revision.revision_number} className="rounded-lg bg-slate-900 p-3 text-xs text-slate-300">
                         <p className="font-semibold">Revision {revision.revision_number}: {revision.previous_marks ?? "—"} → {revision.new_marks} marks</p>
-                        <p className="mt-1 text-slate-500">{new Date(revision.created_at).toLocaleString("en-IN")} · Staff account #{revision.revised_by}</p>
+                        <p className="mt-1 text-slate-500">{formatISTDateTime(revision.created_at)} · Staff account #{revision.revised_by}</p>
                         {revision.new_feedback && <p className="mt-1">{revision.new_feedback}</p>}
                       </div>
                     ))}

@@ -50,13 +50,35 @@ export function formatDateTime(
     return "Invalid date";
   }
 
+  const utcDate = value instanceof Date
+    ? value
+    : new Date(typeof value === "string" && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value + "Z" : value);
+
   return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+    timeZone: "Asia/Kolkata",
+  }).format(utcDate) + " IST";
+}
+
+/** Formats API timestamps (including naive UTC values) as Indian Standard Time. */
+export function formatISTDateTime(
+  value: string | Date | null | undefined,
+  fallback = "Not available"
+): string {
+  if (!value) return fallback;
+  const date = value instanceof Date
+    ? value
+    : new Date(typeof value === "string" && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value + "Z" : value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(date) + " IST";
 }
 
 /**

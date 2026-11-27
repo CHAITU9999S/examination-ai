@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminSectionNavigation from "../components/AdminSectionNavigation";
 import { useRouter } from "next/navigation";
+import { formatISTDateTime } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -71,7 +72,7 @@ export default function AdminSchedulesPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead><tr className="border-b border-white/10 text-slate-400"><th className="p-3">Examination</th><th className="p-3">Creator</th><th className="p-3">Student</th><th className="p-3">Opens (IST)</th><th className="p-3">Closes (IST)</th><th className="p-3">Duration</th></tr></thead>
-                <tbody>{visibleSchedules.map((item) => <tr key={`${item.exam_id}-${item.student_id}`} className="border-b border-white/5"><td className="p-3 font-medium">{item.exam_title}</td><td className="p-3">{item.creator_name || "—"}</td><td className="p-3">{item.student_name}<span className="block text-xs text-slate-500">{item.student_email}</span></td><td className="p-3 text-slate-300">{new Date(item.start_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3 text-slate-300">{new Date(item.end_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td><td className="p-3">{item.duration_minutes} min</td></tr>)}</tbody>
+                <tbody>{visibleSchedules.map((item) => <tr key={`${item.exam_id}-${item.student_id}`} className="border-b border-white/5"><td className="p-3 font-medium">{item.exam_title}</td><td className="p-3">{item.creator_name || "—"}</td><td className="p-3">{item.student_name}<span className="block text-xs text-slate-500">{item.student_email}</span></td><td className="p-3 text-slate-300">{formatISTDateTime(item.start_time)}</td><td className="p-3 text-slate-300">{formatISTDateTime(item.end_time)}</td><td className="p-3">{item.duration_minutes} min</td></tr>)}</tbody>
               </table>
             </div>
           )}

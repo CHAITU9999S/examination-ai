@@ -23,8 +23,7 @@ type Preview = { prompt?: string; expected?: string };
 
 function formatDate(value?: string | null) {
   if (!value) return "Not available";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString();
+  return formatISTDateTime(value);
 }
 
 export default function QuestionBankViewPage() {

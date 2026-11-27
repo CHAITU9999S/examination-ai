@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy import func
@@ -5,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Answer, Exam, ExamAssignment, ExamSession, QuestionBank, Result, User
+from app.models import Answer, Exam, ExamAssignment, ExamSession, Option, QuestionBank, Result, User
+from app.services.exam_config import normalize_to_naive_utc
+from app.services.session_service import generate_session_question_ids
 
 
 router = APIRouter(
@@ -226,6 +230,95 @@ def get_my_result_session_status(
     }
 
 
+@router.get("/exams/{exam_id}/paper")
+def get_my_ended_exam_paper(
+    exam_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return an assigned student's paper and answers only after the exam ends."""
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can view their assigned question papers.")
+
+    assignment = db.query(ExamAssignment).filter(
+        ExamAssignment.exam_id == exam_id,
+        ExamAssignment.student_id == current_user.id,
+        ExamAssignment.is_active.is_(True),
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="No active assignment was found for this examination.")
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+
+    session = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == current_user.id,
+    ).order_by(ExamSession.id.desc()).first()
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    exam_end = normalize_to_naive_utc(exam.end_time)
+    if exam_end is None or now < exam_end:
+        raise HTTPException(status_code=403, detail="The question paper and answers are available after the examination schedule ends.")
+
+    try:
+        selected_ids = (
+            list(session.selected_question_ids)
+            if session is not None and isinstance(session.selected_question_ids, list)
+            else generate_session_question_ids(exam, current_user.id, db)
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+    questions = db.query(QuestionBank).filter(
+        QuestionBank.id.in_(selected_ids or [-1]),
+    ).all()
+    question_map = {question.id: question for question in questions}
+    if len(question_map) != len(selected_ids):
+        raise HTTPException(status_code=409, detail="One or more assigned questions are no longer available.")
+
+    answers = db.query(Answer).filter(
+        Answer.session_id == session.id,
+    ).all() if session is not None else []
+    answer_map = {answer.question_id: answer for answer in answers}
+    published_result = (
+        db.query(Result).filter(
+            Result.session_id == session.id,
+            Result.is_published.is_(True),
+        ).first()
+        if session is not None else None
+    )
+    paper = []
+    for question_id in selected_ids:
+        question = question_map[question_id]
+        options = db.query(Option).filter(
+            Option.question_id == question_id
+        ).order_by(Option.id).all()
+        answer = answer_map.get(question_id)
+        paper.append({
+            "question_id": question.id,
+            "question_text": question.question_text,
+            "question_type": getattr(question.question_type, "value", question.question_type),
+            "maximum_marks": float(question.marks or 0),
+            "awarded_marks": answer.awarded_marks if answer and published_result else None,
+            "student_answer": answer.answer_text if answer else None,
+            "correct_answer": question.expected_answer or question.model_answer_text,
+            "correct_options": [option.option_text for option in options if option.is_correct],
+            "options": [option.option_text for option in options],
+            "question_image_available": bool(question.question_image_path or question.question_image_data),
+            "expected_answer_image_available": bool(question.expected_answer_image_data),
+        })
+
+    return {
+        "exam_id": exam.id,
+        "exam_title": exam.title,
+        "subject": exam.subject,
+        "session_id": session.id if session else None,
+        "session_status": session.status if session else "not_attempted",
+        "paper": paper,
+    }
+
+
 @router.get("/{session_id}")
 def get_my_result_details(
     session_id: int,
@@ -286,10 +379,22 @@ def get_my_result_details(
         else:
             outcome = "partial"
 
+        correct_options = (
+            db.query(Option.option_text)
+            .filter(Option.question_id == question_id, Option.is_correct.is_(True))
+            .order_by(Option.id)
+            .all()
+            if question is not None else []
+        )
         question_results.append({
             **score,
             "question_text": question.question_text if question else None,
             "student_answer": answer.answer_text if answer else None,
+            "correct_answer": (
+                (question.expected_answer or question.model_answer_text)
+                if question else None
+            ),
+            "correct_options": [item[0] for item in correct_options],
             "outcome": outcome,
             "examiner_feedback": (
                 answer.examiner_feedback if answer else None

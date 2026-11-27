@@ -1,5 +1,5 @@
-
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import {
   useCallback,
@@ -1411,8 +1411,8 @@ export default function StudentExamPage() {
                     ["Possible negative marks", String(summary.total_possible_negative_marks)],
                     ["AI proctoring", "Always enabled"],
                     ["Question order", summary.randomize_questions ? "Randomized" : "Configured order"],
-                    ["Scheduled start", summary.scheduled_start ? new Date(summary.scheduled_start).toLocaleString() : "Not specified"],
-                    ["Scheduled end", summary.scheduled_end ? new Date(summary.scheduled_end).toLocaleString() : "Not specified"],
+                    ["Scheduled start", summary.scheduled_start ? formatISTDateTime(summary.scheduled_start) : "Not specified"],
+                    ["Scheduled end", summary.scheduled_end ? formatISTDateTime(summary.scheduled_end) : "Not specified"],
                     ["Maximum tab-switch warnings", summary.max_tab_switch_warnings ?? "Not specified"],
                     ["Gaze sensitivity", summary.gaze_tracking_sensitivity ?? "Not specified"],
                   ].map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}

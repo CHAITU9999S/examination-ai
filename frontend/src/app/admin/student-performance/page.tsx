@@ -1,4 +1,5 @@
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -52,15 +53,7 @@ interface StudentPerformance {
 }
 
 function dateText(value?: string | null) {
-  if (!value) return "Not available";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Not available"
-    : date.toLocaleString("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-        timeZone: "Asia/Kolkata",
-      }) + " IST";
+  return formatISTDateTime(value);
 }
 
 function marksText(value?: number | null) {

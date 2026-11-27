@@ -1,5 +1,5 @@
-
 "use client";
+import { formatISTDateTime } from "@/lib/utils";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -31,11 +31,7 @@ function formatDate(value?: string | null) {
 
   if (Number.isNaN(date.getTime())) return "Invalid date";
 
-  return date.toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Kolkata",
-  }) + " IST";
+  return formatISTDateTime(value);
 }
 
 function getExamStatus(exam: Exam) {
