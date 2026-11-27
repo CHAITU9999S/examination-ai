@@ -1930,3 +1930,90 @@ def test_publishing_an_exam_twice_keeps_the_original_publication_time(client, db
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["published_at"] == first.json()["published_at"]
+
+
+
+def test_unconfigured_random_papers_are_frozen_when_students_are_assigned(client, db_session):
+    creator = create_user(db_session, "examiner", "fixed-paper-creator@test.com")
+    first_student = create_user(db_session, "student", "fixed-paper-one@test.com")
+    second_student = create_user(db_session, "student", "fixed-paper-two@test.com")
+
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    exam_data = {
+        "title": "Fixed Random Papers",
+        "subject": "General Knowledge",
+        "duration_minutes": 30,
+        "total_questions": 1,
+        "total_marks": 2,
+        "randomize_questions": True,
+        "selection_rules": {},
+        "start_time": start.isoformat(),
+        "end_time": (start + timedelta(hours=2)).isoformat(),
+    }
+    create_response = client.post(
+        "/exams/",
+        json=exam_data,
+        headers=get_auth_headers(creator),
+    )
+    assert create_response.status_code == 201
+    exam_id = create_response.json()["exam_id"]
+    exam = db_session.query(Exam).filter(Exam.id == exam_id).first()
+
+    questions = [
+        QuestionBank(
+            question_text=f"Fixed paper question {index}",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        )
+        for index in range(3)
+    ]
+    db_session.add_all(questions)
+    db_session.commit()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam.id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.commit()
+
+    assign_response = client.post(
+        f"/exams/{exam_id}/assignments",
+        json={"student_ids": [first_student.id, second_student.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert assign_response.status_code == 200
+
+    sessions = db_session.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id.in_([first_student.id, second_student.id]),
+    ).all()
+    assert len(sessions) == 2
+    assert all(session.status == "not_started" for session in sessions)
+    assert all(session.started_at is None for session in sessions)
+    assert all(len(session.selected_question_ids) == 1 for session in sessions)
+
+    question_marks = {question.id: question.marks for question in questions}
+    assert all(
+        sum(question_marks[question_id] for question_id in session.selected_question_ids) == 2
+        for session in sessions
+    )
+    assert set(sessions[0].selected_question_ids) != set(sessions[1].selected_question_ids)
+
+    first_paper = list(sessions[0].selected_question_ids)
+    revoke_response = client.delete(
+        f"/exams/{exam_id}/assignments/{first_student.id}",
+        headers=get_auth_headers(creator),
+    )
+    assert revoke_response.status_code == 200
+
+    reassign_response = client.post(
+        f"/exams/{exam_id}/assignments",
+        json={"student_ids": [first_student.id]},
+        headers=get_auth_headers(creator),
+    )
+    assert reassign_response.status_code == 200
+    db_session.refresh(sessions[0])
+    assert sessions[0].selected_question_ids == first_paper
