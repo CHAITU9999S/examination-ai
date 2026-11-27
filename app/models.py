@@ -295,6 +295,8 @@ class Exam(Base):
 
     total_questions = Column(Integer, nullable=True)
 
+    total_marks = Column(Float, nullable=True)
+
     randomize_questions = Column(Boolean, nullable=True)
 
     selection_rules = Column(JSON, nullable=True)
