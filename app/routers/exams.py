@@ -497,7 +497,10 @@ def get_student_examination_overview(
                 else:
                     session.selected_question_ids = selected_ids
                 db.flush()
+                db.commit()
+                db.refresh(session)
             except ValueError:
+                db.rollback()
                 # Keep the overview available; the paper endpoint will explain
                 # that this legacy assignment has no valid paper combination.
                 pass
