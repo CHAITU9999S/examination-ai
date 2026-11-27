@@ -1,0 +1,145 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import AdminSectionNavigation from "../../../components/AdminSectionNavigation";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface ReportQuestion {
+  question_id: number;
+  question_order: number;
+  question_text: string;
+  question_type: string;
+  difficulty: string;
+  maximum_marks: number;
+  awarded_marks?: number | null;
+  student_answer?: string | null;
+  student_selected_options?: string[];
+  correct_answer?: string | null;
+  correct_options?: string[];
+  options?: string[];
+}
+
+interface StudentReport {
+  exam_id: number;
+  exam_title: string;
+  subject?: string | null;
+  student_id: number;
+  session_status: string;
+  result_published: boolean;
+  obtained_marks?: number | null;
+  total_marks?: number | null;
+  percentage?: number | null;
+  grade?: string | null;
+  paper: ReportQuestion[];
+}
+
+export default function AdminStudentPerformanceReportPage() {
+  const params = useParams<{ examId: string; studentId: string }>();
+  const router = useRouter();
+  const examId = Number(params.examId);
+  const studentId = Number(params.studentId);
+  const [report, setReport] = useState<StudentReport | null>(null);
+  const [studentName, setStudentName] = useState("");
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("examguard_access_token");
+      if (!token) { router.replace("/login"); return; }
+      const headers = { Authorization: `Bearer ${token}` };
+      const [profileResponse, reportResponse, performanceResponse] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/results/exams/${examId}/students/${studentId}/paper`, { headers, cache: "no-store" }),
+        fetch(`${API_URL}/admin/student-performance`, { headers, cache: "no-store" }),
+      ]);
+      const profile = await profileResponse.json().catch(() => ({}));
+      const data = await reportResponse.json().catch(() => ({}));
+      const performance = await performanceResponse.json().catch(() => ({}));
+      if ([profileResponse, reportResponse, performanceResponse].some((response) => response.status === 401 || response.status === 403)) {
+        router.replace("/login");
+        return;
+      }
+      if (!profileResponse.ok || !reportResponse.ok || !performanceResponse.ok) {
+        throw new Error(data.detail || performance.detail || "Unable to load the examination report.");
+      }
+      if (profile.role !== "admin") { router.replace("/login"); return; }
+      const student = (Array.isArray(performance.students) ? performance.students : []).find((item: { student_id: number }) => Number(item.student_id) === studentId);
+      if (!student) throw new Error("This student is not available in Admin Student Performance.");
+      setStudentName(student.student_name);
+      setReport(data);
+      setQuestionIndex(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load the examination report.");
+    } finally { setLoading(false); }
+  }, [examId, router, studentId]);
+
+  useEffect(() => {
+    if (!Number.isInteger(examId) || !Number.isInteger(studentId) || examId <= 0 || studentId <= 0) {
+      setError("Invalid student or examination.");
+      setLoading(false);
+      return;
+    }
+    void load();
+  }, [examId, load, studentId]);
+
+  const question = report?.paper?.[questionIndex] || null;
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <header className="border-b border-white/10 bg-slate-900">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5">
+          <div><Link href="/admin/dashboard" className="text-2xl font-bold">ExamGuard <span className="text-blue-400">AI</span></Link><p className="mt-1 text-sm text-slate-400">Administrator / Student Performance Report</p></div>
+          <AdminSectionNavigation previousHref={`/admin/student-examinations/${studentId}?scope=global`} previousLabel="Back to Student Examinations" />
+        </div>
+      </header>
+      <div className="mx-auto max-w-5xl space-y-6 px-5 py-8">
+        {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
+        {loading ? <p className="py-12 text-center text-slate-400">Loading student report...</p> : report && (
+          <>
+            <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+              <p className="text-sm text-cyan-300">{studentName}</p>
+              <h1 className="mt-2 text-3xl font-bold">{report.exam_title}</h1>
+              <p className="mt-1 text-slate-400">{report.subject || "No subject"}</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Session status</p><p className="mt-1 font-semibold capitalize">{report.session_status.replaceAll("_", " ")}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Final obtained marks</p><p className="mt-1 font-semibold">{report.obtained_marks ?? "Not finalised"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Maximum marks</p><p className="mt-1 font-semibold">{report.total_marks ?? "—"}</p></div>
+                <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Result status</p><p className="mt-1 font-semibold">{report.result_published ? "Published" : "Not published"}</p></div>
+              </div>
+            </section>
+            <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><h2 className="text-xl font-bold">Assigned Question Paper</h2><p className="mt-1 text-sm text-slate-400">Question {questionIndex + 1} of {report.paper.length}</p></div>
+                <span className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-cyan-300">{report.paper.length} question(s)</span>
+              </div>
+              {question ? (
+                <article className="mt-5 rounded-xl border border-white/10 bg-slate-800/60 p-5">
+                  <p className="text-xs text-cyan-300">Question {question.question_order} · {question.question_type} · {question.difficulty}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-base">{question.question_text}</p>
+                  {question.options?.length ? <div className="mt-4 space-y-2">{question.options.map((option, index) => <p key={index} className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-slate-200">{option}</p>)}</div> : null}
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs font-semibold text-cyan-300">Expected answer</p><p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.correct_answer || (question.correct_options?.length ? question.correct_options.join(", ") : "No expected answer configured.")}</p></div>
+                    <div className="rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs font-semibold text-cyan-300">Submitted answer</p><p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{question.student_selected_options?.length ? question.student_selected_options.join(", ") : question.student_answer || "Not attempted"}</p></div>
+                  </div>
+                  <div className="mt-4 rounded-lg border border-white/10 bg-slate-900 p-4"><p className="text-xs text-slate-400">Final marks awarded / Maximum marks</p><p className="mt-1 text-xl font-bold">{question.awarded_marks ?? "Not finalised"} / {question.maximum_marks}</p></div>
+                </article>
+              ) : <p className="py-10 text-center text-slate-400">No question paper is available.</p>}
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <button type="button" onClick={() => setQuestionIndex((value) => Math.max(0, value - 1))} disabled={questionIndex <= 0} className="rounded-lg border border-white/20 px-5 py-2.5 text-sm font-semibold hover:bg-white/10 disabled:opacity-40">← Previous</button>
+                <span className="text-sm text-slate-400">Question {report.paper.length ? questionIndex + 1 : 0} / {report.paper.length}</span>
+                <button type="button" onClick={() => setQuestionIndex((value) => Math.min(report.paper.length - 1, value + 1))} disabled={questionIndex >= report.paper.length - 1} className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold hover:bg-cyan-500 disabled:opacity-40">Next →</button>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
