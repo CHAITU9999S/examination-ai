@@ -2113,3 +2113,84 @@ def test_random_paper_rejects_single_type_when_other_types_are_eligible(client, 
         ExamSession.exam_id == exam_id,
         ExamSession.student_id == student.id,
     ).first() is None
+
+
+
+def test_student_overview_uses_exact_frozen_random_paper_marks_and_count(client, db_session):
+    creator = create_user(db_session, "examiner", "overview-paper-creator@test.com")
+    student = create_user(db_session, "student", "overview-paper-student@test.com")
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    create_response = client.post(
+        "/exams/",
+        json={
+            "title": "Overview Exact Paper",
+            "subject": "General Knowledge",
+            "duration_minutes": 30,
+            "total_questions": 2,
+            "total_marks": 4,
+            "randomize_questions": True,
+            "selection_rules": {},
+            "start_time": start.isoformat(),
+            "end_time": (start + timedelta(hours=2)).isoformat(),
+        },
+        headers=get_auth_headers(creator),
+    )
+    assert create_response.status_code == 201
+    exam_id = create_response.json()["exam_id"]
+
+    questions = [
+        QuestionBank(
+            question_text="Overview MCQ one",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Overview MCQ two",
+            question_type="MCQ",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+        QuestionBank(
+            question_text="Overview short answer",
+            question_type="short_answer",
+            subject="General Knowledge",
+            difficulty="easy",
+            marks=2,
+        ),
+    ]
+    db_session.add_all(questions)
+    db_session.commit()
+    for order, question in enumerate(questions, start=1):
+        db_session.add(ExamQuestion(
+            exam_id=exam_id,
+            question_id=question.id,
+            question_order=order,
+        ))
+    db_session.add(ExamAssignment(
+        exam_id=exam_id,
+        student_id=student.id,
+        assigned_by=creator.id,
+        is_active=True,
+    ))
+    db_session.commit()
+
+    response = client.get(
+        "/exams/student-overview",
+        headers=get_auth_headers(student),
+    )
+    assert response.status_code == 200
+    item = response.json()["examinations"][0]
+    assert item["total_questions"] == 2
+    assert item["maximum_marks"] == 4
+    assert sum(group["count"] for group in item["question_breakdown"]) == 2
+    assert {group["question_type"] for group in item["question_breakdown"]} == {"MCQ", "short_answer"}
+
+    session = db_session.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.student_id == student.id,
+    ).first()
+    assert session is not None
+    assert len(session.selected_question_ids) == 2
