@@ -1,6 +1,4 @@
 "use client";
-import { formatISTDateTime } from "@/lib/utils";
-
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -52,22 +50,12 @@ interface StudentPerformance {
   attempts: Attempt[];
 }
 
-function dateText(value?: string | null) {
-  return formatISTDateTime(value);
-}
-
-function marksText(value?: number | null) {
-  return value === null || value === undefined ? "Not evaluated" : Number(value).toFixed(2).replace(/\.00$/, "");
-}
-
 function StudentTrackingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromExaminations = searchParams.get("from") === "examinations";
   const [students, setStudents] = useState<StudentPerformance[]>([]);
   const [role, setRole] = useState<"admin" | "examiner" | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
@@ -227,119 +215,23 @@ function StudentTrackingPageContent() {
             <p className="py-10 text-center text-slate-400">No students found.</p>
           ) : (
             <div className="space-y-3">
-              {visibleStudents.map((student) => {
-                const studentOpen = selectedStudentId === student.student_id;
-                return (
-                  <article key={student.student_id} className="overflow-hidden rounded-xl border border-white/10 bg-slate-800/60">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedStudentId(studentOpen ? null : student.student_id);
-                        setSelectedAssignmentId(null);
-                      }}
-                      aria-expanded={studentOpen}
-                      className="flex w-full flex-wrap items-center justify-between gap-4 p-4 text-left hover:bg-white/5"
-                    >
-                      <span>
-                        <span className="block font-semibold">{student.student_name}</span>
-                        <span className="mt-1 block text-xs text-slate-400">{student.student_email} · {student.department || "Department not set"} · Student ID {student.student_id}</span>
-                      </span>
-                      <span className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded-lg bg-slate-900 px-3 py-2">{student.total_assigned_examinations} assigned</span>
-                        <span className="rounded-lg bg-slate-900 px-3 py-2">{student.total_taken_examinations} taken</span>
-                        <span className="text-blue-300">{studentOpen ? "▲ Close" : "▼ View examinations"}</span>
-                      </span>
-                    </button>
-
-                    {studentOpen && (
-                      <div className="border-t border-white/10 p-4">
-                        <h2 className="font-semibold">Assigned examinations for {student.student_name}</h2>
-                        {student.attempts.length === 0 ? (
-                          <p className="mt-3 rounded-lg bg-slate-900 p-4 text-sm text-slate-400">No examinations assigned by your account.</p>
-                        ) : (
-                          <div className="mt-3 space-y-3">
-                            {student.attempts.map((attempt) => {
-                              const assignmentOpen = selectedAssignmentId === attempt.assignment_id;
-                              return (
-                                <div key={attempt.assignment_id} className="rounded-lg border border-white/10 bg-slate-900/80">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedAssignmentId(assignmentOpen ? null : attempt.assignment_id)}
-                                    aria-expanded={assignmentOpen}
-                                    className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-white/5"
-                                  >
-                                    <span>
-                                      <span className="block font-semibold">{attempt.exam_title}</span>
-                                      <span className="mt-1 block text-xs text-slate-400">
-                                        {attempt.exam_subject || "Subject not specified"} · Created by {attempt.creator_name || "Not available"} · Assigned by {attempt.assigned_by_name || "Not available"} · Assigned {dateText(attempt.assigned_at)}
-                                      </span>
-                                    </span>
-                                    <span className="flex flex-wrap items-center gap-2">
-                                      <span className={attempt.is_taken ? "rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-300" : attempt.is_started ? "rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300" : "rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300"}>
-                                        {attempt.status_label}
-                                      </span>
-                                      <span className="text-xs text-blue-300">{assignmentOpen ? "▲ Hide summary" : "▼ View summary"}</span>
-                                    </span>
-                                  </button>
-
-                                  {assignmentOpen && (
-                                    <div className="border-t border-white/10 p-4">
-                                      <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Questions given</p>
-                                          <p className="mt-1 text-xl font-semibold">{attempt.total_questions}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Correct answers</p>
-                                          <p className="mt-1 text-xl font-semibold text-green-300">{attempt.correct_answers}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Wrong answers</p>
-                                          <p className="mt-1 text-xl font-semibold text-red-300">{attempt.wrong_answers}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Partially correct answers</p>
-                                          <p className="mt-1 text-xl font-semibold text-amber-300">{attempt.partially_correct_answers}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Unanswered questions</p>
-                                          <p className="mt-1 text-xl font-semibold">{attempt.unanswered_questions}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Positive marks</p>
-                                          <p className="mt-1 text-xl font-semibold text-green-300">{marksText(attempt.positive_marks)}</p>
-                                        </div>
-                                        <div className="rounded-lg bg-slate-800 p-3">
-                                          <p className="text-xs text-slate-400">Negative marks</p>
-                                          <p className="mt-1 text-xl font-semibold text-red-300">{marksText(attempt.negative_marks)}</p>
-                                        </div>
-                                      </div>
-                                      <div className="mt-3 grid gap-3 rounded-lg bg-slate-800 p-4 text-sm sm:grid-cols-2">
-                                        <div>
-                                          <p className="text-xs text-slate-400">Marks awarded</p>
-                                          <p className="mt-1 text-lg font-semibold">{marksText(attempt.obtained_marks)} / {marksText(attempt.total_marks)}</p>
-                                          <p className="mt-1 text-xs text-slate-400">{attempt.marks_status}{attempt.percentage !== null && attempt.percentage !== undefined ? ` · ${Number(attempt.percentage).toFixed(2)}%` : ""}{attempt.grade ? ` · Grade ${attempt.grade}` : ""}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-slate-400">Examination timing</p>
-                                          <p className="mt-1">Scheduled start: {dateText(attempt.exam_start_time)}</p>
-                                          <p className="mt-1">Student started: {dateText(attempt.started_at)}</p>
-                                          <p className="mt-1">Student submitted: {dateText(attempt.submitted_at)}</p>
-                                        </div>
-                                      </div>
-                                      {attempt.session_id && (
-                                        <Link
-                                          href={`/staff/manage-exams/${attempt.exam_id}/evaluation/${attempt.session_id}?view=1&return_to=%2Fadmin%2Fperformance%3Ffrom%3Dexaminations`}
-                                          className="mt-4 inline-flex rounded-lg border border-cyan-400/40 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"
-                                        >
-                                          View question-by-question answers
-                                        </Link>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+              {visibleStudents.map((student) => (
+                <Link
+                  key={student.student_id}
+                  href={`/admin/student-examinations/${student.student_id}?scope=tracking&return_to=${encodeURIComponent(reportReturnHref)}`}
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-800/60 p-4 text-left hover:bg-white/5"
+                >
+                  <span>
+                    <span className="block font-semibold">{student.student_name}</span>
+                    <span className="mt-1 block text-xs text-slate-400">{student.student_email} · {student.department || "Department not set"} · Student ID {student.student_id}</span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-lg bg-slate-900 px-3 py-2">{student.total_assigned_examinations} assigned by you</span>
+                    <span className="rounded-lg bg-slate-900 px-3 py-2">{student.total_taken_examinations} taken</span>
+                    <span className="font-semibold text-cyan-300">View examinations →</span>
+                  </span>
+                </Link>
+              ))}
                           </div>
                         )}
                       </div>

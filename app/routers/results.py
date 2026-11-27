@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
@@ -415,6 +416,7 @@ def get_my_ended_exam_paper(
             "maximum_marks": float(question.marks or 0),
             "awarded_marks": answer.awarded_marks if answer and published_result else None,
             "student_answer": answer.answer_text if answer else None,
+            "student_selected_options": student_selected_options,
             "correct_answer": question.expected_answer or question.model_answer_text,
             "correct_options": [option.option_text for option in options if option.is_correct],
             "options": [option.option_text for option in options],
@@ -502,6 +504,22 @@ def get_my_result_details(
             .all()
             if question is not None else []
         )
+        student_selected_options = []
+        if answer is not None and question is not None and getattr(question.question_type, "value", question.question_type) in {"MCQ", "multi_select"}:
+            try:
+                selected_option_ids = json.loads(answer.answer_text or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                selected_option_ids = []
+            if isinstance(selected_option_ids, int):
+                selected_option_ids = [selected_option_ids]
+            if isinstance(selected_option_ids, list):
+                selected_option_ids = [option_id for option_id in selected_option_ids if isinstance(option_id, int)]
+                selected_option_rows = db.query(Option.id, Option.option_text).filter(
+                    Option.question_id == question_id,
+                    Option.id.in_(selected_option_ids or [-1]),
+                ).all()
+                selected_option_map = {option_id: option_text for option_id, option_text in selected_option_rows}
+                student_selected_options = [selected_option_map[option_id] for option_id in selected_option_ids if option_id in selected_option_map]
         question_results.append({
             **score,
             "question_text": question.question_text if question else None,

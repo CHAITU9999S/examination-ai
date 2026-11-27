@@ -101,6 +101,7 @@ function SessionEvaluationPageContent(){
  if(loading)return <main className="min-h-screen bg-slate-950 p-10 text-center text-slate-300">Loading student evaluation...</main>;
  if(!data)return <main className="min-h-screen bg-slate-950 p-10 text-white"><p>{error||"Evaluation unavailable."}</p><Link href={previousHref} className="mt-4 inline-block text-cyan-300">← Previous Section</Link></main>;
  const question=current;
+ const resultPercentage=data.result_total_marks!==null&&data.result_total_marks!==undefined&&Number(data.result_total_marks)>0&&data.result_obtained_marks!==null&&data.result_obtained_marks!==undefined?Number(data.result_obtained_marks)/Number(data.result_total_marks)*100:null;
  const allSubjectiveComplete=data.questions.filter(q=>!q.is_objective&&q.answer_id).every(q=>q.awarded_marks!==null&&q.awarded_marks!==undefined);
  const evaluationCount=question?.evaluation_count||0;
  const canPublish=data.session_status==="submitted"||data.session_status==="auto_submitted";
@@ -118,12 +119,23 @@ function SessionEvaluationPageContent(){
     </div>
    </section>
    <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
+    <h2 className="text-lg font-bold">Examination Performance Summary</h2>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Questions in assigned paper</p><p className="mt-1 text-2xl font-bold">{data.questions.length}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Final marks</p><p className="mt-1 text-2xl font-bold">{data.result_published&&data.result_obtained_marks!==null&&data.result_obtained_marks!==undefined?`${data.result_obtained_marks} / ${data.result_total_marks}`:"Not published"}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Percentage</p><p className="mt-1 text-2xl font-bold">{data.result_published&&resultPercentage!==null?`${resultPercentage.toFixed(2)}%`:"Not published"}</p></div>
+     <div className="rounded-xl bg-slate-800 p-4"><p className="text-xs text-slate-400">Grade / status</p><p className="mt-1 text-2xl font-bold">{data.result_published?data.result_grade||"—":data.session_status.replaceAll("_"," ")}</p></div>
+    </div>
+    {!data.result_published&&<p className="mt-3 text-xs text-amber-300">The result has not been published. Current per-question evaluation marks are shown below to authorized staff.</p>}
+   </section>
+   <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} marks</p></div>
     
     {question&&<div className="mt-6 space-y-5">
      <div><h3 className="text-sm font-semibold text-slate-400">Published question</h3><p className="mt-2 whitespace-pre-wrap">{question.question_text}</p>{questionImage&&<img src={questionImage} alt="Examination question image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}{question.options.length>0&&<ul className="mt-3 space-y-2 text-sm text-slate-300">{question.options.map(o=><li key={o.id} className="rounded-lg bg-slate-800 p-2">{o.option_text}{o.is_correct&&<span className="ml-2 text-green-300">(Correct answer)</span>}</li>)}</ul>}</div>
-     {question.expected_answer&&<div><h3 className="text-sm font-semibold text-slate-400">Expected answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.expected_answer}</p>{expectedAnswerImage&&<img src={expectedAnswerImage} alt="Published expected answer image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}</div>}
+     <div><h3 className="text-sm font-semibold text-slate-400">Expected answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.expected_answer||"No written expected answer provided."}</p>{expectedAnswerImage&&<img src={expectedAnswerImage} alt="Published expected answer image" className="mt-3 max-h-64 max-w-full rounded-lg border border-white/10 object-contain"/>}</div>
      {question.model_answer_text&&<div><h3 className="text-sm font-semibold text-slate-400">Model answer</h3><p className="mt-2 whitespace-pre-wrap text-slate-300">{question.model_answer_text}</p></div>}
+     <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-4"><h3 className="text-sm font-semibold text-cyan-200">Final marks awarded for this question</h3><p className="mt-2 text-xl font-bold tabular-nums">{question.awarded_marks!==null&&question.awarded_marks!==undefined?question.awarded_marks:"Not evaluated"} / {question.maximum_marks}</p></div>
      <div className="rounded-xl bg-slate-800 p-4"><h3 className="text-sm font-semibold text-slate-400">Student's submitted answer</h3><>{question.selected_options&&question.selected_options.length>0?<ul className="mt-2 list-disc space-y-1 pl-5">{question.selected_options.map((option,i)=><li key={`${i}-${option}`} className="whitespace-pre-wrap">{option}</li>)}</ul>:<p className="mt-2 whitespace-pre-wrap">{question.answer_text||"No text answer submitted."}</p>}</>{question.answer_image_url&&<div className="mt-3">{answerImage?<img src={answerImage} alt="Student uploaded answer image" className="max-h-[480px] max-w-full rounded-lg border border-white/10 object-contain"/>:<p className="text-xs text-slate-400">Loading uploaded answer image...</p>}</div>}</div>
      {question.is_objective&&<p className="rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-sm text-blue-200">Objective question — automatically evaluated marks: {question.awarded_marks??"Not available"} / {question.maximum_marks}</p>}
      {!question.is_objective&&<div className="space-y-4 rounded-xl border border-white/10 bg-slate-800/50 p-4">

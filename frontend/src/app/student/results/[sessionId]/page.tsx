@@ -13,6 +13,7 @@ interface QuestionResult {
   question_text?: string | null;
   question_type?: string;
   student_answer?: string | null;
+  student_selected_options?: string[];
   correct_answer?: string | null;
   correct_options?: string[];
   question_image_url?: string | null;
@@ -87,6 +88,7 @@ export default function StudentResultDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [facePhotoUrl, setFacePhotoUrl] = useState("");
+  const [questionIndex, setQuestionIndex] = useState(0);
 
   const loadResult = useCallback(async () => {
     setLoading(true);
@@ -126,6 +128,7 @@ export default function StudentResultDetailPage() {
         throw new Error(data.detail || "Unable to load result details.");
       }
       setResult(await response.json());
+      setQuestionIndex(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load result.");
     } finally {
@@ -158,6 +161,8 @@ export default function StudentResultDetailPage() {
   }, [result?.face_photo_url]);
 
   const percentage = Math.max(0, Math.min(100, Number(result?.percentage || 0)));
+  const currentQuestion = result?.question_results[questionIndex] || null;
+  const questionCount = result?.question_results.length || 0;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -287,46 +292,56 @@ export default function StudentResultDetailPage() {
               </section>
             )}
 
-            <section className="mt-10 space-y-4">
-              <h2 className="text-xl font-bold">Question-wise evaluation</h2>
-              {result.question_results.map((item) => (
-                <article key={item.question_id} className="rounded-xl border border-white/10 bg-slate-900 p-5">
+            <section className="mt-10 rounded-2xl border border-white/10 bg-slate-900 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold">Question-wise evaluation</h2>
+                  <p className="mt-1 text-sm text-slate-400">Question {questionCount ? questionIndex + 1 : 0} of {questionCount}</p>
+                </div>
+                {currentQuestion && <span className="rounded-full bg-slate-800 px-3 py-1 text-xs capitalize text-slate-300">{currentQuestion.outcome}</span>}
+              </div>
+              {currentQuestion ? (
+                <article className="mt-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-slate-500">Question {item.question_id} · {item.question_type}</p>
-                      <p className="mt-2 whitespace-pre-wrap font-medium">{item.question_text || "Question text unavailable"}</p>
-                      {item.question_image_url && <StudentReportImage url={item.question_image_url} alt="Question image" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-slate-500">{currentQuestion.question_type || "Question"} · Question {questionIndex + 1}</p>
+                      <p className="mt-2 whitespace-pre-wrap font-medium">{currentQuestion.question_text || "Question text unavailable"}</p>
+                      {currentQuestion.question_image_url && <StudentReportImage url={currentQuestion.question_image_url} alt="Question image" />}
                     </div>
-                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs capitalize text-slate-300">
-                      {item.outcome}
-                    </span>
+                    <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3">
+                      <p className="text-xs text-slate-400">Final marks awarded</p>
+                      <p className="mt-1 text-xl font-bold tabular-nums">{currentQuestion.awarded_marks} / {currentQuestion.maximum_marks}</p>
+                    </div>
                   </div>
-                  <p className="mt-4 text-sm text-slate-300">
-                    Marks: {item.awarded_marks} / {item.maximum_marks}
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg border border-white/10 bg-slate-800 p-3">
-                      <p className="text-xs font-semibold text-slate-400">Your answer</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.student_answer?.trim() || (item.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
-                      {item.student_answer_image_url && <StudentReportImage url={item.student_answer_image_url} alt="Your submitted answer image" />}
-                    </div>
-                    <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-3">
-                      <p className="text-xs font-semibold text-emerald-300">Correct answer</p>
-                      {item.correct_options && item.correct_options.length > 0 ? (
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-white/10 bg-slate-800 p-4">
+                      <p className="text-xs font-semibold text-slate-400">Your submitted answer</p>
+                      {currentQuestion.student_selected_options && currentQuestion.student_selected_options.length > 0 ? (
                         <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">
-                          {item.correct_options.map((option, index) => <li key={index}>{option}</li>)}
+                          {currentQuestion.student_selected_options.map((option, index) => <li key={index}>{option}</li>)}
                         </ul>
                       ) : (
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{item.correct_answer?.trim() || "No model answer provided"}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{currentQuestion.question_type === "MCQ" || currentQuestion.question_type === "multi_select" ? "Not attempted" : currentQuestion.student_answer?.trim() || (currentQuestion.student_answer_image_url ? "Image answer submitted" : "Not attempted")}</p>
                       )}
-                      {item.expected_answer_image_url && <StudentReportImage url={item.expected_answer_image_url} alt="Expected answer image" />}
+                      {currentQuestion.student_answer_image_url && <StudentReportImage url={currentQuestion.student_answer_image_url} alt="Your submitted answer image" />}
+                    </div>
+                    <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-4">
+                      <p className="text-xs font-semibold text-emerald-300">Expected / correct answer</p>
+                      {currentQuestion.correct_options && currentQuestion.correct_options.length > 0 ? (
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-200">
+                          {currentQuestion.correct_options.map((option, index) => <li key={index}>{option}</li>)}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{currentQuestion.correct_answer?.trim() || "No model answer provided"}</p>
+                      )}
+                      {currentQuestion.expected_answer_image_url && <StudentReportImage url={currentQuestion.expected_answer_image_url} alt="Expected answer image" />}
                     </div>
                   </div>
-                  {item.rubric_scores && item.rubric_scores.length > 0 && (
+                  {currentQuestion.rubric_scores && currentQuestion.rubric_scores.length > 0 && (
                     <div className="mt-4 rounded-lg border border-white/10 bg-slate-800 p-4">
                       <p className="text-sm font-semibold text-slate-200">Rubric breakdown</p>
                       <div className="mt-3 space-y-2">
-                        {item.rubric_scores.map((rubric, index) => (
+                        {currentQuestion.rubric_scores.map((rubric, index) => (
                           <div key={index} className="flex flex-wrap justify-between gap-3 text-sm">
                             <div>
                               <p className="font-medium">{rubric.criterion}</p>
@@ -338,17 +353,17 @@ export default function StudentResultDetailPage() {
                       </div>
                     </div>
                   )}
-                  {item.examiner_feedback && (
+                  {currentQuestion.examiner_feedback && (
                     <div className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-4">
                       <p className="text-sm font-semibold text-blue-300">Examiner feedback</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{item.examiner_feedback}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{currentQuestion.examiner_feedback}</p>
                     </div>
                   )}
-                  {item.image_annotations && item.image_annotations.length > 0 && (
+                  {currentQuestion.image_annotations && currentQuestion.image_annotations.length > 0 && (
                     <div className="mt-4">
                       <p className="text-sm font-semibold text-slate-300">Examiner image annotations</p>
                       <ul className="mt-2 space-y-2">
-                        {item.image_annotations.map((annotation, index) => (
+                        {currentQuestion.image_annotations.map((annotation, index) => (
                           <li key={index} className="rounded-lg bg-slate-800 p-3 text-sm text-slate-300">
                             <span className="font-semibold capitalize">{annotation.annotation_type}</span>
                             {" · "}position {annotation.x.toFixed(1)}%, {annotation.y.toFixed(1)}%
@@ -359,7 +374,14 @@ export default function StudentResultDetailPage() {
                     </div>
                   )}
                 </article>
-              ))}
+              ) : (
+                <p className="mt-5 text-sm text-slate-400">No question-wise evaluation is available.</p>
+              )}
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setQuestionIndex((index) => Math.max(0, index - 1))} disabled={questionIndex === 0} className="rounded-lg border border-white/20 px-4 py-2 text-sm disabled:opacity-40">Previous Question</button>
+                <span className="text-xs text-slate-400">{questionCount ? `Question ${questionIndex + 1} of ${questionCount}` : "No questions"}</span>
+                <button type="button" onClick={() => setQuestionIndex((index) => Math.min(questionCount - 1, index + 1))} disabled={questionIndex >= questionCount - 1} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-40">Next Question</button>
+              </div>
             </section>
           </>
         ) : null}
