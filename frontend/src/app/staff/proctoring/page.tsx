@@ -1,3 +1,4 @@
+import Image from "next/image";
 "use client";
 import { formatISTDateTime } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ interface ProctorEvent {
   suspicion_points?: number | null;
   cumulative_suspicion_score?: number | null;
   created_at?: string | null;
+  snapshot_data?: string | null;
 }
 
 interface CohortAnalytics {
@@ -301,6 +303,12 @@ export default function StaffProctoringReviewPage() {
                         <p className="mt-2 text-xs text-slate-500">
                           Points: {event.suspicion_points ?? 0} · Cumulative: {event.cumulative_suspicion_score ?? 0}
                         </p>
+                        {event.snapshot_data && (
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs font-semibold text-amber-200">Event-triggered evidence snapshot</p>
+                            <Image src={event.snapshot_data} alt={`Evidence snapshot for ${event.event_type.replaceAll("_", " ")}`} width={320} height={240} unoptimized className="max-h-60 w-auto rounded-lg border border-white/10 object-contain" />
+                          </div>
+                        )}
                       </article>
                     ))}
                   </div>
