@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminSectionNavigation from "../../../components/AdminSectionNavigation";
+import ProctoringReportPanel from "@/components/ProctoringReportPanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -28,6 +29,7 @@ interface ReportQuestion {
 
 interface StudentReport {
   exam_id: number;
+  session_id?: number | null;
   exam_title: string;
   subject?: string | null;
   student_id: number;
@@ -198,6 +200,7 @@ export default function AdminStudentPerformanceReportPage() {
                 </div>
               </div>
             </section>
+            <ProctoringReportPanel sessionId={report.session_id} />
             {report.paper_is_preview && <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">No examination session was created for this student. The questions below are a generated paper preview using the current examination selection settings; no submitted answers or marks are recorded.</p>}
             <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
