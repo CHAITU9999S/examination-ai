@@ -147,6 +147,33 @@ export default function StudentExamPage() {
   const [startWindowSecondsRemaining, setStartWindowSecondsRemaining] = useState<number | null>(null);
   const [showCameraPreview, setShowCameraPreview] = useState(true);
   const captureVideoRef = useRef<HTMLVideoElement | null>(null);
+  const monitoringMetricsRef = useRef({
+    monitoring_seconds: 0,
+    face_present_seconds: 0,
+    multiple_face_seconds: 0,
+    face_missing_seconds: 0,
+    gaze_measured_seconds: 0,
+    gaze_on_screen_seconds: 0,
+    gaze_away_seconds: 0,
+  });
+  const handleMonitoringSample = useCallback((sample: {
+    face_present: boolean;
+    multiple_faces: boolean;
+    gaze_measured: boolean;
+    gaze_on_screen: boolean;
+  }) => {
+    const metrics = monitoringMetricsRef.current;
+    metrics.monitoring_seconds += 1;
+    if (sample.face_present) metrics.face_present_seconds += 1;
+    if (sample.multiple_faces) metrics.multiple_face_seconds += 1;
+    if (!sample.face_present && !sample.multiple_faces) metrics.face_missing_seconds += 1;
+    if (sample.gaze_measured) {
+      metrics.gaze_measured_seconds += 1;
+      if (sample.gaze_on_screen) metrics.gaze_on_screen_seconds += 1;
+      else metrics.gaze_away_seconds += 1;
+    }
+  }, []);
+
 
   const answersRef = useRef<Record<number, string>>({});
   const submittedRef = useRef(false);
@@ -1126,6 +1153,20 @@ export default function StudentExamPage() {
     }
   }, [questionTimerLocked, isPaused, paper, currentIndex, handleQuestionNavigation]);
 
+  useEffect(() => {
+    if (paper?.status === "in_progress") {
+      monitoringMetricsRef.current = {
+        monitoring_seconds: 0,
+        face_present_seconds: 0,
+        multiple_face_seconds: 0,
+        face_missing_seconds: 0,
+        gaze_measured_seconds: 0,
+        gaze_on_screen_seconds: 0,
+        gaze_away_seconds: 0,
+      };
+    }
+  }, [paper?.status, sessionId]);
+
   const heartbeatToken = examAccessToken;
   const heartbeatUrl = paper?.status === "in_progress" && heartbeatToken
     ? `${API_URL.replace(/^http:/, "ws:").replace(/^https:/, "wss:")}/exam-sessions/${sessionId}/proctoring/heartbeat?token=${encodeURIComponent(heartbeatToken)}`
@@ -1143,6 +1184,7 @@ export default function StudentExamPage() {
       total_event_count: proctoring.events.length,
       tab_switch_count: proctoring.tabSwitchCount,
       auto_flagged: proctoring.isAutoFlagged,
+      monitoring_metrics: { ...monitoringMetricsRef.current },
     }),
     reconnectIntervalMs: 3000,
     maxReconnectAttempts: 10,
@@ -1482,7 +1524,7 @@ export default function StudentExamPage() {
             <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Camera</h2><button type="button" onClick={() => setShowCameraPreview((visible) => !visible)} className="text-xs text-blue-300">{showCameraPreview ? "Hide preview" : "Show preview"}</button></div>
             <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
             <video ref={captureVideoRef} muted autoPlay playsInline className="hidden" />
-            <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} />
+            <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} onMonitoringSample={handleMonitoringSample} />
             <p className="text-xs text-slate-400">Hiding the preview does not stop face detection during capture or the camera stream during the examination. Automated proctoring continues when enabled. The entry photo and up to eight low-resolution, event-triggered evidence snapshots may be stored for staff review. Continuous video is never uploaded.</p>
           </aside>
         </div>
@@ -1749,6 +1791,7 @@ export default function StudentExamPage() {
                   onMultipleFaces={proctoring.reportMultipleFaces}
                   onGazeAway={proctoring.reportGazeAway}
                   onDetectorError={proctoring.reportWebcamError}
+                  onMonitoringSample={handleMonitoringSample}
                 />
                 <p className="text-xs text-slate-400">
                   Face presence: {faceVerified ? "Confirmed" : "Pending"} · Monitoring: {proctoring.isMonitoring ? "Active" : "Starting"} · Heartbeat: {websocketStatus}
