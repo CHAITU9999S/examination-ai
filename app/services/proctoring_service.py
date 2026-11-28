@@ -170,13 +170,23 @@ def _validate_event_data(
             detail="Gaze data must be a JSON object.",
         )
 
-    # The project requirements specify that webcam frames stay in the
-    # browser. Only derived signals may be sent to the backend.
+    # Only low-resolution, event-triggered JPEG evidence is accepted.
+    # Continuous webcam video/frames are never uploaded.
     if snapshot_data is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Webcam snapshots must remain client-side; submit derived proctoring signals only.",
-        )
+        if event_type not in {"multiple_faces", "gaze_away"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Snapshots are accepted only for multiple-face and gaze-away events.",
+            )
+        if (
+            not isinstance(snapshot_data, str)
+            or not snapshot_data.startswith("data:image/jpeg;base64,")
+            or len(snapshot_data) > MAX_SNAPSHOT_LENGTH
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or oversized JPEG evidence snapshot.",
+            )
 
 
 # ==========================================
@@ -242,6 +252,15 @@ def record_proctor_event(
 
     suspicion_points = EVENT_SUSPICION_POINTS[event_type]
 
+    # Keep evidence storage bounded per examination session.
+    if snapshot_data is not None:
+        existing_snapshots = db.query(func.count(ProctorEvent.id)).filter(
+            ProctorEvent.session_id == session_id,
+            ProctorEvent.snapshot_data.isnot(None),
+        ).scalar() or 0
+        if existing_snapshots >= 8:
+            snapshot_data = None
+
     try:
         tab_switch_count = None
 
@@ -270,8 +289,8 @@ def record_proctor_event(
             suspicion_points=suspicion_points,
             cumulative_suspicion_score=cumulative_score,
             gaze_data=gaze_data,
-            # Webcam frames are intentionally never persisted or uploaded.
-            snapshot_data=None,
+            # Store only bounded, event-triggered JPEG evidence when supplied.
+            snapshot_data=snapshot_data,
             tab_switch_count=tab_switch_count,
             created_at=now,
         )
@@ -290,6 +309,7 @@ def record_proctor_event(
             "cumulative_suspicion_score": event.cumulative_suspicion_score,
             "suspicion_score": session.suspicion_score,
             "tab_switch_count": tab_switch_count,
+            "snapshot_stored": bool(event.snapshot_data),
         }
 
     except SQLAlchemyError:
