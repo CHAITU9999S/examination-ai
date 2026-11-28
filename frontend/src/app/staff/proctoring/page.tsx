@@ -253,6 +253,9 @@ export default function StaffProctoringReviewPage() {
                           ["No tab switches", analytics.metrics.no_tab_switches],
                           ["No multiple-face events", analytics.metrics.no_multiple_face_events],
                           ["High suspicion (>60)", analytics.metrics.high_suspicion_over_60],
+                          ["Face present (estimated)", analytics.metrics.face_present_rate],
+                          ["Gaze on screen (estimated)", analytics.metrics.gaze_on_screen_rate],
+                          ["Monitoring coverage (estimated)", analytics.metrics.monitoring_coverage_rate],
                         ].map(([label, value]) => (
                           <div key={String(label)}>
                             <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="tabular-nums">{value == null ? "Not available" : `${value}%`}</span></div>
