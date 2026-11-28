@@ -540,7 +540,7 @@ def test_webcam_snapshot_upload_is_rejected(
     )
 
     assert response.status_code == 400
-    assert "JPEG evidence snapshot" in response.json()["detail"]
+    assert "only for multiple-face and gaze-away" in response.json()["detail"]
 
 
 
