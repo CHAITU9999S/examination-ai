@@ -221,7 +221,7 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
                   <button type="button" disabled={decisionBusy} onClick={() => void submitIntegrityDecision("pass")} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Mark integrity passed</button>
                   <button type="button" disabled={decisionBusy || !decisionReason.trim()} onClick={() => void submitIntegrityDecision("disqualify")} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Disqualify session</button>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">This records an auditable review decision only. It does not alter awarded marks or automatically publish/reject a result; existing examiner result approval remains in control.</p>
+                <p className="mt-2 text-xs text-slate-500">The decision is auditable. A disqualified session cannot have its result published; a passed session continues through the existing examiner grading and result-publication workflow. Awarded marks are not changed.</p>
               </>
             )}
             {decisionMessage && <p role="status" className="mt-2 text-sm text-emerald-300">{decisionMessage}</p>}
