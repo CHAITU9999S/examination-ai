@@ -1203,6 +1203,13 @@ def publish_session_result(
             detail="Only submitted examination sessions can be published.",
         )
 
+    integrity_decision = (session.last_heartbeat_signals or {}).get("integrity_decision")
+    if isinstance(integrity_decision, dict) and integrity_decision.get("decision") == "disqualify":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This examination session was disqualified after proctoring review. Its result cannot be published.",
+        )
+
     try:
         calculated = calculate_session_result(db, session_id)
     except HTTPException:
