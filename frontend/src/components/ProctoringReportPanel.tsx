@@ -28,6 +28,15 @@ type ProctoringHistory = {
     total_event_count?: number;
     tab_switch_count?: number;
     auto_flagged?: boolean;
+    client_reported_monitoring_metrics?: {
+      monitoring_seconds?: number;
+      face_present_seconds?: number;
+      multiple_face_seconds?: number;
+      face_missing_seconds?: number;
+      gaze_measured_seconds?: number;
+      gaze_on_screen_seconds?: number;
+      gaze_away_seconds?: number;
+    };
   } | null;
   tab_switch_count?: number;
   tab_switch_threshold?: number | null;
@@ -103,7 +112,13 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
   const counts = history?.event_counts || history?.last_heartbeat_signals?.event_counts || {};
   const events = history?.events || [];
   const suspicion = Number(history?.suspicion_score || 0);
+  const sampled = history?.last_heartbeat_signals?.client_reported_monitoring_metrics;
+  const percent = (part?: number, whole?: number) =>
+    whole && whole > 0 && typeof part === "number" ? `${Math.round(part / whole * 1000) / 10}%` : "Not available";
   const metrics = [
+    { label: "Face present", value: percent(sampled?.face_present_seconds, sampled?.monitoring_seconds) },
+    { label: "Gaze on screen", value: percent(sampled?.gaze_on_screen_seconds, sampled?.gaze_measured_seconds) },
+    { label: "Monitoring sampled", value: sampled?.monitoring_seconds ? `${sampled.monitoring_seconds}s` : "Not available" },
     { label: "Tab switches", value: counts.tab_switch ?? history?.tab_switch_count ?? 0 },
     { label: "Face not detected", value: counts.face_not_detected ?? 0 },
     { label: "Multiple faces", value: counts.multiple_faces ?? 0 },
@@ -170,7 +185,7 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
           )}
 
           <p className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-xs text-slate-400">
-            Only low-resolution snapshots captured when multiple faces or gaze-away events are detected are stored (maximum eight per session). Continuous video and routine camera frames are never uploaded. Counts are event totals, not continuous face/gaze percentages.
+            Only low-resolution snapshots captured when multiple faces or gaze-away events are detected are stored (maximum eight per session). Continuous video and routine camera frames are never uploaded. Face/gaze percentages are browser-side detector estimates from one-second samples; they are indicative and not tamper-proof proof of candidate conduct.
           </p>
         </>
       )}
