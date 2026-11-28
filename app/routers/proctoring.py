@@ -342,6 +342,36 @@ def get_exam_proctoring_analytics(
     def percentage(predicate):
         return round(sum(1 for session in sessions if predicate(session, counts_by_session.get(session.id, {}))) / total * 100, 1) if total else None
 
+    monitoring_totals = {
+        "monitoring_seconds": 0,
+        "face_present_seconds": 0,
+        "gaze_measured_seconds": 0,
+        "gaze_on_screen_seconds": 0,
+    }
+    for session in sessions:
+        signals = session.last_heartbeat_signals or {}
+        metrics = signals.get("client_reported_monitoring_metrics", {})
+        if not isinstance(metrics, dict):
+            continue
+        for key in monitoring_totals:
+            value = metrics.get(key, 0)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                monitoring_totals[key] += value
+
+    def rate(numerator: str, denominator: str):
+        total_seconds = monitoring_totals[denominator]
+        return round(monitoring_totals[numerator] / total_seconds * 100, 1) if total_seconds else None
+
+    expected_monitoring_seconds = sum(
+        max(0, int((session.submitted_at - session.started_at).total_seconds()))
+        for session in sessions
+        if session.started_at is not None and session.submitted_at is not None
+    )
+    monitoring_coverage = (
+        round(min(100.0, monitoring_totals["monitoring_seconds"] / expected_monitoring_seconds * 100), 1)
+        if expected_monitoring_seconds > 0 else None
+    )
+
     bands = [
         {"label": "0–20", "count": 0},
         {"label": "21–40", "count": 0},
@@ -364,9 +394,13 @@ def get_exam_proctoring_analytics(
             "no_tab_switches": percentage(lambda _s, c: c.get("tab_switch", 0) == 0),
             "no_multiple_face_events": percentage(lambda _s, c: c.get("multiple_faces", 0) == 0),
             "high_suspicion_over_60": percentage(lambda s, _c: float(s.suspicion_score or 0) > 60),
+            "face_present_rate": rate("face_present_seconds", "monitoring_seconds"),
+            "gaze_on_screen_rate": rate("gaze_on_screen_seconds", "gaze_measured_seconds"),
+            "monitoring_coverage_rate": monitoring_coverage,
         },
+        "monitoring_totals": monitoring_totals,
         "score_distribution": bands,
-        "metric_note": "Percentages are the share of finished sessions with no corresponding event recorded. They are not continuous webcam detection rates.",
+        "metric_note": "Event percentages are the share of finished sessions with no corresponding event. Face-present and gaze-on-screen rates are browser-side detector estimates from one-second samples; monitoring coverage compares sampled seconds with elapsed session time. These are indicative metrics, not tamper-proof proof of candidate conduct.",
     }
 
 def _exam_attribution(exam: Exam, student_id: int, db: Session) -> dict:
