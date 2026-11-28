@@ -780,3 +780,154 @@ def test_snapshot_is_rejected_for_non_visual_event(
     )
     assert response.status_code == 400
     assert "only for multiple-face and gaze-away" in response.json()["detail"]
+
+
+def test_heartbeat_persists_bounded_browser_monitoring_metrics(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    websocket_url = (
+        f"/exam-sessions/{data['session'].id}/proctoring/heartbeat"
+        f"?token={data['token']}"
+    )
+    metrics = {
+        "monitoring_seconds": 20,
+        "face_present_seconds": 18,
+        "multiple_face_seconds": 1,
+        "face_missing_seconds": 1,
+        "gaze_measured_seconds": 16,
+        "gaze_on_screen_seconds": 14,
+        "gaze_away_seconds": 2,
+    }
+    with client.websocket_connect(websocket_url) as websocket:
+        websocket.send_json({
+            "type": "heartbeat",
+            "signals": {"monitoring_metrics": metrics},
+        })
+        acknowledgement = websocket.receive_json()
+
+    assert acknowledgement["type"] == "heartbeat_ack"
+    stored = db_session.query(ExamSession).filter_by(id=data["session"].id).one()
+    assert stored.last_heartbeat_signals["client_reported_monitoring_metrics"] == metrics
+
+
+def test_heartbeat_rejects_inconsistent_monitoring_metrics(
+    client,
+    proctoring_data,
+):
+    data = proctoring_data
+    websocket_url = (
+        f"/exam-sessions/{data['session'].id}/proctoring/heartbeat"
+        f"?token={data['token']}"
+    )
+    with client.websocket_connect(websocket_url) as websocket:
+        websocket.send_json({
+            "type": "heartbeat",
+            "signals": {
+                "monitoring_metrics": {
+                    "monitoring_seconds": 5,
+                    "face_present_seconds": 8,
+                    "gaze_measured_seconds": 0,
+                    "gaze_on_screen_seconds": 0,
+                }
+            },
+        })
+        response = websocket.receive_json()
+    assert response["type"] == "error"
+    assert "monitoring metrics are invalid" in response["message"]
+
+
+def test_admin_can_record_audited_integrity_decision_without_changing_marks(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["session"].status = "submitted"
+    data["session"].submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db_session.commit()
+
+    admin = User(
+        full_name="Integrity Decision Admin",
+        email="integrity-decision-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    from app.auth import create_access_token
+    token = create_access_token({"sub": str(admin.id)})
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/integrity-decision",
+        headers=proctoring_headers(token),
+        json={"decision": "disqualify", "reason": "Multiple people visible in evidence."},
+    )
+    assert response.status_code == 200
+    assert response.json()["integrity_decision"]["decision"] == "disqualify"
+    assert len(response.json()["integrity_decision_history"]) == 1
+
+    db_session.refresh(data["session"])
+    assert data["session"].status == "submitted"
+    assert data["session"].last_heartbeat_signals["integrity_decision"]["decision"] == "disqualify"
+
+
+def test_disqualification_requires_a_reason(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["session"].status = "submitted"
+    data["session"].submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db_session.commit()
+    admin = User(
+        full_name="Reason Required Admin",
+        email="reason-required-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+    from app.auth import create_access_token
+    token = create_access_token({"sub": str(admin.id)})
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/integrity-decision",
+        headers=proctoring_headers(token),
+        json={"decision": "disqualify"},
+    )
+    assert response.status_code == 422
+
+
+def test_examiner_cannot_decide_integrity_for_another_exam(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    data["session"].status = "submitted"
+    data["session"].submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    other_examiner = User(
+        full_name="Unrelated Examiner",
+        email="unrelated-examiner@example.com",
+        password_hash="test-password-hash",
+        role="examiner",
+        is_active=True,
+    )
+    db_session.add(other_examiner)
+    db_session.commit()
+    db_session.refresh(other_examiner)
+    from app.auth import create_access_token
+    token = create_access_token({"sub": str(other_examiner.id)})
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/integrity-decision",
+        headers=proctoring_headers(token),
+        json={"decision": "pass"},
+    )
+    assert response.status_code == 403
