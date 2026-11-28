@@ -26,6 +26,7 @@ from app.models import (
     ExamAssignment,
     ExamSession,
     ProctorEvent,
+    Result,
     User,
 )
 from app.services.proctoring_service import (
@@ -621,6 +622,12 @@ def record_integrity_decision(
         raise HTTPException(status_code=404, detail="Examination session not found.")
     if session.status not in {"submitted", "auto_submitted", "expired"}:
         raise HTTPException(status_code=409, detail="Integrity decisions can be recorded only for submitted or expired examination sessions.")
+    published_result = db.query(Result.id).filter(
+        Result.session_id == session_id,
+        Result.is_published.is_(True),
+    ).first()
+    if published_result is not None:
+        raise HTTPException(status_code=409, detail="The result is already published. Integrity decisions must be completed before publication.")
 
     exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
     if exam is None:
