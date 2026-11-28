@@ -11,6 +11,7 @@ interface FaceProctoringProps {
   onMultipleFaces: () => void;
   onGazeAway: (data: Record<string, unknown>) => void;
   onDetectorError: (message: string) => void;
+  onMonitoringSample?: (sample: { face_present: boolean; multiple_faces: boolean; gaze_measured: boolean; gaze_on_screen: boolean }) => void;
 }
 
 type DetectorStatus = "idle" | "loading" | "ready" | "unavailable";
@@ -131,10 +132,12 @@ export default function FaceProctoring({
   onMultipleFaces,
   onGazeAway,
   onDetectorError,
+  onMonitoringSample,
 }: FaceProctoringProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationRef = useRef<number | null>(null);
   const lastDetectionRef = useRef(0);
+  const lastMonitoringSampleRef = useRef(0);
   const missingSinceRef = useRef<number | null>(null);
   const facePresentSinceRef = useRef<number | null>(null);
   const faceVerifiedRef = useRef(false);
@@ -171,12 +174,19 @@ export default function FaceProctoring({
       }
     };
 
+    const emitMonitoringSample = (now: number, sample: { face_present: boolean; multiple_faces: boolean; gaze_measured: boolean; gaze_on_screen: boolean }) => {
+      if (now - lastMonitoringSampleRef.current < 1000) return;
+      lastMonitoringSampleRef.current = now;
+      onMonitoringSample?.(sample);
+    };
+
     const processFaces = (
       faces: DetectedFace[],
       now: number,
       videoElement: HTMLVideoElement
     ) => {
       if (faces.length === 0) {
+        emitMonitoringSample(now, { face_present: false, multiple_faces: false, gaze_measured: false, gaze_on_screen: false });
         facePresentSinceRef.current = null;
         if (missingSinceRef.current === null) {
           missingSinceRef.current = now;
@@ -193,6 +203,7 @@ export default function FaceProctoring({
       missingSinceRef.current = null;
 
       if (faces.length > 1) {
+        emitMonitoringSample(now, { face_present: false, multiple_faces: true, gaze_measured: false, gaze_on_screen: false });
         setAlertMessage("Multiple faces detected. Only the candidate should be visible.");
         facePresentSinceRef.current = null;
         reportWithCooldown("multiple", onMultipleFaces, 7000);
@@ -231,6 +242,7 @@ export default function FaceProctoring({
       const width = videoElement.videoWidth;
       const height = videoElement.videoHeight;
       if (!width || !height || faces[0].keypoints.length < 478) {
+        emitMonitoringSample(now, { face_present: true, multiple_faces: false, gaze_measured: false, gaze_on_screen: false });
         gazeSamplesRef.current = [];
         gazeAwaySinceRef.current = null;
         return;
@@ -245,6 +257,7 @@ export default function FaceProctoring({
 
       const estimate = estimateGaze(normalizedLandmarks);
       if (!estimate) {
+        emitMonitoringSample(now, { face_present: true, multiple_faces: false, gaze_measured: false, gaze_on_screen: false });
         gazeSamplesRef.current = [];
         gazeAwaySinceRef.current = null;
         return;
@@ -281,6 +294,7 @@ export default function FaceProctoring({
         smoothedVertical < threshold ||
         smoothedVertical > 1 - threshold;
       const lookingAway = horizontalAway || verticalAway;
+      emitMonitoringSample(now, { face_present: true, multiple_faces: false, gaze_measured: true, gaze_on_screen: !lookingAway });
 
       if (lookingAway && samples.length >= 4) {
         if (gazeAwaySinceRef.current === null) {
@@ -355,6 +369,7 @@ export default function FaceProctoring({
       facePresentSinceRef.current = null;
       faceVerifiedRef.current = false;
       lastDetectionRef.current = 0;
+      lastMonitoringSampleRef.current = 0;
 
       try {
         if (!video) {
@@ -445,6 +460,7 @@ export default function FaceProctoring({
     onMultipleFaces,
     onGazeAway,
     onDetectorError,
+    onMonitoringSample,
   ]);
 
   if (!enabled) return null;
