@@ -721,3 +721,62 @@ def test_student_cannot_list_flagged_sessions(
         headers=proctoring_headers(student_token),
     )
     assert response.status_code == 403
+
+
+def test_event_triggered_snapshot_is_stored_and_staff_can_review_it(
+    client,
+    db_session,
+    proctoring_data,
+):
+    data = proctoring_data
+    snapshot = "data:image/jpeg;base64,aGVsbG8="
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/events",
+        headers=proctoring_headers(data["token"]),
+        json={
+            "event_type": "gaze_away",
+            "description": "Candidate gaze moved away from the screen.",
+            "gaze_data": {"direction": "left", "confidence": 0.9},
+            "snapshot_data": snapshot,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["snapshot_stored"] is True
+
+    admin = User(
+        full_name="Snapshot Review Admin",
+        email="snapshot-review-admin@example.com",
+        password_hash="test-password-hash",
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+    db_session.refresh(admin)
+
+    from app.auth import create_access_token
+    token = create_access_token({"sub": str(admin.id)})
+    history = client.get(
+        f"/exam-sessions/{data['session'].id}/proctoring/history",
+        headers=proctoring_headers(token),
+    )
+    assert history.status_code == 200
+    assert history.json()["webcam_snapshots_available"] is True
+    assert history.json()["events"][0]["snapshot_data"] == snapshot
+
+
+def test_snapshot_is_rejected_for_non_visual_event(
+    client,
+    proctoring_data,
+):
+    data = proctoring_data
+    response = client.post(
+        f"/exam-sessions/{data['session'].id}/proctoring/events",
+        headers=proctoring_headers(data["token"]),
+        json={
+            "event_type": "tab_switch",
+            "snapshot_data": "data:image/jpeg;base64,aGVsbG8=",
+        },
+    )
+    assert response.status_code == 400
+    assert "only for multiple-face and gaze-away" in response.json()["detail"]
