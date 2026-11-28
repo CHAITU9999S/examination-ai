@@ -1,3 +1,4 @@
+import Image from "next/image";
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,6 +13,7 @@ type ProctorEvent = {
   suspicion_points?: number | null;
   cumulative_suspicion_score?: number | null;
   created_at?: string | null;
+  snapshot_data?: string | null;
 };
 
 type ProctoringHistory = {
@@ -140,7 +142,7 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
             <p>Last heartbeat: {dateText(history.last_heartbeat_at)}</p>
             <p className="mt-1">Session status: {(history.session_status || "unknown").replaceAll("_", " ")}</p>
             <p className="mt-1">Automatic flag: {history.auto_flagged ? "Yes" : "No"}</p>
-            <p className="mt-1">Webcam snapshots: {history.webcam_snapshots_available ? "Available" : "Not stored (privacy protection)"}</p>
+            <p className="mt-1">Event-triggered snapshots: {history.webcam_snapshots_available ? "Available for review" : "None recorded"}</p>
           </div>
 
           <h3 className="mt-6 font-semibold">Recorded proctoring events</h3>
@@ -156,13 +158,19 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
                   </div>
                   <p className="mt-1 text-sm text-slate-300">{event.description || "No additional description."}</p>
                   <p className="mt-1 text-xs text-slate-500">Points: {event.suspicion_points ?? 0} · Cumulative score: {event.cumulative_suspicion_score ?? 0}</p>
+                  {event.snapshot_data && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-xs font-semibold text-amber-200">Event-triggered evidence snapshot</p>
+                      <Image src={event.snapshot_data} alt={`Webcam evidence for ${event.event_type.replaceAll("_", " ")} event`} width={320} height={240} unoptimized className="max-h-60 w-auto rounded-lg border border-white/10 object-contain" />
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
           )}
 
           <p className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-xs text-slate-400">
-            These are individual-session counts, not face/gaze percentages. The current system records face-loss, multiple-face, gaze-away and focus events; it does not store continuous detection samples or webcam frames.
+            Only low-resolution snapshots captured when multiple faces or gaze-away events are detected are stored (maximum eight per session). Continuous video and routine camera frames are never uploaded. Counts are event totals, not continuous face/gaze percentages.
           </p>
         </>
       )}
