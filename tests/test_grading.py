@@ -827,3 +827,26 @@ def test_review_displays_selected_option_text_instead_of_only_option_ids(
     assert response.status_code == 200
     assert response.json()["questions"][0]["selected_options"] == ["4"]
 
+
+
+def test_disqualified_session_cannot_publish_result(
+    client,
+    db_session,
+    grading_data,
+):
+    data = grading_data
+    data["session"].last_heartbeat_signals = {
+        "integrity_decision": {
+            "decision": "disqualify",
+            "reason": "Confirmed unauthorized assistance.",
+        }
+    }
+    db_session.commit()
+
+    response = client.post(
+        f"/grading/sessions/{data['session'].id}/publish",
+        headers=auth_headers(data["examiner"]),
+        json={},
+    )
+    assert response.status_code == 409
+    assert "disqualified" in response.json()["detail"].lower()
