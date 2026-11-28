@@ -46,7 +46,7 @@ interface FlaggedSession {
   tab_switch_threshold?: number | null;
   event_counts: Record<string, number>;
   events: ProctorEvent[];
-  webcam_snapshots_available: false;
+  webcam_snapshots_available?: boolean;
 }
 
 function formatDate(value?: string | null) {
@@ -182,7 +182,7 @@ export default function StaffProctoringReviewPage() {
           <div>
             <h1 className="text-3xl font-bold">Flagged Examination Sessions</h1>
             <p className="mt-2 text-slate-400">
-              Review server-recorded events and suspicion scores. Webcam frames remain in the student's browser and are not stored.
+              Review server-recorded events, suspicion scores, and limited event-triggered evidence snapshots where available.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -306,7 +306,7 @@ export default function StaffProctoringReviewPage() {
                   </div>
                 )}
                 <p className="mt-6 rounded-lg border border-blue-400/20 bg-blue-500/5 p-4 text-xs text-slate-400">
-                  Privacy: webcam frames and snapshots are not uploaded or stored. This review shows derived detection signals and event timestamps only.
+                  Privacy: continuous video is never uploaded. Up to eight low-resolution snapshots may be stored per session for multiple-face or gaze-away events and are visible only to the Admin and examination creator.
                 </p>
               </>
             )}
