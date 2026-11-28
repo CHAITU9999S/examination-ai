@@ -729,7 +729,7 @@ def test_event_triggered_snapshot_is_stored_and_staff_can_review_it(
     proctoring_data,
 ):
     data = proctoring_data
-    snapshot = "data:image/jpeg;base64,aGVsbG8="
+    snapshot = "data:image/jpeg;base64,/9j/2Q=="
     response = client.post(
         f"/exam-sessions/{data['session'].id}/proctoring/events",
         headers=proctoring_headers(data["token"]),
@@ -775,7 +775,7 @@ def test_snapshot_is_rejected_for_non_visual_event(
         headers=proctoring_headers(data["token"]),
         json={
             "event_type": "tab_switch",
-            "snapshot_data": "data:image/jpeg;base64,aGVsbG8=",
+            "snapshot_data": "data:image/jpeg;base64,/9j/2Q==",
         },
     )
     assert response.status_code == 400
