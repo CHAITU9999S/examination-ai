@@ -619,8 +619,8 @@ def record_integrity_decision(
     session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().first()
     if session is None:
         raise HTTPException(status_code=404, detail="Examination session not found.")
-    if session.status == "in_progress":
-        raise HTTPException(status_code=409, detail="Integrity decisions can be recorded only after the examination session ends.")
+    if session.status not in {"submitted", "auto_submitted", "expired"}:
+        raise HTTPException(status_code=409, detail="Integrity decisions can be recorded only for submitted or expired examination sessions.")
 
     exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
     if exam is None:
@@ -631,7 +631,8 @@ def record_integrity_decision(
         raise HTTPException(status_code=422, detail="A reason is required when disqualifying a session.")
 
     signals = dict(session.last_heartbeat_signals or {})
-    history = list(signals.get("integrity_decision_history", []))
+    existing_history = signals.get("integrity_decision_history", [])
+    history = list(existing_history) if isinstance(existing_history, list) else []
     decision = {
         "decision": submission.decision,
         "reason": (submission.reason or "").strip() or None,
