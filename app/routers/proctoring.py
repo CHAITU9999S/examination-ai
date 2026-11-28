@@ -744,11 +744,58 @@ async def proctoring_heartbeat(
                 })
                 continue
 
+            raw_monitoring_metrics = raw_signals.get("monitoring_metrics", {})
+            if not isinstance(raw_monitoring_metrics, dict):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Heartbeat monitoring_metrics must be a JSON object.",
+                })
+                continue
+
+            metric_names = (
+                "monitoring_seconds",
+                "face_present_seconds",
+                "multiple_face_seconds",
+                "face_missing_seconds",
+                "gaze_measured_seconds",
+                "gaze_on_screen_seconds",
+                "gaze_away_seconds",
+            )
+            monitoring_metrics = {}
+            invalid_metrics = False
+            for metric_name in metric_names:
+                metric_value = raw_monitoring_metrics.get(metric_name, 0)
+                if (
+                    isinstance(metric_value, bool)
+                    or not isinstance(metric_value, int)
+                    or metric_value < 0
+                ):
+                    invalid_metrics = True
+                    break
+                monitoring_metrics[metric_name] = min(metric_value, 36000)
+
+            if (
+                invalid_metrics
+                or monitoring_metrics["face_present_seconds"] > monitoring_metrics["monitoring_seconds"]
+                or monitoring_metrics["multiple_face_seconds"] > monitoring_metrics["monitoring_seconds"]
+                or monitoring_metrics["face_missing_seconds"] > monitoring_metrics["monitoring_seconds"]
+                or monitoring_metrics["gaze_measured_seconds"] > monitoring_metrics["monitoring_seconds"]
+                or monitoring_metrics["gaze_on_screen_seconds"] > monitoring_metrics["gaze_measured_seconds"]
+                or monitoring_metrics["gaze_away_seconds"] > monitoring_metrics["gaze_measured_seconds"]
+                or monitoring_metrics["gaze_on_screen_seconds"] + monitoring_metrics["gaze_away_seconds"] > monitoring_metrics["gaze_measured_seconds"]
+            ):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Heartbeat monitoring metrics are invalid.",
+                })
+                continue
+
             normalized_signals = {
                 "event_counts": normalized_counts,
                 "total_event_count": min(total_event_count, 1000000),
                 "tab_switch_count": min(tab_switch_count, 1000000),
                 "auto_flagged": auto_flagged,
+                "monitoring_metrics": monitoring_metrics,
             }
 
             db.expire_all()
@@ -817,6 +864,8 @@ async def proctoring_heartbeat(
                 "auto_flagged": server_auto_flagged,
                 "auto_flag_threshold": flag_threshold,
                 "client_reported_signals": normalized_signals,
+                # These are browser-side detector estimates, not tamper-proof evidence.
+                "client_reported_monitoring_metrics": monitoring_metrics,
             }
 
             session.last_heartbeat_at = heartbeat_time
