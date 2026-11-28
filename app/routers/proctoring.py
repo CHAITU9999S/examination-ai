@@ -300,6 +300,75 @@ def record_proctoring_event(
         "recorded": True,
     }
 
+
+@router.get("/proctoring/analytics")
+def get_exam_proctoring_analytics(
+    exam_id: int = Query(..., gt=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return cohort-level proctoring aggregates for an exam visible to this staff user."""
+    role = getattr(current_user.role, "value", current_user.role)
+    if role not in {"admin", "examiner"} or not current_user.is_active:
+        raise HTTPException(status_code=403, detail="Only active Admins and Examiners can view proctoring analytics.")
+
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+    if role == "examiner" and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only view analytics for examinations you created.")
+
+    sessions = db.query(ExamSession).filter(
+        ExamSession.exam_id == exam_id,
+        ExamSession.status.in_(["submitted", "auto_submitted", "expired"]),
+    ).order_by(ExamSession.id.asc()).all()
+    session_ids = [session.id for session in sessions]
+    event_rows = db.query(
+        ProctorEvent.session_id,
+        ProctorEvent.event_type,
+        func.count(ProctorEvent.id),
+    ).filter(
+        ProctorEvent.session_id.in_(session_ids or [-1]),
+    ).group_by(
+        ProctorEvent.session_id,
+        ProctorEvent.event_type,
+    ).all()
+
+    counts_by_session: dict[int, dict[str, int]] = {}
+    for session_id, event_type, count in event_rows:
+        counts_by_session.setdefault(session_id, {})[event_type] = int(count)
+
+    total = len(sessions)
+    def percentage(predicate):
+        return round(sum(1 for session in sessions if predicate(session, counts_by_session.get(session.id, {}))) / total * 100, 1) if total else None
+
+    bands = [
+        {"label": "0–20", "count": 0},
+        {"label": "21–40", "count": 0},
+        {"label": "41–60", "count": 0},
+        {"label": "61–80", "count": 0},
+        {"label": "81–100", "count": 0},
+    ]
+    for session in sessions:
+        score = max(0.0, min(100.0, float(session.suspicion_score or 0)))
+        index = min(4, int(score // 20))
+        bands[index]["count"] += 1
+
+    return {
+        "exam_id": exam.id,
+        "exam_title": exam.title,
+        "cohort_size": total,
+        "metrics": {
+            "no_face_loss_events": percentage(lambda _s, c: c.get("face_not_detected", 0) == 0),
+            "no_gaze_away_events": percentage(lambda _s, c: c.get("gaze_away", 0) == 0),
+            "no_tab_switches": percentage(lambda _s, c: c.get("tab_switch", 0) == 0),
+            "no_multiple_face_events": percentage(lambda _s, c: c.get("multiple_faces", 0) == 0),
+            "high_suspicion_over_60": percentage(lambda s, _c: float(s.suspicion_score or 0) > 60),
+        },
+        "score_distribution": bands,
+        "metric_note": "Percentages are the share of finished sessions with no corresponding event recorded. They are not continuous webcam detection rates.",
+    }
+
 def _exam_attribution(exam: Exam, student_id: int, db: Session) -> dict:
     creator = db.query(User).filter(User.id == exam.created_by).first()
     assignment = db.query(ExamAssignment).filter(
