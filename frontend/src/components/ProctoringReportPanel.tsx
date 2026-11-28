@@ -158,7 +158,7 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
   const percent = (part?: number, whole?: number) =>
     whole && whole > 0 && typeof part === "number" ? `${Math.round(part / whole * 1000) / 10}%` : "Not available";
   const metrics = [
-    { label: "Face present", value: percent(sampled?.face_present_seconds, sampled?.monitoring_seconds) },
+    { label: "Single face present", value: percent(sampled?.face_present_seconds, sampled?.monitoring_seconds) },
     { label: "Gaze on screen", value: percent(sampled?.gaze_on_screen_seconds, sampled?.gaze_measured_seconds) },
     { label: "Monitoring sampled", value: sampled?.monitoring_seconds ? `${sampled.monitoring_seconds}s` : "Not available" },
     { label: "Tab switches", value: counts.tab_switch ?? history?.tab_switch_count ?? 0 },
