@@ -18,6 +18,15 @@ interface ProctorEvent {
   created_at?: string | null;
 }
 
+interface CohortAnalytics {
+  exam_id: number;
+  exam_title: string;
+  cohort_size: number;
+  metrics: Record<string, number | null>;
+  score_distribution: Array<{ label: string; count: number }>;
+  metric_note: string;
+}
+
 interface FlaggedSession {
   session_id: number;
   exam_id: number;
@@ -53,6 +62,9 @@ export default function StaffProctoringReviewPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [selected, setSelected] = useState<FlaggedSession | null>(null);
+  const [analytics, setAnalytics] = useState<CohortAnalytics | null>(null);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dashboardHref, setDashboardHref] = useState("/examiner/dashboard");
@@ -110,6 +122,32 @@ export default function StaffProctoringReviewPage() {
   useEffect(() => {
     loadFlaggedSessions();
   }, [loadFlaggedSessions]);
+
+  useEffect(() => {
+    if (!selected?.exam_id) {
+      setAnalytics(null);
+      setAnalyticsError("");
+      return;
+    }
+    let cancelled = false;
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    fetch(`${API_URL}/exam-sessions/proctoring/analytics?exam_id=${selected.exam_id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Unable to load cohort proctoring analytics.");
+        return data as CohortAnalytics;
+      })
+      .then((data) => { if (!cancelled) setAnalytics(data); })
+      .catch((err) => { if (!cancelled) setAnalyticsError(err instanceof Error ? err.message : "Unable to load cohort analytics."); })
+      .finally(() => { if (!cancelled) setAnalyticsLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected?.exam_id]);
 
   const visibleSessions = [...sessions]
     .filter((session) => !searchTerm.trim() || [session.exam_title, session.student_name, session.session_id].some((value) => String(value || "").toLowerCase().includes(searchTerm.trim().toLowerCase())))
@@ -197,6 +235,40 @@ export default function StaffProctoringReviewPage() {
             ) : (
               <>
                 <h2 className="text-xl font-bold">{selected.exam_title}</h2>
+                <div className="mt-5 rounded-xl border border-white/10 bg-slate-800/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold">Proctoring signal breakdown — this examination</h3>
+                    <span className="text-xs text-slate-400">{analytics?.cohort_size ?? 0} finished session(s)</span>
+                  </div>
+                  {analyticsLoading && <p className="mt-3 text-sm text-slate-400">Loading cohort analytics...</p>}
+                  {analyticsError && <p role="alert" className="mt-3 text-sm text-red-300">{analyticsError}</p>}
+                  {analytics && (
+                    <>
+                      <div className="mt-4 space-y-3">
+                        {[
+                          ["No face-loss events", analytics.metrics.no_face_loss_events],
+                          ["No gaze-away events", analytics.metrics.no_gaze_away_events],
+                          ["No tab switches", analytics.metrics.no_tab_switches],
+                          ["No multiple-face events", analytics.metrics.no_multiple_face_events],
+                          ["High suspicion (>60)", analytics.metrics.high_suspicion_over_60],
+                        ].map(([label, value]) => (
+                          <div key={String(label)}>
+                            <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="tabular-nums">{value == null ? "Not available" : `${value}%`}</span></div>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-950"><div className={`h-full rounded-full ${label === "High suspicion (>60)" ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${value ?? 0}%` }} /></div>
+                          </div>
+                        ))}
+                      </div>
+                      <h4 className="mt-5 text-sm font-semibold">Suspicion score distribution</h4>
+                      <div className="mt-3 grid grid-cols-5 items-end gap-2">
+                        {analytics.score_distribution.map((band) => {
+                          const max = Math.max(1, ...analytics.score_distribution.map((item) => item.count));
+                          return <div key={band.label} className="text-center"><div className="flex h-28 items-end justify-center"><div className="w-full rounded-t bg-blue-500" style={{ height: `${Math.max(4, band.count / max * 100)}%` }} title={`${band.count} session(s)`} /></div><p className="mt-2 text-[10px] text-slate-400">{band.label}</p><p className="text-xs">{band.count}</p></div>;
+                        })}
+                      </div>
+                      <p className="mt-4 text-xs text-slate-500">{analytics.metric_note}</p>
+                    </>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-slate-400">{selected.student_name} · Session #{selected.session_id}</p>
                 <p className="mt-1 text-xs text-slate-400">Created by: {selected.creator_name || "Unknown"} · Assigned by: {selected.assigned_by_name || "Unknown"}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
