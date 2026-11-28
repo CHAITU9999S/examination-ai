@@ -254,7 +254,7 @@ export default function StaffProctoringReviewPage() {
                           ["No tab switches", analytics.metrics.no_tab_switches],
                           ["No multiple-face events", analytics.metrics.no_multiple_face_events],
                           ["High suspicion (>60)", analytics.metrics.high_suspicion_over_60],
-                          ["Face present (estimated)", analytics.metrics.face_present_rate],
+                          ["Single face present (estimated)", analytics.metrics.face_present_rate],
                           ["Gaze on screen (estimated)", analytics.metrics.gaze_on_screen_rate],
                           ["Monitoring coverage (estimated)", analytics.metrics.monitoring_coverage_rate],
                         ].map(([label, value]) => (
