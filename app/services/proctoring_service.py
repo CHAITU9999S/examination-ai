@@ -1,4 +1,6 @@
 
+import base64
+import binascii
 from datetime import datetime
 
 from fastapi import HTTPException, status
@@ -186,6 +188,18 @@ def _validate_event_data(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or oversized JPEG evidence snapshot.",
+            )
+        try:
+            image_bytes = base64.b64decode(snapshot_data.split(",", 1)[1], validate=True)
+        except (ValueError, binascii.Error):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="JPEG evidence snapshot is not valid base64 data.",
+            )
+        if not image_bytes or len(image_bytes) > 70000 or not image_bytes.startswith(b"\xff\xd8\xff"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="JPEG evidence snapshot is empty, oversized, or invalid.",
             )
 
 
