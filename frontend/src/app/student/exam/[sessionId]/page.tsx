@@ -228,7 +228,35 @@ export default function StudentExamPage() {
     gaze_data?: Record<string, unknown> | null;
   }) => {
     if (!Number.isInteger(Number(sessionId)) || Number(sessionId) <= 0) return;
-    void proctoringService.submitEvent(Number(sessionId), event).catch((requestError) => {
+
+    const submit = async () => {
+      let snapshot_data: string | undefined;
+      if (
+        (event.event_type === "multiple_faces" || event.event_type === "gaze_away") &&
+        captureVideoRef.current &&
+        captureVideoRef.current.readyState >= 2 &&
+        captureVideoRef.current.videoWidth > 0 &&
+        captureVideoRef.current.videoHeight > 0
+      ) {
+        const video = captureVideoRef.current;
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 320 / video.videoWidth, 240 / video.videoHeight);
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const encoded = canvas.toDataURL("image/jpeg", 0.4);
+          if (encoded.length <= 95000) snapshot_data = encoded;
+        }
+      }
+      await proctoringService.submitEvent(Number(sessionId), {
+        ...event,
+        ...(snapshot_data ? { snapshot_data } : {}),
+      });
+    };
+
+    void submit().catch((requestError) => {
       setError(requestError instanceof Error ? requestError.message : "Unable to record a proctoring event.");
     });
   }, [sessionId, setError]);
@@ -1455,7 +1483,7 @@ export default function StudentExamPage() {
             <WebcamPreview enabled showPreview={showCameraPreview} compact onStreamReady={handleCameraStream} onCameraStatusChange={handleCameraStatus} />
             <video ref={captureVideoRef} muted autoPlay playsInline className="hidden" />
             <FaceProctoring stream={cameraStream} enabled={!faceCaptured} sensitivity={paper.gaze_tracking_sensitivity ?? 0.5} onFaceMissing={proctoring.reportFaceNotDetected} onFaceVerified={handleFaceVerified} onMultipleFaces={proctoring.reportMultipleFaces} onGazeAway={proctoring.reportGazeAway} onDetectorError={proctoring.reportWebcamError} />
-            <p className="text-xs text-slate-400">Hiding the preview does not stop face detection during capture or the camera stream during the examination. Automated proctoring continues when enabled. Only a still photo is saved.</p>
+            <p className="text-xs text-slate-400">Hiding the preview does not stop face detection during capture or the camera stream during the examination. Automated proctoring continues when enabled. The entry photo and up to eight low-resolution, event-triggered evidence snapshots may be stored for staff review. Continuous video is never uploaded.</p>
           </aside>
         </div>
       </main>
