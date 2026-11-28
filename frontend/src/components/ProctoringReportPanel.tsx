@@ -213,6 +213,18 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
                 <p className="mt-1 text-xs text-slate-500">Recorded by {history.integrity_decision.decided_by_name || "staff"} · {dateText(history.integrity_decision.decided_at)}</p>
               </div>
             ) : <p className="mt-2 text-sm text-slate-400">No integrity decision has been recorded.</p>}
+            {!!history.integrity_decision_history?.length && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Decision audit history</p>
+                {history.integrity_decision_history.map((item, index) => (
+                  <div key={`${item.decided_at || "decision"}-${index}`} className="rounded-lg border border-white/5 bg-slate-900/70 p-3 text-xs">
+                    <p className={item.decision === "disqualify" ? "font-semibold text-red-300" : "font-semibold text-emerald-300"}>{item.decision === "disqualify" ? "Disqualified" : "Passed"} · {item.decided_by_name || "Staff"}</p>
+                    {item.reason && <p className="mt-1 text-slate-300">{item.reason}</p>}
+                    <p className="mt-1 text-slate-500">{dateText(item.decided_at)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             {history.session_status !== "in_progress" && (
               <>
                 <label className="mt-3 block text-xs text-slate-400" htmlFor={`integrity-reason-${sessionId}`}>Decision reason (required for disqualification)</label>
