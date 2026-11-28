@@ -45,6 +45,8 @@ type ProctoringHistory = {
   event_counts?: Record<string, number>;
   events?: ProctorEvent[];
   webcam_snapshots_available?: boolean;
+  integrity_decision?: { decision: "pass" | "disqualify"; reason?: string | null; decided_by_name?: string; decided_at?: string } | null;
+  integrity_decision_history?: Array<{ decision: "pass" | "disqualify"; reason?: string | null; decided_by_name?: string; decided_at?: string }>;
 };
 
 function dateText(value?: string | null) {
@@ -65,6 +67,9 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
   const [history, setHistory] = useState<ProctoringHistory | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [decisionMessage, setDecisionMessage] = useState("");
 
   useEffect(() => {
     if (!sessionId || !Number.isInteger(sessionId) || sessionId <= 0) {
@@ -108,6 +113,42 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
       </section>
     );
   }
+
+  const submitIntegrityDecision = async (decision: "pass" | "disqualify") => {
+    if (!sessionId || decisionBusy) return;
+    if (decision === "disqualify" && !decisionReason.trim()) {
+      setError("Enter a reason before disqualifying this session.");
+      return;
+    }
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) {
+      setError("Staff sign-in is required to record an integrity decision.");
+      return;
+    }
+    setDecisionBusy(true);
+    setError("");
+    setDecisionMessage("");
+    try {
+      const response = await fetch(`${API_URL}/exam-sessions/${sessionId}/proctoring/integrity-decision`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, reason: decisionReason.trim() || null }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Unable to record the integrity decision.");
+      setHistory((current) => current ? {
+        ...current,
+        integrity_decision: data.integrity_decision,
+        integrity_decision_history: data.integrity_decision_history,
+      } : current);
+      setDecisionReason("");
+      setDecisionMessage("Integrity decision recorded. Marks and result publication remain unchanged.");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to record the integrity decision.");
+    } finally {
+      setDecisionBusy(false);
+    }
+  };
 
   const counts = history?.event_counts || history?.last_heartbeat_signals?.event_counts || {};
   const events = history?.events || [];
@@ -159,6 +200,31 @@ export default function ProctoringReportPanel({ sessionId }: { sessionId: number
             <p className="mt-1">Automatic flag: {history.auto_flagged ? "Yes" : "No"}</p>
             <p className="mt-1">Event-triggered snapshots: {history.webcam_snapshots_available ? "Available for review" : "None recorded"}</p>
           </div>
+
+          <section className="mt-6 rounded-xl border border-white/10 bg-slate-800/70 p-4">
+            <h3 className="font-semibold">Examiner integrity decision</h3>
+            {history.integrity_decision ? (
+              <div className="mt-2 rounded-lg bg-slate-900 p-3 text-sm">
+                <p className={history.integrity_decision.decision === "disqualify" ? "font-semibold text-red-300" : "font-semibold text-emerald-300"}>
+                  {history.integrity_decision.decision === "disqualify" ? "Session disqualified" : "Integrity passed"}
+                </p>
+                {history.integrity_decision.reason && <p className="mt-1 text-slate-300">Reason: {history.integrity_decision.reason}</p>}
+                <p className="mt-1 text-xs text-slate-500">Recorded by {history.integrity_decision.decided_by_name || "staff"} · {dateText(history.integrity_decision.decided_at)}</p>
+              </div>
+            ) : <p className="mt-2 text-sm text-slate-400">No integrity decision has been recorded.</p>}
+            {history.session_status !== "in_progress" && (
+              <>
+                <label className="mt-3 block text-xs text-slate-400" htmlFor={`integrity-reason-${sessionId}`}>Decision reason (required for disqualification)</label>
+                <textarea id={`integrity-reason-${sessionId}`} value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} maxLength={2000} rows={2} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 p-3 text-sm text-white" placeholder="Enter the reason or review notes..." />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" disabled={decisionBusy} onClick={() => void submitIntegrityDecision("pass")} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Mark integrity passed</button>
+                  <button type="button" disabled={decisionBusy || !decisionReason.trim()} onClick={() => void submitIntegrityDecision("disqualify")} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Disqualify session</button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">This records an auditable review decision only. It does not alter awarded marks or automatically publish/reject a result; existing examiner result approval remains in control.</p>
+              </>
+            )}
+            {decisionMessage && <p role="status" className="mt-2 text-sm text-emerald-300">{decisionMessage}</p>}
+          </section>
 
           <h3 className="mt-6 font-semibold">Recorded proctoring events</h3>
           {events.length === 0 ? (
