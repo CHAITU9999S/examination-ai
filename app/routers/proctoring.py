@@ -487,11 +487,11 @@ def list_flagged_proctoring_sessions(
                     "suspicion_points": event.suspicion_points,
                     "cumulative_suspicion_score": event.cumulative_suspicion_score,
                     "created_at": event.created_at,
+                    "snapshot_available": bool(event.snapshot_data),
                 }
                 for event in events
             ],
-            # Webcam frames are intentionally not uploaded or stored.
-            "webcam_snapshots_available": False,
+            "webcam_snapshots_available": any(event.snapshot_data for event in events),
         })
 
     return {
@@ -609,10 +609,11 @@ def get_staff_proctoring_history(
                 "suspicion_points": event.suspicion_points,
                 "cumulative_suspicion_score": event.cumulative_suspicion_score,
                 "created_at": event.created_at,
+                "snapshot_data": event.snapshot_data,
             }
             for event in history["events"]
         ],
-        "webcam_snapshots_available": False,
+        "webcam_snapshots_available": any(event.snapshot_data for event in history["events"]),
     }
 
 
