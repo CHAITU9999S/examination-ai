@@ -540,7 +540,7 @@ def test_webcam_snapshot_upload_is_rejected(
     )
 
     assert response.status_code == 400
-    assert "client-side" in response.json()["detail"]
+    assert "JPEG evidence snapshot" in response.json()["detail"]
 
 
 
