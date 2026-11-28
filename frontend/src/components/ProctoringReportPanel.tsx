@@ -1,0 +1,171 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { formatISTDateTime } from "@/lib/utils";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type ProctorEvent = {
+  event_id: number;
+  event_type: string;
+  description?: string | null;
+  suspicion_points?: number | null;
+  cumulative_suspicion_score?: number | null;
+  created_at?: string | null;
+};
+
+type ProctoringHistory = {
+  session_id: number;
+  exam_title?: string;
+  student_name?: string;
+  session_status?: string;
+  suspicion_score?: number;
+  last_heartbeat_at?: string | null;
+  last_heartbeat_signals?: {
+    event_counts?: Record<string, number>;
+    total_event_count?: number;
+    tab_switch_count?: number;
+    auto_flagged?: boolean;
+  } | null;
+  tab_switch_count?: number;
+  tab_switch_threshold?: number | null;
+  auto_flagged?: boolean;
+  total_events?: number;
+  event_counts?: Record<string, number>;
+  events?: ProctorEvent[];
+  webcam_snapshots_available?: boolean;
+};
+
+function dateText(value?: string | null) {
+  return formatISTDateTime(value, "Not available");
+}
+
+function Metric({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
+  return (
+    <div className="rounded-xl bg-slate-800 p-4">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+      {detail && <p className="mt-1 text-xs text-slate-500">{detail}</p>}
+    </div>
+  );
+}
+
+export default function ProctoringReportPanel({ sessionId }: { sessionId: number | null | undefined }) {
+  const [history, setHistory] = useState<ProctoringHistory | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!sessionId || !Number.isInteger(sessionId) || sessionId <= 0) {
+      setHistory(null);
+      return;
+    }
+    let cancelled = false;
+    const token = localStorage.getItem("examguard_access_token");
+    if (!token) {
+      setError("Staff sign-in is required to view proctoring details.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    fetch(`${API_URL}/exam-sessions/${sessionId}/proctoring/history`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Unable to load proctoring details.");
+        return data as ProctoringHistory;
+      })
+      .then((data) => {
+        if (!cancelled) setHistory(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load proctoring details.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [sessionId]);
+
+  if (!sessionId) {
+    return (
+      <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <h2 className="text-lg font-bold">AI Proctoring Report</h2>
+        <p className="mt-2 text-sm text-slate-400">No examination session was created, so there are no individual proctoring records.</p>
+      </section>
+    );
+  }
+
+  const counts = history?.event_counts || history?.last_heartbeat_signals?.event_counts || {};
+  const events = history?.events || [];
+  const suspicion = Number(history?.suspicion_score || 0);
+  const metrics = [
+    { label: "Tab switches", value: counts.tab_switch ?? history?.tab_switch_count ?? 0 },
+    { label: "Face not detected", value: counts.face_not_detected ?? 0 },
+    { label: "Multiple faces", value: counts.multiple_faces ?? 0 },
+    { label: "Gaze away", value: counts.gaze_away ?? 0 },
+    { label: "Window lost focus", value: counts.window_blur ?? 0 },
+    { label: "Webcam errors", value: counts.webcam_error ?? 0 },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">AI Proctoring Report</h2>
+          <p className="mt-1 text-sm text-slate-400">Session #{sessionId} · Server-recorded signals and event history</p>
+        </div>
+        {history && (
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${suspicion > 60 ? "bg-red-500/15 text-red-300" : suspicion >= 50 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+            {suspicion.toFixed(0)} / 100 suspicion
+          </span>
+        )}
+      </div>
+
+      {loading && <p className="mt-4 text-sm text-slate-400">Loading proctoring report...</p>}
+      {error && <p role="alert" className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+
+      {history && (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Metric label="Suspicion score" value={`${suspicion.toFixed(0)} / 100`} detail={suspicion > 60 ? "High suspicion (>60)" : "Score recorded by the server"} />
+            <Metric label="Total recorded events" value={history.total_events ?? events.length} />
+            <Metric label="Tab-switch threshold" value={history.tab_switch_threshold ?? "Not configured"} detail={history.auto_flagged ? "Automatic tab-switch flag triggered" : "No automatic tab-switch flag"} />
+            {metrics.map((metric) => <Metric key={metric.label} label={metric.label} value={metric.value} />)}
+          </div>
+
+          <div className="mt-4 rounded-xl bg-slate-800/70 p-4 text-sm text-slate-300">
+            <p>Last heartbeat: {dateText(history.last_heartbeat_at)}</p>
+            <p className="mt-1">Session status: {(history.session_status || "unknown").replaceAll("_", " ")}</p>
+            <p className="mt-1">Automatic flag: {history.auto_flagged ? "Yes" : "No"}</p>
+            <p className="mt-1">Webcam snapshots: {history.webcam_snapshots_available ? "Available" : "Not stored (privacy protection)"}</p>
+          </div>
+
+          <h3 className="mt-6 font-semibold">Recorded proctoring events</h3>
+          {events.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-400">No individual violation events were recorded for this session.</p>
+          ) : (
+            <div className="mt-3 max-h-96 space-y-2 overflow-y-auto">
+              {events.map((event) => (
+                <article key={event.event_id} className="rounded-lg border border-white/5 bg-slate-800 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold capitalize">{event.event_type.replaceAll("_", " ")}</p>
+                    <time className="text-xs text-slate-500">{dateText(event.created_at)}</time>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-300">{event.description || "No additional description."}</p>
+                  <p className="mt-1 text-xs text-slate-500">Points: {event.suspicion_points ?? 0} · Cumulative score: {event.cumulative_suspicion_score ?? 0}</p>
+                </article>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-xs text-slate-400">
+            These are individual-session counts, not face/gaze percentages. The current system records face-loss, multiple-face, gaze-away and focus events; it does not store continuous detection samples or webcam frames.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
