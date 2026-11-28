@@ -369,9 +369,9 @@ def get_exam_proctoring_analytics(
         return round(monitoring_totals[numerator] / total_seconds * 100, 1) if total_seconds else None
 
     expected_monitoring_seconds = sum(
-        max(0, int((session.submitted_at - session.started_at).total_seconds()))
+        max(0, int(((session.submitted_at or session.expires_at) - session.started_at).total_seconds()))
         for session in sessions
-        if session.started_at is not None and session.submitted_at is not None
+        if session.started_at is not None and (session.submitted_at is not None or session.expires_at is not None)
     )
     monitoring_coverage = (
         round(min(100.0, monitoring_totals["monitoring_seconds"] / expected_monitoring_seconds * 100), 1)
