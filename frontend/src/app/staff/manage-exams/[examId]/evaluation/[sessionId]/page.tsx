@@ -3,6 +3,7 @@ import { formatISTDateTime } from "@/lib/utils";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import ProctoringReportPanel from "@/components/ProctoringReportPanel";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -144,6 +145,7 @@ function SessionEvaluationPageContent(){
     </div>
     {!data.result_published&&<p className="mt-3 text-xs text-amber-300">The result has not been published. Current per-question evaluation marks are shown below to authorized staff.</p>}
    </section>
+   <div className="mt-5"><ProctoringReportPanel sessionId={Number(sessionId)} /></div>
    <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-400">Question {question?index+1:0} of {data.questions.length}</p><h2 className="mt-1 text-xl font-bold">Student Answer Review</h2></div><p className="text-sm text-slate-400">{question?.question_type} · {question?.difficulty} · {question?.maximum_marks} positive marks · {question?.negative_marks??0} negative marks</p></div>
     
