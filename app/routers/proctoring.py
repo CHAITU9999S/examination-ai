@@ -67,6 +67,11 @@ MAX_SNAPSHOT_LENGTH = 100000
 # REQUEST SCHEMA
 # ==========================================
 
+class IntegrityDecisionSubmission(BaseModel):
+    decision: str = Field(pattern="^(pass|disqualify)$")
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class ProctorEventSubmission(BaseModel):
     event_type: str = Field(
         min_length=1,
@@ -599,6 +604,54 @@ def get_proctoring_summary(
     )
 
 
+@router.post("/{session_id}/proctoring/integrity-decision")
+def record_integrity_decision(
+    session_id: int,
+    submission: IntegrityDecisionSubmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Record an auditable examiner integrity decision without altering grading or publication."""
+    role = getattr(current_user.role, "value", current_user.role)
+    if role not in {"admin", "examiner"} or not current_user.is_active:
+        raise HTTPException(status_code=403, detail="Only active Admins and Examiners can record integrity decisions.")
+
+    session = db.query(ExamSession).filter(ExamSession.id == session_id).with_for_update().first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Examination session not found.")
+    if session.status == "in_progress":
+        raise HTTPException(status_code=409, detail="Integrity decisions can be recorded only after the examination session ends.")
+
+    exam = db.query(Exam).filter(Exam.id == session.exam_id).first()
+    if exam is None:
+        raise HTTPException(status_code=404, detail="Examination not found.")
+    if role == "examiner" and exam.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only decide integrity for your own examinations.")
+    if submission.decision == "disqualify" and not (submission.reason or "").strip():
+        raise HTTPException(status_code=422, detail="A reason is required when disqualifying a session.")
+
+    signals = dict(session.last_heartbeat_signals or {})
+    history = list(signals.get("integrity_decision_history", []))
+    decision = {
+        "decision": submission.decision,
+        "reason": (submission.reason or "").strip() or None,
+        "decided_by_user_id": current_user.id,
+        "decided_by_name": current_user.full_name,
+        "decided_by_role": role,
+        "decided_at": get_current_utc_time().isoformat(),
+    }
+    history.append(decision)
+    signals["integrity_decision"] = decision
+    signals["integrity_decision_history"] = history[-20:]
+    session.last_heartbeat_signals = signals
+    db.commit()
+    return {
+        "message": "Integrity decision recorded. Examination marks and result publication were not changed.",
+        "integrity_decision": decision,
+        "integrity_decision_history": signals["integrity_decision_history"],
+    }
+
+
 @router.get("/{session_id}/proctoring/history")
 def get_staff_proctoring_history(
     session_id: int,
@@ -627,6 +680,8 @@ def get_staff_proctoring_history(
         "suspicion_score": history["suspicion_score"],
         "last_heartbeat_at": history["last_heartbeat_at"],
         "last_heartbeat_signals": history["last_heartbeat_signals"],
+        "integrity_decision": (history["last_heartbeat_signals"] or {}).get("integrity_decision"),
+        "integrity_decision_history": (history["last_heartbeat_signals"] or {}).get("integrity_decision_history", []),
         "tab_switch_count": history["tab_switch_count"],
         "tab_switch_threshold": history["auto_flag_threshold"],
         "auto_flagged": history["auto_flagged"],
